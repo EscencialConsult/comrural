@@ -1,0 +1,68 @@
+{
+  "source": "https://antigravity.google/",
+  "tokens": {
+    "spacing": {
+      "scale": [4, 6, 8, 10, 16, 24, 32, 36, 48, 60, 72, 80, 120],
+      "base_unit": 4
+    },
+    "typography": {
+      "families": ["Google Sans Flex", "Google Symbols"],
+      "scale": [
+        { "role": "hero", "size": "80px", "weight": "450", "family": "Google Sans Flex" },
+        { "role": "h2-large", "size": "54px", "weight": "450", "family": "Google Sans Flex" },
+        { "role": "h2", "size": "42px", "weight": "450", "family": "Google Sans Flex" },
+        { "role": "h2-small", "size": "32px", "weight": "450", "family": "Google Sans Flex" },
+        { "role": "lede", "size": "24px", "weight": "450", "family": "Google Sans Flex" },
+        { "role": "body", "size": "17.5px", "weight": "400", "family": "Google Sans Flex" },
+        { "role": "button-label", "size": "14.5px", "weight": "450", "family": "Google Sans Flex" }
+      ]
+    },
+    "colors": [
+      { "role": "background", "value": "#F8F9FC" },
+      { "role": "background-inverse", "value": "#121317" },
+      { "role": "text-primary", "value": "#45474D" },
+      { "role": "text-heading", "value": "#121317" },
+      { "role": "accent (pricing-only)", "value": "#3279F9" },
+      { "role": "surface-white", "value": "#FFFFFF" }
+    ],
+    "radius": ["9999px", "36px", "24px", "16px", "8px", "4px"],
+    "shadows": [],
+    "image_ratios": [
+      { "usage": "hero", "ratio": "1.78:1" },
+      { "usage": "feature", "ratio": "0.88:1" },
+      { "usage": "feature-square", "ratio": "1:1" },
+      { "usage": "thumbnail", "ratio": "1:1" }
+    ],
+    "grid": { "max_width": "1425px (fluid, no hard cap)", "columns": "variable — 2 (product features) / 4 (pricing) / 9 (home slider)", "gutter": "16-48px depending on section" }
+  },
+  "taste": [
+    {
+      "name": "No-Shadow Flat Depth",
+      "trigger": "When deciding how pricing cards, feature panels, and code-screenshot mockups should read as distinct surfaces",
+      "decision": "Chose zero elevation shadows, using near-invisible background tint instead, over conventional card shadows",
+      "reason": "A product about AI agents doing real engineering work wants to feel calm and technical, not like a marketing site stacking glossy cards",
+      "evidence": ["effects.shadows: [] on all 3 pages analyzed", "card-detection heuristic (shadow-or-border required) found zero matches anywhere"]
+    },
+    {
+      "name": "Single-Typeface, Weight-Only Hierarchy",
+      "trigger": "Differentiating an 80px hero headline from 17.5px body copy and 14.5px button labels",
+      "decision": "Chose one variable font (Google Sans Flex) across every role using fractional weights (300/400/450/500), over pairing a display face with a separate body face",
+      "reason": "A single voice at every scale feels engineered and consistent — appropriate when the product itself, not the marketing copy, is meant to be the star",
+      "evidence": ["uniqueFamilies = Google Sans Flex + icon font only, on all 3 pages", "weightDistribution never exceeds 500 on any page"]
+    },
+    {
+      "name": "Accent Color Confined to Its One Job",
+      "trigger": "Deciding where the system's one non-neutral hue (#3279F9 blue) should appear",
+      "decision": "Chose to restrict blue to /pricing alone (a promo link + plan-tier badges), over extending it as a site-wide accent",
+      "reason": "Color pulls attention; the only place a user needs a quick visual distinction is comparing pricing tiers — everywhere else it would compete with product screenshots",
+      "evidence": ["blue in /pricing's top-6 color lists (count 6-11)", "absent from home and /product top-6 color lists entirely"]
+    },
+    {
+      "name": "Decorative Motion Stays Out of the UI's Way",
+      "trigger": "Wanting a distinctive 'liftoff' mood without making the interface feel unpredictable",
+      "decision": "Chose to split motion into page-specific atmospheric particle fields versus one shared functional hover transition, over a single unified animation system",
+      "reason": "Users get the brand personality without it ever slowing down or obscuring what they came to click",
+      "evidence": ["particle pattern differs per page (arc on /product, confetti on /pricing)", "identical 'transform 0.3s ease-in-out, background-color 0.3s' hover transition string on all 3 pages"]
+    }
+  ]
+}

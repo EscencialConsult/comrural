@@ -1,0 +1,66 @@
+[
+  {
+    "id": "almacen",
+    "nombre": "Almacén",
+    "descripcion": "Ingresos, salidas, stock por lote, devoluciones y bajas de Materia Prima, Envases/Insumos y Producto Terminado.",
+    "estado": "relevado",
+    "ruta": "/almacen",
+    "orden": 1
+  },
+  {
+    "id": "calidad",
+    "nombre": "Calidad y Laboratorio",
+    "descripcion": "Recepción de materia prima, liberación de lotes, análisis interno y externo.",
+    "estado": "relevado_parcial",
+    "ruta": "/calidad",
+    "orden": 2
+  },
+  {
+    "id": "produccion",
+    "nombre": "Producción",
+    "descripcion": "Requerimientos de materiales, entrega de producto terminado, control de reproceso.",
+    "estado": "pendiente",
+    "ruta": "/produccion",
+    "orden": 3
+  },
+  {
+    "id": "compras",
+    "nombre": "Compras",
+    "descripcion": "Solicitudes, órdenes de compra y gestión de proveedores.",
+    "estado": "pendiente",
+    "ruta": "/compras",
+    "orden": 4
+  },
+  {
+    "id": "contabilidad",
+    "nombre": "Contabilidad",
+    "descripcion": "Inventario mensual y conciliación contable.",
+    "estado": "pendiente",
+    "ruta": "/contabilidad",
+    "orden": 5
+  },
+  {
+    "id": "gerencia",
+    "nombre": "Gerencia",
+    "descripcion": "Aprobación de ajustes de inventario, órdenes de compra y análisis externos.",
+    "estado": "pendiente",
+    "ruta": "/gerencia",
+    "orden": 6
+  },
+  {
+    "id": "mantenimiento",
+    "nombre": "Mantenimiento",
+    "descripcion": "Solicitudes de mantenimiento preventivo desde otras áreas.",
+    "estado": "pendiente",
+    "ruta": "/mantenimiento",
+    "orden": 7
+  },
+  {
+    "id": "despacho",
+    "nombre": "Despacho",
+    "descripcion": "Salidas de producto terminado para exportación y venta.",
+    "estado": "pendiente",
+    "ruta": "/despacho",
+    "orden": 8
+  }
+]

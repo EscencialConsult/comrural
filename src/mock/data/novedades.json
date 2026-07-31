@@ -1,0 +1,23 @@
+[
+  {
+    "id": "nov-003",
+    "version": "0.1.0",
+    "fecha": "2026-07-30T00:00:00Z",
+    "titulo": "Primera pantalla del sistema",
+    "descripcion": "Arranca /servicio: mapa de los 8 módulos del ERP con su estado real de relevamiento, sección de descargas y acceso, y la identidad visual de COMRURAL aplicada en todo el sistema."
+  },
+  {
+    "id": "nov-002",
+    "version": "0.0.2",
+    "fecha": "2026-07-25T00:00:00Z",
+    "titulo": "Kit de marca oficial",
+    "descripcion": "Se incorporó la paleta de 12 colores, los logos y la tipografía (Montserrat) definidos por COMRURAL como base de todo el sistema de diseño."
+  },
+  {
+    "id": "nov-001",
+    "version": "0.0.1",
+    "fecha": "2026-07-20T00:00:00Z",
+    "titulo": "Arranque del proyecto",
+    "descripcion": "Primer relevamiento funcional: módulo Almacén completo (18 reglas de negocio, 14 procesos) y primer avance sobre Calidad y Laboratorio."
+  }
+]

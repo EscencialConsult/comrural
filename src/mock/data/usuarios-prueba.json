@@ -1,0 +1,10 @@
+[
+  { "id": "usr_rol_1", "nombre": "Rol N°1", "email": "rol1@comrural.local", "rol": "rol_1", "avatar_url": null },
+  { "id": "usr_rol_2", "nombre": "Rol N°2", "email": "rol2@comrural.local", "rol": "rol_2", "avatar_url": null },
+  { "id": "usr_rol_3", "nombre": "Rol N°3", "email": "rol3@comrural.local", "rol": "rol_3", "avatar_url": null },
+  { "id": "usr_rol_4", "nombre": "Rol N°4", "email": "rol4@comrural.local", "rol": "rol_4", "avatar_url": null },
+  { "id": "usr_rol_5", "nombre": "Rol N°5", "email": "rol5@comrural.local", "rol": "rol_5", "avatar_url": null },
+  { "id": "usr_rol_6", "nombre": "Rol N°6", "email": "rol6@comrural.local", "rol": "rol_6", "avatar_url": null },
+  { "id": "usr_rol_7", "nombre": "Rol N°7", "email": "rol7@comrural.local", "rol": "rol_7", "avatar_url": null },
+  { "id": "usr_rol_8", "nombre": "Rol N°8", "email": "rol8@comrural.local", "rol": "rol_8", "avatar_url": null }
+]

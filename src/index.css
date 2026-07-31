@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+/*
+  Design tokens de COMRURAL XXI SRL.
+  Fuente: ~/.claude/proyectos/comrural/wiki/comrural-kit-de-marca.md
+  No inventar colores/tipografía nuevos sin actualizar ese archivo primero.
+*/
+@theme {
+  /* Verdes — naturaleza, sostenibilidad, cultivo */
+  --color-verde-hoja: #62a83c;
+  --color-verde-bosque: #2a572b;
+  --color-verde-lima: #84b739;
+  --color-verde-pistacho: #dce5c8;
+
+  /* Marrones y terrosos — tierra, quinua, origen andino */
+  --color-marron-tierra: #733f1f;
+  --color-marron-arcilla: #9c4119;
+  --color-marron-cafe: #3e2312;
+
+  /* Celestes y azules — frescura, agua, tecnología web */
+  --color-celeste-aqua: #48c9c4;
+  --color-azul-andino: #5282a7;
+  --color-azul-indigo: #4278a3;
+
+  /* Neutros y acentos de producto */
+  --color-crema-quinua: #faf4e8;
+  --color-rojo-pasankalla: #c0392b;
+
+  --font-sans: 'Montserrat', sans-serif;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-crema-quinua);
+  font-family: var(--font-sans);
+}
+
+/*
+  Textura decorativa del hero — clonada de la referencia de diseño
+  antigravity.google (ver ./CLAUDE.md, sección "Design Taste").
+  Puramente atmosférica: nunca lleva información ni acciones.
+  Deriva de impeccable critique 2026-07-30: la v1 (opacity 0.18, 1px, un
+  solo tamaño) no se percibía en pantalla — se subió tamaño/variedad/opacidad
+  hasta que el efecto es real, sin pasar el 12% de superficie visual.
+*/
+.hero-dots {
+  background-image:
+    radial-gradient(3px 3px at center, var(--color-verde-lima) 0, transparent 60%),
+    radial-gradient(2.5px 2.5px at center, var(--color-marron-arcilla) 0, transparent 60%),
+    radial-gradient(2px 2px at center, var(--color-celeste-aqua) 0, transparent 60%),
+    radial-gradient(2.5px 2.5px at center, var(--color-verde-bosque) 0, transparent 60%);
+  background-size: 140px 140px, 190px 190px, 110px 110px, 240px 240px;
+  background-position: 20px 30px, 90px 120px, 150px 40px, 40px 160px;
+  opacity: 0.4;
+  animation: hero-dots-drift 40s linear infinite;
+}
+
+@keyframes hero-dots-drift {
+  from { background-position: 20px 30px, 90px 120px, 150px 40px, 40px 160px; }
+  to { background-position: 20px 190px, 90px 350px, 150px -140px, 40px 440px; }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rise-in {
+  animation: rise-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Dropdown de notificaciones (DashboardHeader.jsx) — entra desde su
+   disparador (la campana), arriba a la derecha, no desde el centro. */
+@keyframes notif-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.notif-panel {
+  animation: notif-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Dropdown de resultados del buscador (DashboardHeader.jsx) — panel
+   centrado a lo ancho del buscador, entra derecho desde arriba (no desde
+   una esquina como el de notificaciones). */
+@keyframes search-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.search-panel {
+  animation: search-in 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/*
+  Ripple de feedback al hacer click en Button.jsx — la parte que vale la
+  pena del "liquid metal button" de referencia, sin el shader WebGL ni
+  las sombras en capas que rompían DESIGN.md.
+*/
+@keyframes ripple-expand {
+  from { transform: translate(-50%, -50%) scale(0); opacity: 0.5; }
+  to { transform: translate(-50%, -50%) scale(14); opacity: 0; }
+}
+
+.ripple-effect {
+  animation: ripple-expand 600ms ease-out;
+}
+
+/*
+  Hover del logo en AuthLayout: la marca blanca vive encima de la de
+  color con un reveal desde el centro hacia afuera — un solo movimiento
+  (sin loop de "respiración"). Usa ellipse() en vez de circle(): el logo
+  es un rectángulo ancho, un círculo no llega parejo a los bordes.
+
+  El brillo (drop-shadow) va en una capa SEPARADA de la del "wipe"
+  recortado: un filter y un clip-path en el MISMO elemento se recortan
+  siempre juntos, así que si el brillo compartía elemento con el reveal,
+  el propio clip-path (creciendo desde 0%) le cortaba el brillo de golpe
+  en cada frame de la animación, no solo al final. La capa del brillo
+  vive fuera del contenedor con overflow-hidden (ver AuthLayout.jsx) y
+  tiene su propio reveal sincronizado, así que nada la recorta.
+*/
+.logo-reveal-crisp {
+  clip-path: ellipse(0% 0% at 50% 50%);
+  transition: clip-path 900ms ease-out;
+}
+
+.group:hover .logo-reveal-crisp {
+  clip-path: ellipse(100% 100% at 50% 50%);
+}
+
+.logo-reveal-glow {
+  clip-path: ellipse(0% 0% at 50% 50%);
+  filter: drop-shadow(0 0 0 rgba(250, 244, 232, 0)) drop-shadow(0 0 0 rgba(250, 244, 232, 0));
+  transition: clip-path 900ms ease-out, filter 900ms ease-out;
+}
+
+/* Colapso del sidebar del dashboard (DashboardSidebar.jsx) — mismo
+   timing token que .rise-in para que el gesto se sienta consistente.
+   Las tres clases comparten duración/easing a propósito: si el ancho del
+   <aside> anima pero la etiqueta de texto o la tarjeta de IA desaparecen
+   de golpe (unmount instantáneo), el gesto se siente cortado — todo tiene
+   que terminar la transición al mismo tiempo para que se sienta fluido. */
+.sidebar-collapse {
+  transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Ítem del nav del sidebar — el padding horizontal se anima (no hay
+   salto instantáneo de justify-content/px-0): a los 64px de ancho del
+   sidebar colapsado, 22px de cada lado centran el ícono de 20px. */
+.sidebar-navitem {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  transition: padding-left 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding-right 250ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease-out,
+    color 200ms ease-out;
+}
+
+.sidebar-navitem.is-colapsado {
+  padding-left: 1.375rem;
+  padding-right: 1.375rem;
+}
+
+/* El margen entre ícono y texto vive en el propio label (no en un `gap`
+   del padre) para poder animarlo a 0 junto con max-width — si el `gap`
+   quedara fijo, sobraría espacio reservado incluso con el texto en 0. */
+.sidebar-label {
+  margin-left: 0.75rem;
+  max-width: 11rem;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 250ms cubic-bezier(0.16, 1, 0.3, 1), margin-left 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 200ms ease-out;
+}
+
+.sidebar-label.is-oculto {
+  max-width: 0;
+  margin-left: 0;
+  opacity: 0;
+}
+
+.sidebar-aicard {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 250ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
+}
+
+.sidebar-aicard.is-oculto {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.sidebar-logo-fade {
+  transition: opacity 200ms ease-out;
+}
+
+.group:hover .logo-reveal-glow {
+  clip-path: ellipse(100% 100% at 50% 50%);
+  filter: drop-shadow(0 0 3px rgba(250, 244, 232, 0.35)) drop-shadow(0 0 10px rgba(250, 244, 232, 0.3));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-dots {
+    animation: none;
+  }
+  .rise-in {
+    animation: none;
+  }
+  .notif-panel {
+    animation: none;
+  }
+  .search-panel {
+    animation: none;
+  }
+  .ripple-effect {
+    display: none;
+  }
+  .logo-reveal-crisp,
+  .logo-reveal-glow {
+    transition: clip-path 150ms ease, filter 150ms ease;
+  }
+  .sidebar-collapse,
+  .sidebar-label,
+  .sidebar-aicard,
+  .sidebar-logo-fade,
+  .sidebar-navitem {
+    transition-duration: 1ms;
+  }
+}

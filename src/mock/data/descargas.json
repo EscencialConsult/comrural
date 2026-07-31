@@ -1,0 +1,20 @@
+[
+  {
+    "id": "pc",
+    "nombre": "Desde PC",
+    "descripcion": "Aplicación de escritorio para Windows y Mac.",
+    "estado": "proximamente"
+  },
+  {
+    "id": "celular",
+    "nombre": "Desde el celular",
+    "descripcion": "App para Android e iOS, para consultar stock y notificaciones desde cualquier lado.",
+    "estado": "proximamente"
+  },
+  {
+    "id": "acceso-directo",
+    "nombre": "Acceso directo",
+    "descripcion": "Entrar desde el navegador, sin instalar nada.",
+    "estado": "proximamente"
+  }
+]
