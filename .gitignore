@@ -12,10 +12,12 @@ dist
 dist-ssr
 *.local
 
-# Variables de entorno (API keys) — nunca al repo
-.env
-.env.*
-!.env.example
+# Variables de entorno: .env SÍ se sube a propósito (decisión de
+# Facundo) — todavía no hay backend/hosting, así que cualquiera que
+# clone el repo necesita la key real ya puesta para poder correr el
+# proyecto sin pasos extra. Revisar esto cuando exista backend real (ver
+# nota en climaService.js / src/mock/README.md) — ahí la key deja de
+# viajar al cliente y este archivo puede volver a ignorarse.
 
 # Artefactos de debug de Playwright MCP (screenshots/logs de pruebas)
 .playwright-mcp
