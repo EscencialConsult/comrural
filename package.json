@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@paper-design/shaders": "^0.0.78",
+    "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.28.0",
     "react": "^19.2.7",
