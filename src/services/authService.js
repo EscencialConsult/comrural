@@ -1,82 +1,74 @@
 // Capa de servicio de autenticación. Los componentes SIEMPRE importan de
-// acá, nunca de src/mock directo. Ver src/mock/README.md — este archivo
-// es lo único que backend necesita reescribir (Supabase Auth o lo que
-// se termine usando).
-import { usuarioActual, usuariosPrueba } from '../mock'
+// acá, nunca de supabaseClient/apiClient directo.
+//
+// Login real vía Supabase Auth (el backend NestJS no tiene endpoint de
+// login propio: solo valida el JWT que emite Supabase — ver
+// src/auth/strategies/jwt.strategy.ts en comrural_erp_backend). El estado
+// reactivo de sesión vive en AuthContext, que escucha
+// supabase.auth.onAuthStateChange; este archivo solo dispara las acciones.
+//
+// Registro self-service, login social y recuperación de contraseña siguen
+// en mock: el backend crea usuarios por invitación de un superadmin
+// (UsersManagementService.create), no hay endpoint público de alta ni
+// Client ID de Google/Facebook configurado todavía.
+import { supabase } from '../lib/supabaseClient'
+import { apiClient } from '../lib/apiClient'
 
-const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const SESSION_KEY = 'comrural_sesion_mock'
+const delay = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export const authService = {
-  // Login real (mock): cualquier usuario/contraseña no vacíos "funciona"
-  // — no hay backend todavía, así que no hay credenciales reales que
-  // validar. Guarda la sesión en localStorage para que sobreviva un
-  // refresh (simula "recordarme", que quedó confirmado como default).
-  async login({ usuario, contrasena }) {
-    await delay()
-    if (!usuario || !contrasena) {
+  // Devuelve la sesión recién creada — AuthContext la usa para traer el
+  // perfil ANTES de resolver, así quien llama a login() (AuthPage) puede
+  // navegar a /panel con la certeza de que ya hay usuario cargado, sin
+  // pasar por un instante intermedio con sesión pero sin perfil.
+  async login({ email, contrasena }) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: contrasena,
+    })
+    if (error) {
+      // Mensaje genérico por seguridad (no revela si el usuario existe o
+      // no) — decisión confirmada en wiki/comrural-shell-frontend.md.
       throw new Error('Usuario o contraseña incorrectos.')
     }
-    const sesion = { ...usuarioActual, email: usuario }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(sesion))
-    return sesion
+    return data.session
   },
 
-  // Switcher de desarrollo — loguea directo como uno de los usuarios de
-  // prueba, sin pedir contraseña. Ver DevRoleSwitcher.jsx: se elimina
-  // antes de producción.
-  async loginComoUsuarioPrueba(usuarioId) {
-    await delay(150)
-    const usuario = usuariosPrueba.find((u) => u.id === usuarioId)
-    if (!usuario) throw new Error('Usuario de prueba no encontrado.')
-    localStorage.setItem(SESSION_KEY, JSON.stringify(usuario))
-    return usuario
+  // Perfil de la app (nombre, estado) para el usuario ya autenticado en
+  // Supabase — lo usa AuthContext tras cada cambio de sesión.
+  async getPerfil() {
+    const perfil = await apiClient.get('/iam/users/me')
+    return {
+      id: perfil.id,
+      nombre: perfil.fullName,
+      email: perfil.email,
+      isActive: perfil.isActive,
+      avatar_url: null,
+    }
   },
 
-  async getUsuariosPrueba() {
-    await delay(100)
-    return [...usuariosPrueba]
+  async cerrarSesion() {
+    await supabase.auth.signOut()
   },
 
-  // Google/Facebook — mock hasta que exista un Client ID / App ID real
-  // (los crea Facundo en Google Cloud Console / Facebook for Developers)
-  // y un backend que verifique el token. Simula un login exitoso para
-  // que el botón tenga un destino real mientras tanto.
+  // Google/Facebook — mock hasta que exista un Client ID/App ID real y el
+  // backend soporte alta vía proveedor externo.
   async loginConProveedor(proveedor) {
-    await delay(300)
-    const sesion = {
-      ...usuarioActual,
-      nombre: `Usuario de ${proveedor}`,
-      email: `usuario@${proveedor.toLowerCase()}.mock`,
-    }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(sesion))
-    return sesion
+    await delay()
+    throw new Error(`Login con ${proveedor} todavía no está disponible.`)
   },
 
-  async registrar({ nombre, email, contrasena, aceptaTerminos }) {
+  // Alta self-service — mock: el backend hoy solo crea usuarios por
+  // invitación de un superadmin (no hay endpoint público de registro).
+  async registrar() {
     await delay()
-    if (!aceptaTerminos) {
-      throw new Error('Tenés que aceptar los términos para crear la cuenta.')
-    }
-    const nuevoUsuario = { id: `usr_${Date.now()}`, nombre, email, rol: 'sin_asignar' }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(nuevoUsuario))
-    return nuevoUsuario
+    throw new Error('El alta de cuentas todavía no está disponible desde acá — hablá con un administrador.')
   },
 
   async solicitarRecuperacion(email) {
     await delay()
     if (!email) throw new Error('Ingresá tu email.')
-    // Mock: no envía nada de verdad, solo simula el flujo self-service.
+    // Mock: no envía nada de verdad todavía.
     return { enviado: true, email }
-  },
-
-  getSesionActual() {
-    const raw = localStorage.getItem(SESSION_KEY)
-    return raw ? JSON.parse(raw) : null
-  },
-
-  cerrarSesion() {
-    localStorage.removeItem(SESSION_KEY)
   },
 }

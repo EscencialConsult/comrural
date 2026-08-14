@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { authService } from './services/authService'
+import { useAuth } from './context/AuthContext.jsx'
 import RutaProtegida from './components/RutaProtegida.jsx'
+import LoadingScreen from './components/LoadingScreen.jsx'
 import Servicio from './pages/Servicio.jsx'
 import Modulos from './pages/Modulos.jsx'
 import Descargas from './pages/Descargas.jsx'
@@ -10,13 +11,18 @@ import Registro from './pages/Registro.jsx'
 import RecuperarContrasena from './pages/RecuperarContrasena.jsx'
 import Panel from './pages/Panel.jsx'
 import PanelModulo from './pages/PanelModulo.jsx'
+import NotFound from './pages/NotFound.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
 
 // "/" ES el login (no un redirect a /login) — la puerta de entrada del
 // sistema es el login, no una ruta aparte. Con sesión activa, redirige
 // directo al panel autenticado (no a /servicio, que es pública).
 function Raiz() {
-  const haySesion = Boolean(authService.getSesionActual())
+  const { haySesion, cargando } = useAuth()
+  // La sesión de Supabase se restaura de forma asíncrona al cargar la
+  // página — sin este chequeo se mostraría el login por un instante aunque
+  // ya haya sesión.
+  if (cargando) return <LoadingScreen />
   if (haySesion) return <Navigate to="/panel" replace />
   return <Login />
 }
@@ -56,6 +62,8 @@ function App() {
         <Route path="/panel" element={<Panel />} />
         <Route path="/panel/:moduloId" element={<PanelModulo />} />
       </Route>
+
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

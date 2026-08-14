@@ -11,8 +11,9 @@ import {
   Trash2,
   LayoutDashboard,
   SlidersHorizontal,
+  Menu,
 } from 'lucide-react'
-import { authService } from '../../services/authService'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { rolesService } from '../../services/rolesService'
 import { notificacionesService } from '../../services/notificacionesService'
 import { servicioService } from '../../services/servicioService'
@@ -39,8 +40,9 @@ function normalizar(texto) {
 // los 8 módulos y Configuración (los mismos ítems del sidebar) y navega
 // al elegido — no hay todavía un índice de contenido real para buscar
 // dentro de cada módulo. Cerrar sesión sí es real.
-export default function DashboardHeader({ clima, climaError, usuario }) {
+export default function DashboardHeader({ clima, climaError, usuario, onAbrirMenu }) {
   const navigate = useNavigate()
+  const { cerrarSesion: cerrarSesionAuth } = useAuth()
   const [rol, setRol] = useState(null)
   const [notificaciones, setNotificaciones] = useState([])
   const [notifAbierto, setNotifAbierto] = useState(false)
@@ -80,8 +82,8 @@ export default function DashboardHeader({ clima, climaError, usuario }) {
     }
   }, [])
 
-  const cerrarSesion = () => {
-    authService.cerrarSesion()
+  const cerrarSesion = async () => {
+    await cerrarSesionAuth()
     navigate('/')
   }
 
@@ -120,7 +122,16 @@ export default function DashboardHeader({ clima, climaError, usuario }) {
   const sinLeer = notificaciones.some((n) => !n.leida)
 
   return (
-    <header className="flex items-center gap-4 border-b border-marron-tierra/10 bg-crema-quinua px-6 py-4">
+    <header className="sticky top-0 z-20 flex items-center gap-4 border-b border-marron-tierra/10 bg-crema-quinua px-6 py-4">
+      <button
+        type="button"
+        onClick={onAbrirMenu}
+        title="Abrir menú"
+        className="rounded-full p-2 text-marron-cafe/60 transition-colors duration-200 hover:bg-marron-tierra/10 hover:text-marron-cafe md:hidden"
+      >
+        <Menu className="size-5" strokeWidth={1.75} />
+      </button>
+
       {clima && (
         <div className="hidden items-center gap-2 text-sm text-marron-cafe/70 sm:flex">
           <CloudSun className="size-5 text-azul-andino" strokeWidth={1.75} />

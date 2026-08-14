@@ -36,6 +36,10 @@ export default function SocialButtons() {
     try {
       await authService.loginConProveedor(proveedor)
       navigate('/panel')
+    } catch (err) {
+      // Todavía no hay Client ID de Google/Facebook ni backend que
+      // verifique el token — ver authService.loginConProveedor.
+      window.alert(err.message)
     } finally {
       setCargando(null)
     }

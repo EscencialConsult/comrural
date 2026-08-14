@@ -23,25 +23,30 @@ export default function ImagenPickerDev({ imagen, setImagen, disponibles }) {
       </button>
 
       {abierto && (
-        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-dashed border-white/30 bg-marron-cafe p-3 w-72">
-          {disponibles.map((nombre) => (
-            <button
-              key={nombre}
-              type="button"
-              onClick={() => setImagen(nombre)}
-              title={nombre}
-              className={`relative rounded-lg overflow-hidden aspect-square border-2 transition-colors duration-200 ${
-                imagen === nombre ? 'border-verde-lima' : 'border-transparent hover:border-white/40'
-              }`}
-            >
-              <img
-                src={`/imagenes-generadas/${nombre}`}
-                alt={nombre}
-                className="w-full h-full object-cover"
-              />
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Mismo patrón que los dropdowns de DashboardHeader.jsx: overlay
+              invisible detrás del panel, clickear afuera cierra. */}
+          <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
+          <div className="relative z-50 grid w-72 max-w-[calc(100vw-2rem)] grid-cols-3 gap-2 rounded-2xl border border-dashed border-white/30 bg-marron-cafe p-3">
+            {disponibles.map((nombre) => (
+              <button
+                key={nombre}
+                type="button"
+                onClick={() => setImagen(nombre)}
+                title={nombre}
+                className={`relative rounded-lg overflow-hidden aspect-square border-2 transition-colors duration-200 ${
+                  imagen === nombre ? 'border-verde-lima' : 'border-transparent hover:border-white/40'
+                }`}
+              >
+                <img
+                  src={`/imagenes-generadas/${nombre}`}
+                  alt={nombre}
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { servicioService } from '../services/servicioService'
-import { authService } from '../services/authService'
+import { useAuth } from '../context/AuthContext.jsx'
 
-// Usuario (de la sesión real de authService) + versión de plataforma —
+// Usuario (de la sesión real de AuthContext) + versión de plataforma —
 // los necesita el nav y el footer de TODAS las páginas, así que se
 // centraliza acá en vez de repetir el mismo fetch en cada page.
 export function useSitioBase() {
-  const [usuario] = useState(() => authService.getSesionActual())
+  const { usuario } = useAuth()
   const [plataforma, setPlataforma] = useState(null)
 
   useEffect(() => {

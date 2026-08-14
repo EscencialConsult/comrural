@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useSitioBase } from '../../hooks/useSitioBase'
 import { climaService } from '../../services/climaService'
 import DashboardSidebar from './DashboardSidebar'
@@ -16,6 +16,17 @@ export default function DashboardLayout() {
   const { usuario } = useSitioBase()
   const [clima, setClima] = useState(null)
   const [climaError, setClimaError] = useState(false)
+  // Drawer del sidebar en pantallas chicas — vive acá (no en
+  // DashboardSidebar) porque tanto el sidebar como el botón que lo abre
+  // (en DashboardHeader) lo necesitan.
+  const [sidebarAbierto, setSidebarAbierto] = useState(false)
+  const { pathname } = useLocation()
+
+  // Al navegar a otro módulo se cierra solo — sin esto, el drawer se
+  // quedaba abierto tapando la pantalla después de elegir un ítem del menú.
+  useEffect(() => {
+    setSidebarAbierto(false)
+  }, [pathname])
 
   useEffect(() => {
     let cancelado = false
@@ -34,11 +45,25 @@ export default function DashboardLayout() {
   }, [])
 
   return (
-    <div className="flex min-h-svh bg-crema-quinua">
-      <DashboardSidebar />
+    // h-svh (no min-h-svh) + overflow-hidden: fija todo el layout a la
+    // altura del viewport para que el <aside> (h-svh, ver
+    // DashboardSidebar.jsx) quede realmente estático. Con min-h-svh el
+    // contenedor crecía con el contenido de la derecha y era la página
+    // entera la que scrolleaba, arrastrando al sidebar con ella. min-h-0
+    // en la columna derecha es necesario para que su overflow-y-auto
+    // scrollee de verdad — sin eso, un hijo flex nunca se encoge por
+    // debajo de la altura de su propio contenido, así que ignoraría el
+    // overflow y volvería a estirar el contenedor padre.
+    <div className="flex h-svh overflow-hidden bg-crema-quinua">
+      <DashboardSidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
-      <div className="flex flex-1 flex-col overflow-y-auto">
-        <DashboardHeader clima={clima} climaError={climaError} usuario={usuario} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <DashboardHeader
+          clima={clima}
+          climaError={climaError}
+          usuario={usuario}
+          onAbrirMenu={() => setSidebarAbierto(true)}
+        />
         <Outlet />
       </div>
     </div>
