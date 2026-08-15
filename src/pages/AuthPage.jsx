@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { User, Mail, Lock, Loader2 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth, ErrorPostLogin } from '../context/AuthContext.jsx'
 import { authService } from '../services/authService'
 import Button from '../components/Button'
 import AuthLayout from '../components/AuthLayout'
@@ -91,7 +91,14 @@ export default function AuthPage({ modoInicial = 'login' }) {
     } catch (err) {
       // Login: mensaje genérico por seguridad (no revela si el usuario
       // existe o no) — decisión confirmada en wiki/comrural-shell-frontend.md.
-      setError(esLogin ? 'Usuario o contraseña incorrectos.' : err.message)
+      // Excepción: ErrorPostLogin pasa DESPUÉS de que Supabase ya confirmó
+      // la contraseña (ej. cuenta inactiva) — a esa altura mostrar el
+      // motivo real no filtra nada, y es más útil que el genérico.
+      if (esLogin) {
+        setError(err instanceof ErrorPostLogin ? err.message : 'Usuario o contraseña incorrectos.')
+      } else {
+        setError(err.message)
+      }
     } finally {
       setEnviando(false)
     }

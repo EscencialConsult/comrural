@@ -12,8 +12,10 @@ import {
   LayoutDashboard,
   SlidersHorizontal,
   Menu,
+  Users,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { puedeVerModulo } from '../../utils/permisos'
 import { rolesService } from '../../services/rolesService'
 import { notificacionesService } from '../../services/notificacionesService'
 import { servicioService } from '../../services/servicioService'
@@ -42,7 +44,7 @@ function normalizar(texto) {
 // dentro de cada módulo. Cerrar sesión sí es real.
 export default function DashboardHeader({ clima, climaError, usuario, onAbrirMenu }) {
   const navigate = useNavigate()
-  const { cerrarSesion: cerrarSesionAuth } = useAuth()
+  const { cerrarSesion: cerrarSesionAuth, permisos } = useAuth()
   const [rol, setRol] = useState(null)
   const [notificaciones, setNotificaciones] = useState([])
   const [notifAbierto, setNotifAbierto] = useState(false)
@@ -89,7 +91,12 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
 
   const itemsBuscables = [
     { id: 'panel', nombre: 'Resumen', ruta: '/panel', Icon: LayoutDashboard },
-    ...modulos.map((m) => ({ id: m.id, nombre: m.nombre, ruta: `/panel/${m.id}`, Icon: MODULO_ICON[m.id] })),
+    ...modulos
+      .filter((m) => puedeVerModulo(m.id, permisos))
+      .map((m) => ({ id: m.id, nombre: m.nombre, ruta: `/panel/${m.id}`, Icon: MODULO_ICON[m.id] })),
+    ...(permisos.has('iam:read')
+      ? [{ id: 'usuarios', nombre: 'Usuarios', ruta: '/panel/usuarios', Icon: Users }]
+      : []),
     { id: 'configuracion', nombre: 'Configuración', ruta: '/panel/configuracion', Icon: SlidersHorizontal },
   ]
 
