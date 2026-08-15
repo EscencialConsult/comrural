@@ -1,24 +1,29 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, SlidersHorizontal, X } from 'lucide-react'
+import { LayoutDashboard, SlidersHorizontal, Users, X } from 'lucide-react'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
+import { useAuth } from '../../context/AuthContext.jsx'
+import { puedeVerModulo } from '../../utils/permisos'
 import AiAdvisorTeaser from './AiAdvisorTeaser'
 
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
 
-// Nav del panel: Resumen + los 8 módulos reales relevados (mismos que
-// /modulos, ver modulos.json) + Configuración. Hoy TODOS habilitados por
-// igual para los 8 roles de prueba (sin distinción) — el día que se
-// definan permisos reales por rol, esto es lo único que cambia por rol:
-// qué ítems de esta lista se muestran/habilitan, no el resto del diseño.
+// Nav del panel: Resumen + los módulos que el rol del usuario habilita
+// (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
+// Configuración, que es de acceso libre.
 //
 // `abierto`/`onCerrar`: en pantallas chicas el sidebar es un drawer que
 // arranca oculto — DashboardLayout guarda ese estado (lo necesita también
 // DashboardHeader para el botón que lo abre) y lo pasa para acá.
 export default function DashboardSidebar({ abierto, onCerrar }) {
-  const [modulos, setModulos] = useState([])
+  const { permisos } = useAuth()
+  const [todosLosModulos, setTodosLosModulos] = useState([])
+  const modulos = useMemo(
+    () => todosLosModulos.filter((m) => puedeVerModulo(m.id, permisos)),
+    [todosLosModulos, permisos],
+  )
   const [colapsado, setColapsado] = useState(
     () => localStorage.getItem(CLAVE_COLAPSADO) === 'true'
   )
@@ -38,7 +43,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   useEffect(() => {
     let cancelado = false
     servicioService.getModulos().then((data) => {
-      if (!cancelado) setModulos(data)
+      if (!cancelado) setTodosLosModulos(data)
     })
     return () => {
       cancelado = true
@@ -182,6 +187,19 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                   </NavLink>
                 )
               })}
+
+              {/* Gestión de usuarios/roles — solo superadmin hoy (permiso
+                  real "iam:read", no un código de rol hardcodeado). */}
+              {permisos.has('iam:read') && (
+                <NavLink
+                  to="/panel/usuarios"
+                  className={linkClass}
+                  title={colapsadoEfectivo ? 'Usuarios' : undefined}
+                >
+                  <Users className="size-5 shrink-0" strokeWidth={1.75} />
+                  <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Usuarios</span>
+                </NavLink>
+              )}
 
               <NavLink
                 to="/panel/configuracion"

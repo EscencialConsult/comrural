@@ -47,6 +47,17 @@ export const authService = {
     }
   },
 
+  // Permisos efectivos ("modulo:accion", ej. "almacen:read") del usuario
+  // autenticado — unión de los permisos de todos sus roles. Es el único
+  // endpoint de identidad que permite auto-consultarse sin pedir iam:read
+  // (ver UserRolesService.getEffectivePermissions en el backend, caso
+  // targetUserId === actorId). AuthContext los usa para decidir qué
+  // módulos del sidebar mostrar y qué rutas permitir.
+  async getPermisos(userId) {
+    const { permissions } = await apiClient.get(`/iam/users/${userId}/effective-permissions`)
+    return permissions
+  },
+
   async cerrarSesion() {
     await supabase.auth.signOut()
   },

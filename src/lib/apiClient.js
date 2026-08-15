@@ -29,7 +29,11 @@ async function request(path, { method = 'GET', body, headers } = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      // Content-Type solo si hay body: Fastify rechaza con "Body cannot be
+      // empty when content-type is set to 'application/json'" un DELETE
+      // (u otro request sin body) que igual mande ese header — no es un
+      // endpoint faltante, es este header sobrando.
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       ...headers,
     },
