@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Search, ShieldOff, Users as UsersIcon } from 'lucide-react'
+import { ChevronDown, ChevronUp, Search, Users as UsersIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { iamService } from '../services/iamService'
 import { MODULO_ICON } from '../config/moduloIcons'
 import UsuarioRoles from '../components/dashboard/UsuarioRoles.jsx'
 import Switch from '../components/Switch.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
+import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 
 const MODULOS_NEGOCIO = Object.keys(MODULO_ICON)
 
@@ -107,17 +108,7 @@ export default function GestionUsuarios() {
   }, [roles, filtroRoles])
 
   if (!puedeGestionar) {
-    return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center">
-        <div className="rounded-full bg-rojo-pasankalla/10 p-4">
-          <ShieldOff className="size-8 text-rojo-pasankalla" strokeWidth={1.5} />
-        </div>
-        <h1 className="text-2xl font-extrabold text-marron-cafe">No tenés acceso a esta sección</h1>
-        <p className="max-w-md text-marron-cafe/70">
-          La gestión de usuarios y roles es solo para superadmin.
-        </p>
-      </main>
-    )
+    return <AccesoDenegado mensaje="La gestión de usuarios y roles es solo para superadmin." />
   }
 
   return (

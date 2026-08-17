@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ShieldOff, ShoppingCart } from 'lucide-react'
+import { CheckCircle2, ShoppingCart } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
 import { lotsService } from '../services/lotsService'
+import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
+import StatCard from '../components/dashboard/StatCard.jsx'
+import FormInput from '../components/FormInput.jsx'
+import FormSelect from '../components/FormSelect.jsx'
+import Button from '../components/Button.jsx'
 
 const nombreProveedor = (p) =>
   p.person ? `${p.person.firstNames} ${p.person.lastNames}` : p.organization?.tradeName || p.organization?.legalName || '—'
@@ -103,15 +108,7 @@ export default function PanelCompras() {
   }
 
   if (!puedeVer) {
-    return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center">
-        <div className="rounded-full bg-rojo-pasankalla/10 p-4">
-          <ShieldOff className="size-8 text-rojo-pasankalla" strokeWidth={1.5} />
-        </div>
-        <h1 className="text-2xl font-extrabold text-marron-cafe">No tenés acceso a este módulo</h1>
-        <p className="max-w-md text-marron-cafe/70">Tu rol actual no incluye Compras.</p>
-      </main>
-    )
+    return <AccesoDenegado titulo="No tenés acceso a este módulo" mensaje="Tu rol actual no incluye Compras." />
   }
 
   return (
@@ -129,21 +126,13 @@ export default function PanelCompras() {
         <span
           title={puedeEmitir ? undefined : 'Tu rol no tiene permiso para crear lotes (lots:create) — hablá con un administrador'}
         >
-          <button
-            type="button"
-            onClick={() => setFormAbierto((v) => !v)}
-            disabled={!puedeEmitir}
-            className="rounded-full bg-verde-lima px-5 py-2.5 text-sm font-medium text-marron-cafe transition-colors duration-200 hover:bg-verde-hoja disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <Button type="button" onClick={() => setFormAbierto((v) => !v)} disabled={!puedeEmitir}>
             {formAbierto ? 'Cancelar' : '+ Nuevo programa'}
-          </button>
+          </Button>
         </span>
       </header>
 
-      <div className="rounded-3xl bg-marron-tierra/5 p-5">
-        <p className="text-2xl font-extrabold text-marron-cafe">{lotesMateriaPrima.length}</p>
-        <p className="text-sm text-marron-cafe/60">Lotes de materia prima emitidos</p>
-      </div>
+      <StatCard valor={lotesMateriaPrima.length} etiqueta="Lotes de materia prima emitidos" />
 
       {ultimoEmitido && (
         <div className="flex items-start gap-3 rounded-2xl bg-verde-hoja/10 p-4">
@@ -167,66 +156,42 @@ export default function PanelCompras() {
       {formAbierto && (
         <form onSubmit={emitirPrograma} noValidate className="flex flex-col gap-6 rounded-3xl bg-marron-tierra/5 p-6">
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
-              Materia prima
-              <select
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              >
-                <option value="">Seleccioná un producto…</option>
-                {productos?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.code})
-                  </option>
-                ))}
-              </select>
-              {productos?.length === 0 && (
-                <span className="text-xs text-marron-cafe/50">
-                  No hay productos cargados todavía — se crean vía la API de productos.
-                </span>
-              )}
-            </label>
+            <FormSelect
+              label="Materia prima"
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+              hint={productos?.length === 0 ? 'No hay productos cargados todavía — se crean vía la API de productos.' : undefined}
+            >
+              <option value="">Seleccioná un producto…</option>
+              {productos?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.code})
+                </option>
+              ))}
+            </FormSelect>
 
-            <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
-              Proveedor
-              <select
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              >
-                <option value="">Seleccioná un proveedor…</option>
-                {proveedores?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {nombreProveedor(p)}
-                  </option>
-                ))}
-              </select>
-              {proveedores?.length === 0 && (
-                <span className="text-xs text-marron-cafe/50">
-                  No hay proveedores cargados todavía — se crean vía la API de proveedores.
-                </span>
-              )}
-            </label>
+            <FormSelect
+              label="Proveedor"
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              hint={proveedores?.length === 0 ? 'No hay proveedores cargados todavía — se crean vía la API de proveedores.' : undefined}
+            >
+              <option value="">Seleccioná un proveedor…</option>
+              {proveedores?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {nombreProveedor(p)}
+                </option>
+              ))}
+            </FormSelect>
 
-            <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
-              Código interno de lote
-              <input
-                disabled
-                value="Se asigna automáticamente al emitir (LOT-N)"
-                className="rounded-xl border border-marron-tierra/20 bg-marron-tierra/5 px-3 py-2 text-sm text-marron-cafe/50"
-              />
-            </label>
+            <FormInput label="Código interno de lote" disabled value="Se asigna automáticamente al emitir (LOT-N)" />
 
-            <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
-              Fecha y hora de llegada programada
-              <input
-                type="datetime-local"
-                value={fechaHora}
-                onChange={(e) => setFechaHora(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
-            </label>
+            <FormInput
+              label="Fecha y hora de llegada programada"
+              type="datetime-local"
+              value={fechaHora}
+              onChange={(e) => setFechaHora(e.target.value)}
+            />
           </div>
 
           <div className="flex flex-col gap-3">
@@ -237,24 +202,9 @@ export default function PanelCompras() {
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <input
-                placeholder="Control de descargüío"
-                value={responsableDescargue}
-                onChange={(e) => setResponsableDescargue(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
-              <input
-                placeholder="Control de calidad"
-                value={responsableCalidad}
-                onChange={(e) => setResponsableCalidad(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
-              <input
-                placeholder="Supervisión"
-                value={responsableSupervision}
-                onChange={(e) => setResponsableSupervision(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
+              <FormInput placeholder="Control de descargüío" value={responsableDescargue} onChange={(e) => setResponsableDescargue(e.target.value)} />
+              <FormInput placeholder="Control de calidad" value={responsableCalidad} onChange={(e) => setResponsableCalidad(e.target.value)} />
+              <FormInput placeholder="Supervisión" value={responsableSupervision} onChange={(e) => setResponsableSupervision(e.target.value)} />
             </div>
           </div>
 
@@ -264,28 +214,14 @@ export default function PanelCompras() {
               <p className="text-xs text-marron-cafe/50 italic">Tampoco se guardan todavía, mismo motivo.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input
-                placeholder="Elaborado por (Compras)"
-                value={elaboradoPor}
-                onChange={(e) => setElaboradoPor(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
-              <input
-                placeholder="Revisado por (Analista de Calidad)"
-                value={revisadoPor}
-                onChange={(e) => setRevisadoPor(e.target.value)}
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
+              <FormInput placeholder="Elaborado por (Compras)" value={elaboradoPor} onChange={(e) => setElaboradoPor(e.target.value)} />
+              <FormInput placeholder="Revisado por (Analista de Calidad)" value={revisadoPor} onChange={(e) => setRevisadoPor(e.target.value)} />
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={enviando || !puedeEmitir}
-            className="self-start rounded-full bg-verde-lima px-6 py-2.5 text-sm font-medium text-marron-cafe transition-colors duration-200 hover:bg-verde-hoja disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <Button type="submit" disabled={enviando || !puedeEmitir} className="self-start">
             {enviando ? 'Emitiendo…' : 'Emitir programa'}
-          </button>
+          </Button>
         </form>
       )}
 
