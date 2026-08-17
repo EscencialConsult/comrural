@@ -12,6 +12,7 @@ import RecuperarContrasena from './pages/RecuperarContrasena.jsx'
 import Panel from './pages/Panel.jsx'
 import PanelModulo from './pages/PanelModulo.jsx'
 import PanelCompras from './pages/PanelCompras.jsx'
+import PanelAlmacen from './pages/PanelAlmacen.jsx'
 import GestionUsuarios from './pages/GestionUsuarios.jsx'
 import NotFound from './pages/NotFound.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
@@ -64,6 +65,7 @@ function App() {
         <Route path="/panel" element={<Panel />} />
         <Route path="/panel/usuarios" element={<GestionUsuarios />} />
         <Route path="/panel/compras" element={<PanelCompras />} />
+        <Route path="/panel/almacen" element={<PanelAlmacen />} />
         <Route path="/panel/:moduloId" element={<PanelModulo />} />
       </Route>
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ShieldOff } from 'lucide-react'
 import { servicioService } from '../services/servicioService'
 import { ESTADO_LABEL, ESTADO_STYLE } from '../components/ModuloCard'
 import { MODULO_ICON } from '../config/moduloIcons'
 import { useAuth } from '../context/AuthContext.jsx'
 import { puedeVerModulo } from '../utils/permisos'
+import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 
 // Destino real de cada ítem del sidebar que todavía no tiene pantalla
 // propia — reutiliza el estado real de modulos.json (relevado/parcial/
@@ -43,19 +43,14 @@ export default function PanelModulo() {
 
   if (sinAcceso) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center">
-        <div className="rounded-full bg-rojo-pasankalla/10 p-4">
-          <ShieldOff className="size-8 text-rojo-pasankalla" strokeWidth={1.5} />
-        </div>
-        <h1 className="text-2xl font-extrabold text-marron-cafe">No tenés acceso a este módulo</h1>
-        <p className="max-w-md text-marron-cafe/70">
-          Tu rol actual no incluye {modulo.nombre}. Si creés que deberías verlo, pedile a un
-          administrador que te asigne el rol correspondiente.
-        </p>
+      <AccesoDenegado
+        titulo="No tenés acceso a este módulo"
+        mensaje={`Tu rol actual no incluye ${modulo.nombre}. Si creés que deberías verlo, pedile a un administrador que te asigne el rol correspondiente.`}
+      >
         <Link to="/panel" className="text-sm font-medium text-verde-bosque hover:text-verde-hoja">
           ← Volver al resumen
         </Link>
-      </main>
+      </AccesoDenegado>
     )
   }
 
