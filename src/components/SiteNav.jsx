@@ -3,7 +3,7 @@ import { NAV_LINKS } from '../config/nav'
 
 export default function SiteNav({ usuario }) {
   return (
-    <nav className="flex items-center justify-between px-6 sm:px-10 py-5">
+    <nav className="sticky top-0 z-20 flex items-center justify-between border-b border-marron-tierra/10 bg-crema-quinua px-6 sm:px-10 py-5">
       <div className="flex items-center gap-10">
         <Link to="/">
           <img src="/logos/marcacolor.webp" alt="COMRURAL XXI" className="h-11" />
