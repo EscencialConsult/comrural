@@ -49,14 +49,34 @@ export default function PanelCompras() {
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState(null)
+  const [errorCarga, setErrorCarga] = useState(null)
   const [ultimoEmitido, setUltimoEmitido] = useState(null)
 
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    productsService.listar().then((data) => !cancelado && setProductos(data))
-    suppliersService.listar().then((data) => !cancelado && setProveedores(data))
-    lotsService.listar().then((data) => !cancelado && setLotes(data))
+    // productsService/suppliersService.listar() ahora devuelven el sobre
+    // paginado real { data, nextCursor, hasMore } (mismo criterio que
+    // countries/people/organizations) — antes devolvían el array directo,
+    // por eso acá hace falta .data explícito. Sin este fix, productos/
+    // proveedores quedaban seteados al objeto entero y cualquier .map()/
+    // .find() sobre ellos tiraba abajo la pantalla.
+    //
+    // Los tres .catch() son nuevos: antes, si cualquiera de estas cargas
+    // fallaba, los selects del formulario quedaban vacíos para siempre sin
+    // ningún aviso — ni error ni "cargando", solo un desplegable en blanco.
+    productsService
+      .listar()
+      .then((resp) => !cancelado && setProductos(resp.data))
+      .catch((err) => !cancelado && setErrorCarga(err.message))
+    suppliersService
+      .listar()
+      .then((resp) => !cancelado && setProveedores(resp.data))
+      .catch((err) => !cancelado && setErrorCarga(err.message))
+    lotsService
+      .listar({ limit: 100 })
+      .then((resp) => !cancelado && setLotes(resp.data))
+      .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true
     }
@@ -131,6 +151,12 @@ export default function PanelCompras() {
           </Button>
         </span>
       </header>
+
+      {errorCarga && (
+        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">
+          No se pudo cargar todo lo necesario para emitir un programa: {errorCarga}
+        </p>
+      )}
 
       <StatCard valor={lotesMateriaPrima.length} etiqueta="Lotes de materia prima emitidos" />
 

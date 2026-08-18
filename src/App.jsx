@@ -17,6 +17,9 @@ import GestionUsuarios from './pages/GestionUsuarios.jsx'
 import PanelPaises from './pages/PanelPaises.jsx'
 import PanelPersonas from './pages/PanelPersonas.jsx'
 import PanelOrganizaciones from './pages/PanelOrganizaciones.jsx'
+import PanelProveedores from './pages/PanelProveedores.jsx'
+import PanelProductos from './pages/PanelProductos.jsx'
+import PanelLotes from './pages/PanelLotes.jsx'
 import NotFound from './pages/NotFound.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
 
@@ -70,6 +73,9 @@ function App() {
         <Route path="/panel/paises" element={<PanelPaises />} />
         <Route path="/panel/personas" element={<PanelPersonas />} />
         <Route path="/panel/organizaciones" element={<PanelOrganizaciones />} />
+        <Route path="/panel/proveedores" element={<PanelProveedores />} />
+        <Route path="/panel/productos" element={<PanelProductos />} />
+        <Route path="/panel/lotes" element={<PanelLotes />} />
         <Route path="/panel/compras" element={<PanelCompras />} />
         <Route path="/panel/almacen" element={<PanelAlmacen />} />
         <Route path="/panel/:moduloId" element={<PanelModulo />} />

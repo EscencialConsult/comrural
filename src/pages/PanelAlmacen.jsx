@@ -32,14 +32,28 @@ export default function PanelAlmacen() {
 
   const [productos, setProductos] = useState(null)
   const [lotes, setLotes] = useState(null)
+  const [errorCarga, setErrorCarga] = useState(null)
   const [sesiones, setSesiones] = useState({}) // lotId -> { apertura, cierre }
   const [pantalla, setPantalla] = useState({ vista: 'lista', lotId: null })
 
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    productsService.listar().then((data) => !cancelado && setProductos(data))
-    lotsService.listar().then((data) => !cancelado && setLotes(data))
+    // productsService.listar() ahora devuelve el sobre paginado real
+    // { data, nextCursor, hasMore } (mismo criterio que countries/people/
+    // organizations) — antes devolvía el array directo. Sin .data acá,
+    // productos quedaba seteado al objeto entero y productos?.find(...)
+    // tiraba abajo la pantalla. Los .catch() son nuevos: sin ellos, si
+    // cualquiera de las dos cargas fallaba, la pantalla quedaba en
+    // "Cargando…" para siempre sin ningún aviso.
+    productsService
+      .listar()
+      .then((resp) => !cancelado && setProductos(resp.data))
+      .catch((err) => !cancelado && setErrorCarga(err.message))
+    lotsService
+      .listar({ limit: 100 })
+      .then((resp) => !cancelado && setLotes(resp.data))
+      .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true
     }
@@ -99,6 +113,12 @@ export default function PanelAlmacen() {
           <p className="text-sm text-marron-cafe/60">Recepción de materia prima.</p>
         </div>
       </header>
+
+      {errorCarga && (
+        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">
+          No se pudo cargar todo lo necesario: {errorCarga}
+        </p>
+      )}
 
       <section className="grid gap-3 sm:grid-cols-4">
         <StatCard valor={kpis.pendientes} etiqueta="Mis pendientes" />
