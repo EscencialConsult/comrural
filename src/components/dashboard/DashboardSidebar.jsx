@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, SlidersHorizontal, Users, Globe, IdCard, Building2, X } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { LayoutDashboard, SlidersHorizontal, Users, ChevronDown, X } from 'lucide-react'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
+import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { puedeVerModulo } from '../../utils/permisos'
 import AiAdvisorTeaser from './AiAdvisorTeaser'
@@ -10,23 +11,12 @@ import AiAdvisorTeaser from './AiAdvisorTeaser'
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
 
-// Datos maestros/catálogo (FE·M1-M6 del tablero) — a diferencia de los 8
-// módulos de negocio (Almacén, Calidad...), estos no vienen de
-// servicioService.getModulos(): son pantallas fijas del frontend, cada
-// una gateada por su propio permiso real "<entidad>:read" (ver docs de
-// cada módulo en comrural_erp_backend/docs/). Sumar acá cada pantalla
-// nueva a medida que se completa (M2 Persona, M3 Organización, etc.).
-const CATALOGOS = [
-  { id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe },
-  { id: 'personas', nombre: 'Personas', ruta: '/panel/personas', permiso: 'people:read', Icon: IdCard },
-  {
-    id: 'organizaciones',
-    nombre: 'Organizaciones',
-    ruta: '/panel/organizaciones',
-    permiso: 'organizations:read',
-    Icon: Building2,
-  },
-]
+// Datos maestros (FE·M1-M6 del tablero): qué pantalla va agrupada bajo qué
+// módulo padre vive en config/gruposMaestros.js — es la MISMA fuente que
+// usa GrupoTabs.jsx para las pastillas de arriba de cada pantalla. Sumar
+// una pantalla nueva es una línea ahí, no acá.
+const SUBITEMS_COMPRAS = GRUPOS_MAESTROS.find((g) => g.id === 'compras').items
+const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
 // (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
@@ -42,7 +32,14 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
     () => todosLosModulos.filter((m) => puedeVerModulo(m.id, permisos)),
     [todosLosModulos, permisos],
   )
-  const catalogos = useMemo(() => CATALOGOS.filter((c) => permisos.has(c.permiso)), [permisos])
+  const subitemsCompras = useMemo(
+    () => SUBITEMS_COMPRAS.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsConfiguracion = useMemo(
+    () => SUBITEMS_CONFIGURACION.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
   const [colapsado, setColapsado] = useState(
     () => localStorage.getItem(CLAVE_COLAPSADO) === 'true'
   )
@@ -58,6 +55,13 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   const navRef = useRef(null)
   const [sombraArriba, setSombraArriba] = useState(false)
   const [sombraAbajo, setSombraAbajo] = useState(false)
+  // El ResizeObserver de abajo solo mira el tamaño propio del <nav> (fijo,
+  // h-full) — no su scrollHeight. Expandir un NavGroup (Compras/
+  // Configuración) cambia cuánto contenido hay ADENTRO sin cambiar el
+  // tamaño del <nav> en sí, así que el observer no se entera. Cada
+  // NavGroup avisa acá cuando se abre/cierra para forzar el recálculo.
+  const [navVersion, setNavVersion] = useState(0)
+  const alExpandirGrupo = () => setNavVersion((v) => v + 1)
 
   useEffect(() => {
     let cancelado = false
@@ -100,7 +104,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
       el.removeEventListener('scroll', actualizar)
       resizeObserver.disconnect()
     }
-  }, [modulos, catalogos, colapsadoEfectivo])
+  }, [modulos, subitemsCompras, subitemsConfiguracion, colapsadoEfectivo, navVersion])
 
   const linkClass = ({ isActive }) =>
     `sidebar-navitem flex items-center rounded-xl py-2.5 text-sm font-medium ${
@@ -194,6 +198,25 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {modulos.map((modulo) => {
                 const Icon = MODULO_ICON[modulo.id]
+                // Compras es el único módulo de negocio que además agrupa
+                // datos maestros (Personas, Organizaciones, y lo que siga
+                // de M4-M6) — pedido explícito, ver SUBITEMS_COMPRAS. Si
+                // el usuario no tiene ningún permiso de esos, queda como
+                // un link plano igual que el resto de los módulos.
+                if (modulo.id === 'compras' && subitemsCompras.length > 0) {
+                  return (
+                    <NavGroup
+                      key={modulo.id}
+                      nombre={modulo.nombre}
+                      ruta={`/panel/${modulo.id}`}
+                      Icon={Icon}
+                      subitems={subitemsCompras}
+                      colapsadoEfectivo={colapsadoEfectivo}
+                      linkClass={linkClass}
+                      onToggle={alExpandirGrupo}
+                    />
+                  )
+                }
                 return (
                   <NavLink
                     key={modulo.id}
@@ -220,35 +243,31 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                 </NavLink>
               )}
 
-              {/* Catálogos (FE·M1-M6) — datos maestros, cada ítem gateado
-                  por su propio permiso real. El grupo entero se oculta si
-                  ninguno está habilitado, en vez de mostrar un título
-                  vacío. Sin encabezado en modo colapsado: no hay lugar
-                  para texto y los íconos ya quedan agrupados visualmente. */}
-              {catalogos.length > 0 && (
-                <>
-                  {!colapsadoEfectivo && (
-                    <p className="mt-4 mb-1 px-3 text-[11px] font-semibold tracking-wide text-crema-quinua/40 uppercase">
-                      Catálogos
-                    </p>
-                  )}
-                  {catalogos.map((c) => (
-                    <NavLink key={c.id} to={c.ruta} className={linkClass} title={colapsadoEfectivo ? c.nombre : undefined}>
-                      <c.Icon className="size-5 shrink-0" strokeWidth={1.75} />
-                      <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>{c.nombre}</span>
-                    </NavLink>
-                  ))}
-                </>
+              {/* Configuración: acceso libre en sí misma (por eso nunca se
+                  gatea el link padre), pero Países vive adentro como
+                  sub-item propio — pedido explícito. Si Países no está
+                  habilitado (sin countries:read) queda como el link plano
+                  de siempre. */}
+              {subitemsConfiguracion.length > 0 ? (
+                <NavGroup
+                  nombre="Configuración"
+                  ruta="/panel/configuracion"
+                  Icon={SlidersHorizontal}
+                  subitems={subitemsConfiguracion}
+                  colapsadoEfectivo={colapsadoEfectivo}
+                  linkClass={linkClass}
+                  onToggle={alExpandirGrupo}
+                />
+              ) : (
+                <NavLink
+                  to="/panel/configuracion"
+                  className={linkClass}
+                  title={colapsadoEfectivo ? 'Configuración' : undefined}
+                >
+                  <SlidersHorizontal className="size-5 shrink-0" strokeWidth={1.75} />
+                  <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Configuración</span>
+                </NavLink>
               )}
-
-              <NavLink
-                to="/panel/configuracion"
-                className={linkClass}
-                title={colapsadoEfectivo ? 'Configuración' : undefined}
-              >
-                <SlidersHorizontal className="size-5 shrink-0" strokeWidth={1.75} />
-                <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Configuración</span>
-              </NavLink>
             </nav>
 
             {/* Sombras de "hay más" — se apagan solas apenas no queda nada
@@ -281,5 +300,75 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
         />
       </div>
     </>
+  )
+}
+
+// Ítem de nav con sub-items desplegables (Compras→Personas/Organizaciones,
+// Configuración→Países). El padre sigue siendo un link real a su propia
+// pantalla — la flechita es un toggle aparte al lado, no le roba el click
+// al link. Se auto-abre (nunca se auto-cierra) cuando la ruta activa es
+// uno de sus sub-items, para no esconder dónde está parado el usuario;
+// aparte de eso el toggle es manual.
+//
+// En modo colapsado (sidebar a íconos) no hay lugar para desplegar nada:
+// el padre queda como link directo a su propia pantalla, sin sub-items —
+// mismo criterio que ya tenían los ítems de "Catálogos" antes de agrupar.
+function NavGroup({ nombre, ruta, Icon, subitems, colapsadoEfectivo, linkClass, onToggle }) {
+  const location = useLocation()
+  const activoPorRuta = subitems.some((s) => location.pathname === s.ruta)
+  const [abierto, setAbierto] = useState(activoPorRuta)
+
+  useEffect(() => {
+    if (activoPorRuta) {
+      setAbierto(true)
+      onToggle?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a propósito
+    // solo depende de activoPorRuta: onToggle se recrea en cada render del
+    // padre, incluirla dispararía este efecto en renders no relacionados.
+  }, [activoPorRuta])
+
+  if (colapsadoEfectivo) {
+    return (
+      <NavLink to={ruta} className={linkClass} title={nombre}>
+        {Icon && <Icon className="size-5 shrink-0" strokeWidth={1.75} />}
+      </NavLink>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-0.5">
+        <NavLink to={ruta} className={({ isActive }) => `${linkClass({ isActive })} flex-1`}>
+          {Icon && <Icon className="size-5 shrink-0" strokeWidth={1.75} />}
+          <span className="sidebar-label">{nombre}</span>
+        </NavLink>
+        <button
+          type="button"
+          onClick={() => {
+            setAbierto((v) => !v)
+            onToggle?.()
+          }}
+          aria-expanded={abierto}
+          aria-label={abierto ? `Ocultar ${nombre}` : `Mostrar ${nombre}`}
+          className="shrink-0 rounded-lg p-2 text-crema-quinua/50 transition-colors duration-150 hover:bg-crema-quinua/10 hover:text-crema-quinua"
+        >
+          <ChevronDown
+            className={`size-4 shrink-0 transition-transform duration-200 ${abierto ? 'rotate-180' : ''}`}
+            strokeWidth={1.75}
+          />
+        </button>
+      </div>
+      {abierto && (
+        <div className="mt-1 ml-4 flex flex-col gap-1 border-l border-crema-quinua/10 pl-3">
+          {subitems.map((s) => (
+            <NavLink key={s.id} to={s.ruta} className={linkClass}>
+              <s.Icon className="size-4 shrink-0" strokeWidth={1.75} />
+              <span className="sidebar-label">{s.nombre}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

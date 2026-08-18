@@ -1,109 +1,49 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { IdCard, CheckCircle2, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
+import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
 import { peopleService } from '../services/peopleService'
-import { siguienteCursor } from '../services/paginacion'
 import { telefonoValido, ciValido, normalizarCi } from '../config/validaciones'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import Button from '../components/Button.jsx'
 
-// FE·M2 · Gestionar Persona (ver comrural_erp_backend/docs/people.md).
-// Misma arquitectura que Organizaciones (FE·M3), ya corregida ahí después
-// de una revisión a fondo: la vista de detalle pide GET /people/:id por su
-// cuenta (no busca en el array del listado — el id ordena por UUID
-// aleatorio, no por fecha), "cargar más" no reemplaza el listado entero si
-// falla, y el alta refresca la página 1 real en vez de adivinar dónde va el
-// registro nuevo.
+// FE·M2 · Gestionar Persona (ver comrural_erp_backend/docs/people.md). El
+// listado paginado + detalle con fetch propio + guarda contra condición de
+// carrera vive en useCatalogoMaestro (hooks/useCatalogoMaestro.js) — mismo
+// patrón que Organizaciones/Proveedores/Productos, extraído a un solo lugar
+// después de que ese patrón se copiara a mano 4 veces y un fix se perdiera
+// al copiarlo. Acá solo queda lo específico de Personas: los campos del
+// formulario y su validación.
 export default function PanelPersonas() {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('people:read')
   const puedeCrear = permisos.has('people:create')
   const puedeEditar = permisos.has('people:update')
 
-  const [personas, setPersonas] = useState(null)
-  const [cursor, setCursor] = useState(null)
-  const [cargandoMas, setCargandoMas] = useState(false)
-  const [errorCargarMas, setErrorCargarMas] = useState(null)
   const [vista, setVista] = useState({ modo: 'lista', personId: null })
-  const [personaDetalle, setPersonaDetalle] = useState(null)
-  const [errorDetalle, setErrorDetalle] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
-  const [errorCarga, setErrorCarga] = useState(null)
-
-  const cargarPrimeraPagina = () => {
-    setErrorCarga(null)
-    peopleService
-      .listar({ limit: 50 })
-      .then((resp) => {
-        setPersonas(resp.data)
-        setCursor(siguienteCursor(resp))
-      })
-      .catch((err) => setErrorCarga(err.message))
-  }
-
-  const cargarMas = async () => {
-    if (!cursor || cargandoMas) return
-    setCargandoMas(true)
-    setErrorCargarMas(null)
-    try {
-      const resp = await peopleService.listar({ cursor, limit: 50 })
-      setPersonas((prev) => [...prev, ...resp.data])
-      setCursor(siguienteCursor(resp))
-    } catch (err) {
-      setErrorCargarMas(err.message)
-    } finally {
-      setCargandoMas(false)
-    }
-  }
-
-  // Guarda cuál es el pedido de detalle más reciente: si el usuario clickea
-  // una fila y enseguida clickea otra, la respuesta del primer pedido puede
-  // llegar DESPUÉS que la del segundo (orden de red no garantizado) — sin
-  // este chequeo, esa respuesta vieja pisaba los datos de la persona que el
-  // usuario ya está mirando, mostrando la entidad equivocada (mismo bug que
-  // tenía Organizaciones — se corrige acá también).
-  const detalleSolicitadoRef = useRef(null)
+  const {
+    items: personas,
+    setItems: setPersonas,
+    cursor,
+    cargandoMas,
+    errorCargarMas,
+    errorCarga,
+    cargarPrimeraPagina,
+    cargarMas,
+    detalle: personaDetalle,
+    setDetalle: setPersonaDetalle,
+    errorDetalle,
+    abrirDetalle: abrirDetalleHook,
+    confirmacion,
+    setConfirmacion,
+  } = useCatalogoMaestro(peopleService, { puedeVer })
 
   const abrirDetalle = (personId) => {
     setVista({ modo: 'detalle', personId })
-    setPersonaDetalle(null)
-    setErrorDetalle(null)
-    detalleSolicitadoRef.current = personId
-    peopleService
-      .obtener(personId)
-      .then((data) => {
-        if (detalleSolicitadoRef.current === personId) setPersonaDetalle(data)
-      })
-      .catch((err) => {
-        if (detalleSolicitadoRef.current === personId) setErrorDetalle(err.message)
-      })
+    abrirDetalleHook(personId)
   }
-
-  useEffect(() => {
-    if (!puedeVer) return
-    let cancelado = false
-    peopleService
-      .listar({ limit: 50 })
-      .then((resp) => {
-        if (cancelado) return
-        setPersonas(resp.data)
-        setCursor(siguienteCursor(resp))
-      })
-      .catch((err) => {
-        if (!cancelado) setErrorCarga(err.message)
-      })
-    return () => {
-      cancelado = true
-    }
-  }, [puedeVer])
-
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
 
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso al listado de personas." />

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Building2, CheckCircle2, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
+import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
 import { organizationsService } from '../services/organizationsService'
 import { countriesService } from '../services/countriesService'
-import { siguienteCursor } from '../services/paginacion'
 import { telefonoValido, emailValido } from '../config/validaciones'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
@@ -31,74 +31,37 @@ export default function PanelOrganizaciones() {
   const puedeCrear = permisos.has('organizations:create')
   const puedeEditar = permisos.has('organizations:update')
 
-  const [organizaciones, setOrganizaciones] = useState(null)
-  const [cursor, setCursor] = useState(null)
-  const [cargandoMas, setCargandoMas] = useState(false)
-  const [errorCargarMas, setErrorCargarMas] = useState(null)
   const [paises, setPaises] = useState(null)
   const [paisesError, setPaisesError] = useState(false)
   const [vista, setVista] = useState({ modo: 'lista', organizationId: null })
-  const [orgDetalle, setOrgDetalle] = useState(null)
-  const [errorDetalle, setErrorDetalle] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
-  const [errorCarga, setErrorCarga] = useState(null)
-
-  const cargarPrimeraPagina = () => {
-    setErrorCarga(null)
-    organizationsService
-      .listar({ limit: 50 })
-      .then((resp) => {
-        setOrganizaciones(resp.data)
-        setCursor(siguienteCursor(resp))
-      })
-      .catch((err) => setErrorCarga(err.message))
-  }
-
-  const cargarMas = async () => {
-    if (!cursor || cargandoMas) return
-    setCargandoMas(true)
-    setErrorCargarMas(null)
-    try {
-      const resp = await organizationsService.listar({ cursor, limit: 50 })
-      setOrganizaciones((prev) => [...prev, ...resp.data])
-      setCursor(siguienteCursor(resp))
-    } catch (err) {
-      // A propósito NO usa errorCarga: eso reemplazaba el listado entero por
-      // el banner de error, borrando de la pantalla las organizaciones que
-      // ya habían cargado bien solo porque "cargar más" falló una vez.
-      setErrorCargarMas(err.message)
-    } finally {
-      setCargandoMas(false)
-    }
-  }
-
-  // Guarda cuál es el pedido de detalle más reciente: si el usuario clickea
-  // una fila y enseguida clickea otra, la respuesta del primer pedido puede
-  // llegar DESPUÉS que la del segundo (orden de red no garantizado) — sin
-  // este chequeo, esa respuesta vieja pisaba los datos de la organización
-  // que el usuario ya está mirando, mostrando la entidad equivocada.
-  const detalleSolicitadoRef = useRef(null)
+  const {
+    items: organizaciones,
+    setItems: setOrganizaciones,
+    cursor,
+    cargandoMas,
+    errorCargarMas,
+    errorCarga,
+    cargarPrimeraPagina,
+    cargarMas,
+    detalle: orgDetalle,
+    setDetalle: setOrgDetalle,
+    errorDetalle,
+    abrirDetalle: abrirDetalleHook,
+    confirmacion,
+    setConfirmacion,
+  } = useCatalogoMaestro(organizationsService, { puedeVer })
 
   const abrirDetalle = (organizationId) => {
     setVista({ modo: 'detalle', organizationId })
-    setOrgDetalle(null)
-    setErrorDetalle(null)
-    detalleSolicitadoRef.current = organizationId
-    organizationsService
-      .obtener(organizationId)
-      .then((data) => {
-        if (detalleSolicitadoRef.current === organizationId) setOrgDetalle(data)
-      })
-      .catch((err) => {
-        if (detalleSolicitadoRef.current === organizationId) setErrorDetalle(err.message)
-      })
+    abrirDetalleHook(organizationId)
   }
 
+  // El selector de país (para el form) es independiente del listado de
+  // organizaciones — no vive en useCatalogoMaestro porque ningún otro
+  // módulo lo necesita, solo Organizaciones.
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    // El selector de país (para el form) y el listado de organizaciones no
-    // dependen entre sí — se piden en paralelo, no en cadena.
     countriesService
       .listar()
       .then((data) => {
@@ -110,26 +73,10 @@ export default function PanelOrganizaciones() {
         // puntualmente (ver FormularioOrganizacion / paisesError).
         if (!cancelado) setPaisesError(true)
       })
-    organizationsService
-      .listar({ limit: 50 })
-      .then((resp) => {
-        if (cancelado) return
-        setOrganizaciones(resp.data)
-        setCursor(siguienteCursor(resp))
-      })
-      .catch((err) => {
-        if (!cancelado) setErrorCarga(err.message)
-      })
     return () => {
       cancelado = true
     }
   }, [puedeVer])
-
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
 
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso al catálogo de organizaciones." />

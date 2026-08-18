@@ -4,6 +4,7 @@ import { useSitioBase } from '../../hooks/useSitioBase'
 import { climaService } from '../../services/climaService'
 import DashboardSidebar from './DashboardSidebar'
 import DashboardHeader from './DashboardHeader'
+import GrupoTabs from './GrupoTabs'
 
 // Armazón único de sidebar + header para toda la zona autenticada
 // (/panel y sus subpáginas). Antes cada página (Panel.jsx, PanelModulo.jsx)
@@ -64,6 +65,7 @@ export default function DashboardLayout() {
           usuario={usuario}
           onAbrirMenu={() => setSidebarAbierto(true)}
         />
+        <GrupoTabs />
         <Outlet />
       </div>
     </div>
