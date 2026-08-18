@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, SlidersHorizontal, Users, X } from 'lucide-react'
+import { LayoutDashboard, SlidersHorizontal, Users, Globe, IdCard, Building2, X } from 'lucide-react'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -9,6 +9,24 @@ import AiAdvisorTeaser from './AiAdvisorTeaser'
 
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
+
+// Datos maestros/catálogo (FE·M1-M6 del tablero) — a diferencia de los 8
+// módulos de negocio (Almacén, Calidad...), estos no vienen de
+// servicioService.getModulos(): son pantallas fijas del frontend, cada
+// una gateada por su propio permiso real "<entidad>:read" (ver docs de
+// cada módulo en comrural_erp_backend/docs/). Sumar acá cada pantalla
+// nueva a medida que se completa (M2 Persona, M3 Organización, etc.).
+const CATALOGOS = [
+  { id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe },
+  { id: 'personas', nombre: 'Personas', ruta: '/panel/personas', permiso: 'people:read', Icon: IdCard },
+  {
+    id: 'organizaciones',
+    nombre: 'Organizaciones',
+    ruta: '/panel/organizaciones',
+    permiso: 'organizations:read',
+    Icon: Building2,
+  },
+]
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
 // (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
@@ -24,6 +42,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
     () => todosLosModulos.filter((m) => puedeVerModulo(m.id, permisos)),
     [todosLosModulos, permisos],
   )
+  const catalogos = useMemo(() => CATALOGOS.filter((c) => permisos.has(c.permiso)), [permisos])
   const [colapsado, setColapsado] = useState(
     () => localStorage.getItem(CLAVE_COLAPSADO) === 'true'
   )
@@ -81,7 +100,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
       el.removeEventListener('scroll', actualizar)
       resizeObserver.disconnect()
     }
-  }, [modulos, colapsadoEfectivo])
+  }, [modulos, catalogos, colapsadoEfectivo])
 
   const linkClass = ({ isActive }) =>
     `sidebar-navitem flex items-center rounded-xl py-2.5 text-sm font-medium ${
@@ -199,6 +218,27 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                   <Users className="size-5 shrink-0" strokeWidth={1.75} />
                   <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Usuarios</span>
                 </NavLink>
+              )}
+
+              {/* Catálogos (FE·M1-M6) — datos maestros, cada ítem gateado
+                  por su propio permiso real. El grupo entero se oculta si
+                  ninguno está habilitado, en vez de mostrar un título
+                  vacío. Sin encabezado en modo colapsado: no hay lugar
+                  para texto y los íconos ya quedan agrupados visualmente. */}
+              {catalogos.length > 0 && (
+                <>
+                  {!colapsadoEfectivo && (
+                    <p className="mt-4 mb-1 px-3 text-[11px] font-semibold tracking-wide text-crema-quinua/40 uppercase">
+                      Catálogos
+                    </p>
+                  )}
+                  {catalogos.map((c) => (
+                    <NavLink key={c.id} to={c.ruta} className={linkClass} title={colapsadoEfectivo ? c.nombre : undefined}>
+                      <c.Icon className="size-5 shrink-0" strokeWidth={1.75} />
+                      <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>{c.nombre}</span>
+                    </NavLink>
+                  ))}
+                </>
               )}
 
               <NavLink
