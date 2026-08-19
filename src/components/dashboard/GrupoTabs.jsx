@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
@@ -15,10 +16,21 @@ import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
 export default function GrupoTabs() {
   const location = useLocation()
   const { permisos } = useAuth()
+  const scrollRef = useRef(null)
 
   const grupo = GRUPOS_MAESTROS.find(
     (g) => g.padre.ruta === location.pathname || g.items.some((item) => item.ruta === location.pathname),
   )
+
+  // Al navegar, la tab activa se centra automáticamente — útil en mobile
+  // cuando la tab seleccionada está fuera de la zona visible.
+  useEffect(() => {
+    if (!scrollRef.current) return
+    const activa = scrollRef.current.querySelector('[aria-current="page"]')
+    if (activa) {
+      activa.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
+    }
+  }, [location.pathname])
 
   if (!grupo) return null
 
@@ -36,23 +48,31 @@ export default function GrupoTabs() {
   if ((puedeVerPadre ? 1 : 0) + hijos.length <= 1) return null
 
   return (
-    <nav
-      aria-label="Pantallas de esta sección"
-      className="flex flex-wrap items-center gap-0.5 border-b border-marron-tierra/10 bg-crema-quinua px-6 pt-4 pb-3 md:px-10"
-    >
-      {puedeVerPadre && (
-        <>
-          <Pestaña item={grupo.padre} esRaiz />
-          {/* Separador entre la pestaña "de inicio" del área y sus
-              hermanas — sin esto, Compras se veía como una hermana más en
-              la fila en vez de la entrada principal de toda la sección. */}
-          {hijos.length > 0 && <span aria-hidden="true" className="mx-1.5 h-4 w-px bg-marron-tierra/15" />}
-        </>
-      )}
-      {hijos.map((item) => (
-        <Pestaña key={item.ruta} item={item} />
-      ))}
-    </nav>
+    <div className="relative overflow-hidden border-b border-marron-tierra/10 bg-crema-quinua">
+      {/* Fades en los bordes: indican que hay más contenido al deslizar.
+          pointer-events-none para que no bloqueen el tap sobre las tabs. */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-crema-quinua to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-crema-quinua to-transparent" />
+
+      <nav
+        ref={scrollRef}
+        aria-label="Pantallas de esta sección"
+        className="flex items-center gap-0.5 overflow-x-auto px-6 pt-4 pb-3 md:px-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {puedeVerPadre && (
+          <>
+            <Pestaña item={grupo.padre} esRaiz />
+            {/* Separador entre la pestaña "de inicio" del área y sus
+                hermanas — sin esto, Compras se veía como una hermana más en
+                la fila en vez de la entrada principal de toda la sección. */}
+            {hijos.length > 0 && <span aria-hidden="true" className="mx-1.5 h-4 w-px shrink-0 bg-marron-tierra/15" />}
+          </>
+        )}
+        {hijos.map((item) => (
+          <Pestaña key={item.ruta} item={item} />
+        ))}
+      </nav>
+    </div>
   )
 }
 
@@ -62,9 +82,9 @@ function Pestaña({ item, esRaiz = false }) {
       to={item.ruta}
       end={esRaiz}
       className={({ isActive }) =>
-        `flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-medium transition-all duration-200 ease-out ${
+        `flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-out ${
           isActive
-            ? 'bg-verde-lima text-marron-cafe'
+            ? 'bg-verde-lima text-marron-cafe shadow-sm scale-[1.03]'
             : 'text-marron-cafe/50 hover:-translate-y-0.5 hover:bg-marron-tierra/5 hover:text-marron-cafe/80'
         }`
       }
