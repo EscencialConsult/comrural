@@ -6,6 +6,7 @@ import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
 import { formsService } from '../services/formsService'
 import { areasService } from '../services/areasService'
 import { formItemsService } from '../services/formItemsService'
+import { siguienteCursor } from '../services/paginacion'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
@@ -377,6 +378,10 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
   const [items, setItems] = useState(null)
   const [error, setError] = useState(null)
   const [agregandoEnSeccion, setAgregandoEnSeccion] = useState(null)
+  // Nombre ya confirmado para la sección nueva que se está creando — hasta
+  // que esto tenga valor, el panel de "Agregar sección nueva" solo muestra
+  // el input del nombre (no todo el formulario de alta de campo junto).
+  const [seccionNuevaNombre, setSeccionNuevaNombre] = useState(null)
 
   const [headerDraft, setHeaderDraft] = useState({ name: form.name, areaId: form.areaId, isActive: form.isActive })
   const [labelDrafts, setLabelDrafts] = useState({})
@@ -384,12 +389,32 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
   const [guardandoTodo, setGuardandoTodo] = useState(false)
   const [errorGuardado, setErrorGuardado] = useState(null)
 
+  // El endpoint pagina por cursor (máximo 100 por página, ver
+  // common/dtos/pagination.dto.ts) — un formulario con muchos campos entre
+  // todas sus secciones puede superar eso fácil. Antes esto solo pedía UNA
+  // página y descartaba nextCursor/hasMore: cualquier campo que cayera
+  // después del corte de esa página (por ejemplo, el primer campo de una
+  // sección nueva cuyo nombre ordena alfabéticamente después de las que ya
+  // existían) quedaba invisible sin ningún error — el fetch "funcionaba"
+  // (200 OK), solo traía una porción. Acá se sigue el cursor hasta agotar
+  // hasMore para traer todos los campos siempre.
+  const cargarTodosLosItems = async () => {
+    let cursor
+    let acumulado = []
+    for (;;) {
+      const resp = await formItemsService.listar(formId, { status: 'all', limit: 100, cursor })
+      acumulado = acumulado.concat(resp.data)
+      cursor = siguienteCursor(resp)
+      if (!cursor) break
+    }
+    return acumulado
+  }
+
   const cargar = () => {
     setError(null)
     setItems(null)
-    formItemsService
-      .listar(formId, { status: 'all', limit: 100 })
-      .then((resp) => setItems(resp.data))
+    cargarTodosLosItems()
+      .then((data) => setItems(data))
       .catch((err) => setError(err.message))
   }
 
@@ -397,10 +422,9 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
     let cancelado = false
     setError(null)
     setItems(null)
-    formItemsService
-      .listar(formId, { status: 'all', limit: 100 })
-      .then((resp) => {
-        if (!cancelado) setItems(resp.data)
+    cargarTodosLosItems()
+      .then((data) => {
+        if (!cancelado) setItems(data)
       })
       .catch((err) => {
         if (!cancelado) setError(err.message)
@@ -417,6 +441,7 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
   const agregarCampo = (item) => {
     setItems((prev) => (prev ? [...prev, item] : [item]))
     setAgregandoEnSeccion(null)
+    setSeccionNuevaNombre(null)
   }
 
   const itemsActivos = items ? items.filter((i) => i.isActive) : []
@@ -603,6 +628,43 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
               </div>
             ))
           )}
+
+          {puedeGestionarItems && form.isActive && items !== null && (
+            <div className="print:hidden">
+              <BotonAgregarCampo
+                nuevaSeccion
+                activo={agregandoEnSeccion === '__nueva__'}
+                onAbrir={() => setAgregandoEnSeccion('__nueva__')}
+                onCerrar={() => {
+                  setAgregandoEnSeccion(null)
+                  setSeccionNuevaNombre(null)
+                }}
+              >
+                {/* Dos pasos: primero solo el nombre de la sección, recién
+                    después se despliega el alta de campo completa (con
+                    seccionFija, igual que agregar un campo a una sección
+                    ya existente) — pedido explícito de no mostrar todos
+                    los inputs del campo antes de tener el nombre. */}
+                {seccionNuevaNombre ? (
+                  <ItemAltaForm
+                    formId={formId}
+                    seccionFija={seccionNuevaNombre}
+                    onCancelar={() => setSeccionNuevaNombre(null)}
+                    onGuardado={agregarCampo}
+                  />
+                ) : (
+                  <NombreSeccionForm
+                    seccionesExistentes={secciones}
+                    onCancelar={() => {
+                      setAgregandoEnSeccion(null)
+                      setSeccionNuevaNombre(null)
+                    }}
+                    onConfirmar={setSeccionNuevaNombre}
+                  />
+                )}
+              </BotonAgregarCampo>
+            </div>
+          )}
         </div>
 
         {/* Barra de acciones al pie del documento */}
@@ -650,6 +712,60 @@ function BotonAgregarCampo({ activo, onAbrir, onCerrar, nuevaSeccion = false, ch
       <Plus className="size-3.5" strokeWidth={1.75} />
       {nuevaSeccion ? 'Agregar sección nueva' : 'Agregar campo a esta sección'}
     </button>
+  )
+}
+
+// Paso 1 de "Agregar sección nueva": solo el nombre — recién al confirmar
+// se pasa a ItemAltaForm (con esa sección ya fija) para completar el
+// primer campo. Evita mostrar de una todos los inputs de un campo antes
+// de saber siquiera cómo se va a llamar la sección.
+function NombreSeccionForm({ seccionesExistentes, onCancelar, onConfirmar }) {
+  const [nombre, setNombre] = useState('')
+  const [tocado, setTocado] = useState(false)
+
+  const valido = SNAKE_CASE_REGEX.test(nombre) && nombre.length >= 3
+
+  const submit = (e) => {
+    e.preventDefault()
+    setTocado(true)
+    if (!valido) return
+    onConfirmar(nombre)
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+      <div>
+        <FormInput
+          label="Nombre de la sección"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value.toLowerCase())}
+          onBlur={() => setTocado(true)}
+          maxLength={100}
+          placeholder="arrival_conditions"
+          hint="snake_case, entre 3 y 100 caracteres."
+          list="secciones-existentes-nueva"
+          autoFocus
+        />
+        {seccionesExistentes?.length > 0 && (
+          <datalist id="secciones-existentes-nueva">
+            {seccionesExistentes.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        )}
+        {tocado && !valido && (
+          <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Sección inválida.</p>
+        )}
+      </div>
+      <div className="flex gap-3">
+        <Button type="submit" className="px-4 py-2 text-sm" disabled={!valido}>
+          Continuar
+        </Button>
+        <Button type="button" variant="secondary" className="px-4 py-2 text-sm" onClick={onCancelar}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -835,11 +951,20 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
   const codeValido = SNAKE_CASE_REGEX.test(code)
   const labelValido = label.trim().length > 0
   const sortOrderValido = Number.isInteger(Number(sortOrder)) && Number(sortOrder) >= 1
+  // INTEGER exige min/max enteros en el backend (integerConfigSchema,
+  // z.number().int()) — el input numérico no bloquea que alguien tipee
+  // "1.5" a mano (noValidate desactiva la validación nativa del navegador,
+  // igual que el resto de los formularios del panel), así que se valida acá
+  // para no mandar un 400 evitable.
+  const minMaxEnterosValidos =
+    dataType !== 'INTEGER' ||
+    ((min === '' || Number.isInteger(Number(min))) && (max === '' || Number.isInteger(Number(max))))
   const opcionesValidas =
     dataType !== 'SELECT' ||
     (opciones.every((o) => o.value.trim() && o.label.trim()) &&
       new Set(opciones.map((o) => o.value.trim())).size === opciones.length)
-  const puedeGuardar = sectionValida && codeValido && labelValido && sortOrderValido && opcionesValidas
+  const puedeGuardar =
+    sectionValida && codeValido && labelValido && sortOrderValido && minMaxEnterosValidos && opcionesValidas
 
   const construirConfig = () => {
     switch (dataType) {
@@ -847,8 +972,8 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
         return {}
       case 'INTEGER':
         return {
-          ...(min !== '' ? { min: Number(min) } : {}),
-          ...(max !== '' ? { max: Number(max) } : {}),
+          ...(min !== '' ? { min: Math.trunc(Number(min)) } : {}),
+          ...(max !== '' ? { max: Math.trunc(Number(max)) } : {}),
         }
       case 'DECIMAL':
         return {
@@ -913,8 +1038,9 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
               label="Sección nueva"
               value={section}
               onChange={(e) => setSection(e.target.value.toLowerCase())}
+              maxLength={100}
               placeholder="arrival_conditions"
-              hint="snake_case, mínimo 3 caracteres."
+              hint="snake_case, entre 3 y 100 caracteres."
               list="secciones-existentes"
             />
             {seccionesExistentes?.length > 0 && (
@@ -934,8 +1060,9 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
             label="Código del campo"
             value={code}
             onChange={(e) => setCode(e.target.value.toLowerCase())}
+            maxLength={100}
             placeholder="peso_bruto"
-            hint="snake_case, único dentro del formulario."
+            hint="snake_case, único dentro del formulario (no solo de la sección)."
           />
           {code.length > 0 && !codeValido && (
             <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Código inválido.</p>
@@ -976,17 +1103,41 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
             label="Orden"
             type="number"
             min={1}
+            step={1}
             value={sortOrder}
             onChange={(e) => setSortOrder(e.target.value)}
           />
-          {!sortOrderValido && <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Debe ser ≥ 1.</p>}
+          {!sortOrderValido && (
+            <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Debe ser un número entero ≥ 1.</p>
+          )}
         </div>
       </div>
 
       {(dataType === 'INTEGER' || dataType === 'DECIMAL') && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <FormInput label="Mínimo (opcional)" type="number" value={min} onChange={(e) => setMin(e.target.value)} />
-          <FormInput label="Máximo (opcional)" type="number" value={max} onChange={(e) => setMax(e.target.value)} />
+          <div>
+            <FormInput
+              label="Mínimo (opcional)"
+              type="number"
+              step={dataType === 'INTEGER' ? 1 : 'any'}
+              value={min}
+              onChange={(e) => setMin(e.target.value)}
+            />
+          </div>
+          <div>
+            <FormInput
+              label="Máximo (opcional)"
+              type="number"
+              step={dataType === 'INTEGER' ? 1 : 'any'}
+              value={max}
+              onChange={(e) => setMax(e.target.value)}
+            />
+          </div>
+          {dataType === 'INTEGER' && !minMaxEnterosValidos && (
+            <p className="col-span-full text-xs font-medium text-rojo-pasankalla">
+              Un campo numérico entero no admite mínimo/máximo con decimales.
+            </p>
+          )}
           {dataType === 'DECIMAL' && (
             <FormInput
               label="Decimales (opcional)"
