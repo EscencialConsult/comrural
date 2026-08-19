@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Layers, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Layers, CheckCircle2, ChevronLeft, Truck, Leaf, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -8,7 +9,22 @@ import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormSelect from '../components/FormSelect.jsx'
+import SearchInput from '../components/SearchInput.jsx'
 import Button from '../components/Button.jsx'
+import StatCard from '../components/dashboard/StatCard.jsx'
+import Badge from '../components/Badge.jsx'
+
+const TONO_ESTADO_LOTE = {
+  PROGRAMADO: 'neutro',
+  EN_RECEPCION: 'alerta',
+  ACEPTADO_RECEPCION: 'positivo',
+  EN_ANALISIS: 'alerta',
+  PENDIENTE_LIBERACION: 'alerta',
+  RETENIDO: 'negativo',
+  LIBERADO: 'positivo',
+  RECHAZADO: 'negativo',
+  CANCELADO: 'neutro',
+}
 
 // FE·M6 · Gestionar Lote (ver comrural_erp_backend/docs/lots.md +
 // lot.dto.ts/lots.service.ts, leídos completos). Último módulo de la Fase
@@ -38,6 +54,7 @@ const aInputLocal = (isoUtc) => {
 
 export default function PanelLotes() {
   const { permisos } = useAuth()
+  const navigate = useNavigate()
   const puedeVer = permisos.has('lots:read')
   const puedeCrear = permisos.has('lots:create')
   const puedeEditar = permisos.has('lots:update')
@@ -47,6 +64,10 @@ export default function PanelLotes() {
   const [proveedores, setProveedores] = useState(null)
   const [proveedoresError, setProveedoresError] = useState(false)
   const [vista, setVista] = useState({ modo: 'lista', lotId: null })
+  const [busqueda, setBusqueda] = useState('')
+  const [estadoFiltro, setEstadoFiltro] = useState('')
+  const [productoFiltro, setProductoFiltro] = useState('')
+  const [proveedorFiltro, setProveedorFiltro] = useState('')
   const {
     items: lotes,
     setItems: setLotes,
@@ -97,6 +118,36 @@ export default function PanelLotes() {
     }
   }, [puedeVer])
 
+  // Tarjetas de stats + filtro de la lista — sobre lo YA cargado (`lotes`
+  // viene paginado por cursor), no una cuenta/filtro global: `GET /lots` no
+  // tiene query params de filtro server-side (ver docs/lots.md §7), y
+  // "cargar más" va a ir ampliando el conjunto filtrable. Aviso explícito
+  // en la propia UI si todavía queda más por cargar.
+  const stats = useMemo(() => {
+    if (!lotes) return null
+    return {
+      total: lotes.length,
+      enRecepcion: lotes.filter((l) => l.currentStatus === 'EN_RECEPCION').length,
+      aceptados: lotes.filter((l) => l.currentStatus === 'ACEPTADO_RECEPCION').length,
+      rechazados: lotes.filter((l) => l.currentStatus === 'RECHAZADO').length,
+    }
+  }, [lotes])
+
+  const lotesFiltrados = useMemo(() => {
+    if (!lotes) return null
+    const q = busqueda.trim().toLowerCase()
+    return lotes.filter((l) => {
+      if (estadoFiltro && l.currentStatus !== estadoFiltro) return false
+      if (productoFiltro && l.productId !== productoFiltro) return false
+      if (proveedorFiltro && l.supplierId !== proveedorFiltro) return false
+      if (q) {
+        const nombreProd = productos?.find((p) => p.id === l.productId)?.name?.toLowerCase() ?? ''
+        if (!l.code.toLowerCase().includes(q) && !nombreProd.includes(q)) return false
+      }
+      return true
+    })
+  }, [lotes, busqueda, estadoFiltro, productoFiltro, proveedorFiltro, productos])
+
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso al listado de lotes." />
   }
@@ -108,7 +159,7 @@ export default function PanelLotes() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6 md:p-10">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
       <header className="flex items-center gap-3">
         <div className="rounded-full bg-verde-hoja/10 p-3">
           <Layers className="size-6 text-verde-bosque" strokeWidth={1.75} />
@@ -151,32 +202,99 @@ export default function PanelLotes() {
             <p className="text-sm text-marron-cafe/50">Cargando…</p>
           ) : (
             <>
-              <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-                {lotes.map((l) => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => abrirDetalle(l.id)}
-                    className="flex w-full flex-col gap-1 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
-                      <span className="rounded-full bg-marron-tierra/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-marron-cafe/60 uppercase">
-                        {NATURE_LABEL[l.nature] ?? l.nature}
-                      </span>
-                      <span className="ml-auto rounded-full bg-verde-hoja/15 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-verde-bosque uppercase">
-                        {l.currentStatus.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    <p className="text-sm font-medium text-marron-cafe">{productoNombre(l.productId)}</p>
-                    {l.nature === 'PM' && l.scheduledReceptionAt && (
-                      <p className="text-xs text-marron-cafe/50">Llegada: {formatearFechaHora(l.scheduledReceptionAt)}</p>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <StatCard Icon={Truck} tono="alerta" valor={stats.enRecepcion} etiqueta="En recepción" />
+                <StatCard Icon={Leaf} tono="positivo" valor={stats.aceptados} etiqueta="Aceptados" />
+                <StatCard Icon={XCircle} tono="negativo" valor={stats.rechazados} etiqueta="Rechazados" />
+              </div>
+              {cursor && (
+                <p className="text-xs text-marron-cafe/40">
+                  Las tarjetas y el filtro solo cuentan los {lotes.length} lotes ya cargados — usá "Cargar más" para
+                  ampliar el conjunto.
+                </p>
+              )}
+
+              <div className="grid gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <SearchInput label="Buscar" placeholder="Código o producto…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                <FormSelect label="Estado" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
+                  <option value="">Todos</option>
+                  {Object.keys(TONO_ESTADO_LOTE).map((e) => (
+                    <option key={e} value={e}>
+                      {e.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </FormSelect>
+                <FormSelect label="Producto" value={productoFiltro} onChange={(e) => setProductoFiltro(e.target.value)}>
+                  <option value="">Todos</option>
+                  {productos?.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </FormSelect>
+                <FormSelect label="Proveedor" value={proveedorFiltro} onChange={(e) => setProveedorFiltro(e.target.value)}>
+                  <option value="">Todos</option>
+                  {proveedores?.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {nombreProveedor(s)}
+                    </option>
+                  ))}
+                </FormSelect>
+              </div>
+
+              <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-marron-tierra/10 text-xs font-semibold uppercase tracking-wide text-marron-cafe/40">
+                      <th className="px-4 py-3">Lote</th>
+                      <th className="px-4 py-3">Producto</th>
+                      <th className="px-4 py-3">Proveedor</th>
+                      <th className="px-4 py-3">Llegada</th>
+                      <th className="px-4 py-3">Estado</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lotesFiltrados.map((l) => (
+                      <tr key={l.id} className="border-b border-marron-tierra/10 last:border-b-0 hover:bg-marron-tierra/5">
+                        <td className="px-4 py-3">
+                          <button type="button" onClick={() => abrirDetalle(l.id)} className="flex flex-col gap-0.5 text-left">
+                            <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
+                            <span className="rounded-full bg-marron-tierra/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-marron-cafe/60 uppercase w-fit">
+                              {NATURE_LABEL[l.nature] ?? l.nature}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-marron-cafe">{productoNombre(l.productId)}</td>
+                        <td className="px-4 py-3 text-marron-cafe">{l.nature === 'PM' ? proveedorNombre(l.supplierId) : '—'}</td>
+                        <td className="px-4 py-3 text-marron-cafe">
+                          {l.nature === 'PM' && l.scheduledReceptionAt ? formatearFechaHora(l.scheduledReceptionAt) : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge tono={TONO_ESTADO_LOTE[l.currentStatus] ?? 'neutro'}>{l.currentStatus.replace(/_/g, ' ')}</Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          {l.nature === 'PM' && (
+                            <Button
+                              variant="secondary"
+                              className="px-3 py-1.5 text-xs"
+                              onClick={() => navigate(`/panel/calidad/lotes/${l.id}`)}
+                            >
+                              Ver recepción y calidad
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {lotesFiltrados.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-marron-cafe/50">
+                          {lotes.length === 0 ? 'No hay lotes cargados todavía.' : 'Ningún lote coincide con el filtro.'}
+                        </td>
+                      </tr>
                     )}
-                  </button>
-                ))}
-                {lotes.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">No hay lotes cargados todavía.</p>
-                )}
+                  </tbody>
+                </table>
               </div>
 
               {errorCargarMas && (
