@@ -1,4 +1,14 @@
-import { Globe, IdCard, Building2, Handshake, Boxes, Layers, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import {
+  Globe,
+  IdCard,
+  Building2,
+  Handshake,
+  Boxes,
+  Layers,
+  ShoppingCart,
+  SlidersHorizontal,
+  ClipboardList,
+} from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
 // bajo qué módulo padre" (pedido explícito: Personas/Organizaciones/
@@ -43,6 +53,15 @@ export const GRUPOS_MAESTROS = [
   {
     id: 'configuracion',
     padre: { nombre: 'Configuración', ruta: '/panel/configuracion', Icon: SlidersHorizontal },
-    items: [{ id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe }],
+    items: [
+      { id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe },
+      {
+        id: 'formularios',
+        nombre: 'Formularios',
+        ruta: '/panel/formularios',
+        permiso: 'forms:read',
+        Icon: ClipboardList,
+      },
+    ],
   },
 ]
