@@ -13,6 +13,9 @@ import Panel from './pages/Panel.jsx'
 import PanelModulo from './pages/PanelModulo.jsx'
 import PanelCompras from './pages/PanelCompras.jsx'
 import PanelAlmacen from './pages/PanelAlmacen.jsx'
+import PanelCalidad from './pages/PanelCalidad.jsx'
+import PanelRecepcionLote from './pages/PanelRecepcionLote.jsx'
+import PanelAprobacionResolucion from './pages/PanelAprobacionResolucion.jsx'
 import GestionUsuarios from './pages/GestionUsuarios.jsx'
 import PanelPaises from './pages/PanelPaises.jsx'
 import PanelPersonas from './pages/PanelPersonas.jsx'
@@ -78,6 +81,9 @@ function App() {
         <Route path="/panel/lotes" element={<PanelLotes />} />
         <Route path="/panel/compras" element={<PanelCompras />} />
         <Route path="/panel/almacen" element={<PanelAlmacen />} />
+        <Route path="/panel/calidad" element={<PanelCalidad />} />
+        <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
+        <Route path="/panel/calidad/lotes/:lotId/aprobacion" element={<PanelAprobacionResolucion />} />
         <Route path="/panel/:moduloId" element={<PanelModulo />} />
       </Route>
 
