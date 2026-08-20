@@ -4,14 +4,11 @@ import { ChevronLeft, CheckCircle2, FlaskConical } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
-import { warehouseReceiptsService } from '../services/warehouseReceiptsService'
 import { qualityResolutionsService } from '../services/qualityResolutionsService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
 import FormInput from '../components/FormInput.jsx'
-import FormSelect from '../components/FormSelect.jsx'
-import Switch from '../components/Switch.jsx'
 
 // Calidad y Laboratorio · Proceso 1 (recepción e inspección de materia
 // prima) — ver comrural_erp_backend/docs/raw-material-receptions.md,
@@ -27,8 +24,6 @@ import Switch from '../components/Switch.jsx'
 // calculado por el backend (canRegisterWeight, canCompleteWithoutWeight,
 // canApprove, storageAuthorized, receptionAccepted) desde la vista
 // consolidada, y se vuelve a pedir esa vista después de CADA mutación.
-const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
-
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
@@ -173,16 +168,7 @@ export default function PanelRecepcionLote() {
         </p>
       )}
 
-      <SeccionRecepcion
-        lot={lot}
-        summary={summary}
-        warehouseReceipt={warehouseReceipt}
-        permisos={permisos}
-        onCambio={(msg) => {
-          recargar()
-          setConfirmacion(msg)
-        }}
-      />
+      <SeccionRecepcion lot={lot} warehouseReceipt={warehouseReceipt} permisos={permisos} navigate={navigate} />
 
       <SeccionInspeccion lot={lot} inspection={inspection} permisos={permisos} navigate={navigate} />
 
@@ -206,10 +192,15 @@ export default function PanelRecepcionLote() {
 }
 
 // --- Recepción de Almacén -----------------------------------------------
+//
+// Igual que la Inspección de Calidad: el formulario en sí vive en su propia
+// pantalla, pixel-perfect contra el papel real (P-ADM-03/R-02) —
+// src/pages/PanelIngresoMateriaPrima.jsx. Acá solo queda un resumen + el
+// botón que lleva ahí, por la misma razón: dos formularios vivos para lo
+// mismo es la receta para que se desincronicen.
 
-function SeccionRecepcion({ lot, summary, warehouseReceipt, permisos, onCambio }) {
+function SeccionRecepcion({ lot, warehouseReceipt, permisos, navigate }) {
   const puedeCrear = permisos.has('warehouse-receipts:create')
-  const puedeEditar = permisos.has('warehouse-receipts:update')
 
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-marron-tierra/5 p-6">
@@ -220,385 +211,26 @@ function SeccionRecepcion({ lot, summary, warehouseReceipt, permisos, onCambio }
         )}
       </div>
 
-      {!warehouseReceipt ? (
-        puedeCrear ? (
-          <FormularioIniciarRecepcion lotId={lot.id} onCreado={() => onCambio('Recepción iniciada.')} />
-        ) : (
-          <p className="text-sm text-marron-cafe/50">Todavía no se inició la recepción de este lote.</p>
-        )
+      {!warehouseReceipt && !puedeCrear ? (
+        <p className="text-sm text-marron-cafe/50">Todavía no se inició la recepción de este lote.</p>
       ) : (
-        <>
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <CampoDetalle etiqueta="Tipo de envase" valor={warehouseReceipt.packagingType} />
-            <CampoDetalle etiqueta="Envases recibidos" valor={warehouseReceipt.receivedPackageCount} />
-            {warehouseReceipt.status === 'FINALIZADA' && (
-              <>
-                <CampoDetalle etiqueta="Envases almacenados" valor={warehouseReceipt.storedPackageCount} />
-                <CampoDetalle
-                  etiqueta="Peso neto aceptado"
-                  valor={warehouseReceipt.acceptedNetWeightKg != null ? `${warehouseReceipt.acceptedNetWeightKg} kg` : '—'}
-                />
-              </>
-            )}
-          </dl>
-
-          {warehouseReceipt.status === 'INICIADA' && (
-            <>
-              {puedeEditar && (
-                <FormularioDocumentacionRecepcion
-                  warehouseReceipt={warehouseReceipt}
-                  tieneResolucion={summary.qualityDecision != null}
-                  onGuardado={() => onCambio('Documentación de recepción actualizada.')}
-                />
-              )}
-
-              {(summary.canRegisterWeight || summary.canCompleteWithoutWeight) && puedeEditar ? (
-                <FormularioCerrarRecepcion
-                  warehouseReceiptId={warehouseReceipt.id}
-                  requierePesos={summary.canRegisterWeight}
-                  onCerrado={() => onCambio('Recepción cerrada.')}
-                />
-              ) : (
-                <p className="text-xs text-marron-cafe/50">
-                  {summary.qualityDecision == null
-                    ? 'El cierre se habilita cuando Calidad emita su resolución.'
-                    : 'Esperando el permiso para cerrar la recepción.'}
-                </p>
-              )}
-            </>
+        <div className="flex flex-wrap items-center gap-3">
+          {warehouseReceipt?.status === 'FINALIZADA' && (
+            <p className="text-sm text-marron-cafe/70">
+              {warehouseReceipt.storedPackageCount} envases almacenados
+              {warehouseReceipt.acceptedNetWeightKg != null ? ` · ${warehouseReceipt.acceptedNetWeightKg} kg` : ''}
+            </p>
           )}
-        </>
+          <Button
+            variant={warehouseReceipt ? 'secondary' : 'primary'}
+            className="self-start px-4 py-2 text-sm"
+            onClick={() => navigate(`/panel/calidad/lotes/${lot.id}/ingreso`)}
+          >
+            {!warehouseReceipt ? 'Iniciar recepción' : warehouseReceipt.status === 'INICIADA' ? 'Continuar recepción' : 'Ver formulario'}
+          </Button>
+        </div>
       )}
     </section>
-  )
-}
-
-function CampoDetalle({ etiqueta, valor }) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-marron-cafe/40">{etiqueta}</dt>
-      <dd className="text-sm text-marron-cafe">{valor ?? '—'}</dd>
-    </div>
-  )
-}
-
-function FormularioIniciarRecepcion({ lotId, onCreado }) {
-  const [packagingType, setPackagingType] = useState(TIPOS_ENVASE[0])
-  const [receivedPackageCount, setReceivedPackageCount] = useState('')
-  const [producerListVerified, setProducerListVerified] = useState(false)
-  const [producerListNotes, setProducerListNotes] = useState('')
-  const [shippingGuideVerified, setShippingGuideVerified] = useState(false)
-  const [shippingGuideNotes, setShippingGuideNotes] = useState('')
-  const [notes, setNotes] = useState('')
-  const [conductor, setConductor] = useState({ fullName: '', identityDocument: '', licenseNumber: '', licenseCategory: '' })
-  const [vehiculo, setVehiculo] = useState({ plate: '', type: '', brand: '', model: '', color: '' })
-  const { enviando, error, ejecutar } = useSolicitud()
-
-  // transportInfo es opcional en el DTO, pero si se manda, sus 9 campos
-  // (driverSchema + vehicleSchema, ambos `.strict()`) son TODOS
-  // obligatorios — no hay forma de mandar "solo el nombre del conductor".
-  // Se verificó leyendo warehouse-receipt.dto.ts completo. Por eso acá es
-  // todo-o-nada: o los 9 campos están completos, o ninguno — un estado
-  // intermedio bloquea el submit en vez de mandar un objeto a medio
-  // completar que el backend rechazaría con 400.
-  const camposTransporte = [
-    conductor.fullName,
-    conductor.identityDocument,
-    conductor.licenseNumber,
-    conductor.licenseCategory,
-    vehiculo.plate,
-    vehiculo.type,
-    vehiculo.brand,
-    vehiculo.model,
-    vehiculo.color,
-  ]
-  const transporteCompleto = camposTransporte.every((v) => v.trim() !== '')
-  const transporteParcial = !transporteCompleto && camposTransporte.some((v) => v.trim() !== '')
-
-  // producerListNotes/shippingGuideNotes son obligatorias cuando el
-  // verificado respectivo es false — pero el CHECK de base solo lo exige al
-  // finalizar (status=FINALIZADA), no acá al crear. Se pide igual desde el
-  // arranque: es la única forma de que quien recibe deje constancia de por
-  // qué no pudo verificar algo, en vez de descubrir el bloqueo recién al
-  // intentar cerrar la recepción (donde ya no tiene el documento a mano).
-  const notasDocumentosValidas =
-    (producerListVerified || producerListNotes.trim() !== '') && (shippingGuideVerified || shippingGuideNotes.trim() !== '')
-
-  const puedeGuardar =
-    receivedPackageCount !== '' &&
-    Number(receivedPackageCount) > 0 &&
-    packagingType !== '' &&
-    !transporteParcial &&
-    notasDocumentosValidas
-
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!puedeGuardar) return
-    try {
-      const dto = {
-        packagingType,
-        receivedPackageCount: Number(receivedPackageCount),
-        producerListVerified,
-        producerListNotes: producerListVerified ? undefined : producerListNotes,
-        shippingGuideVerified,
-        shippingGuideNotes: shippingGuideVerified ? undefined : shippingGuideNotes,
-        notes: notes || undefined,
-        ...(transporteCompleto ? { transportInfo: { driver: conductor, vehicle: vehiculo } } : {}),
-      }
-      await ejecutar(() => warehouseReceiptsService.iniciar(lotId, dto))
-      onCreado()
-    } catch {
-      // ejecutar() ya dejó el mensaje legible en `error`.
-    }
-  }
-
-  return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-2xl bg-white/60 p-4">
-      <h3 className="text-sm font-bold text-marron-cafe">Iniciar recepción</h3>
-      {error && (
-        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormSelect label="Tipo de envase" value={packagingType} onChange={(e) => setPackagingType(e.target.value)}>
-          {TIPOS_ENVASE.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </FormSelect>
-        <FormInput
-          label="Envases recibidos"
-          type="number"
-          min="1"
-          value={receivedPackageCount}
-          onChange={(e) => setReceivedPackageCount(e.target.value)}
-        />
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-marron-cafe">Lista de productores verificada</span>
-            <Switch checked={producerListVerified} onChange={setProducerListVerified} label="Lista de productores verificada" />
-          </div>
-          {!producerListVerified && (
-            <FormInput
-              label="Motivo (obligatorio si no está verificada)"
-              value={producerListNotes}
-              onChange={(e) => setProducerListNotes(e.target.value)}
-            />
-          )}
-        </div>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-marron-cafe">Guía de remisión verificada</span>
-            <Switch checked={shippingGuideVerified} onChange={setShippingGuideVerified} label="Guía de remisión verificada" />
-          </div>
-          {!shippingGuideVerified && (
-            <FormInput
-              label="Motivo (obligatorio si no está verificada)"
-              value={shippingGuideNotes}
-              onChange={(e) => setShippingGuideNotes(e.target.value)}
-            />
-          )}
-        </div>
-      </div>
-
-      <details className="rounded-xl bg-marron-tierra/5 p-3" open={transporteParcial}>
-        <summary className="cursor-pointer text-sm font-medium text-marron-cafe/70">
-          Datos de transporte (opcional — completá los 9 campos o dejalos todos vacíos)
-        </summary>
-        {transporteParcial && (
-          <p className="mt-2 text-xs font-medium text-rojo-pasankalla">
-            Si cargás algún dato de transporte, hay que completar los 9 campos (conductor + vehículo) — el backend no
-            acepta un transporte a medio completar.
-          </p>
-        )}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <FormInput
-            label="Conductor"
-            value={conductor.fullName}
-            onChange={(e) => setConductor((p) => ({ ...p, fullName: e.target.value }))}
-          />
-          <FormInput
-            label="Documento de identidad"
-            value={conductor.identityDocument}
-            onChange={(e) => setConductor((p) => ({ ...p, identityDocument: e.target.value }))}
-          />
-          <FormInput
-            label="N° de licencia"
-            value={conductor.licenseNumber}
-            onChange={(e) => setConductor((p) => ({ ...p, licenseNumber: e.target.value }))}
-          />
-          <FormInput
-            label="Categoría de licencia"
-            value={conductor.licenseCategory}
-            onChange={(e) => setConductor((p) => ({ ...p, licenseCategory: e.target.value }))}
-          />
-          <FormInput label="Placa" value={vehiculo.plate} onChange={(e) => setVehiculo((p) => ({ ...p, plate: e.target.value }))} />
-          <FormInput label="Tipo de vehículo" value={vehiculo.type} onChange={(e) => setVehiculo((p) => ({ ...p, type: e.target.value }))} />
-          <FormInput label="Marca" value={vehiculo.brand} onChange={(e) => setVehiculo((p) => ({ ...p, brand: e.target.value }))} />
-          <FormInput label="Modelo" value={vehiculo.model} onChange={(e) => setVehiculo((p) => ({ ...p, model: e.target.value }))} />
-          <FormInput label="Color" value={vehiculo.color} onChange={(e) => setVehiculo((p) => ({ ...p, color: e.target.value }))} />
-        </div>
-      </details>
-
-      <FormInput label="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} />
-
-      <Button type="submit" disabled={enviando || !puedeGuardar} className="self-start">
-        {enviando ? 'Guardando…' : 'Iniciar recepción'}
-      </Button>
-    </form>
-  )
-}
-
-function FormularioDocumentacionRecepcion({ warehouseReceipt, tieneResolucion, onGuardado }) {
-  const [producerListVerified, setProducerListVerified] = useState(warehouseReceipt.producerListVerified ?? false)
-  const [producerListNotes, setProducerListNotes] = useState(warehouseReceipt.producerListNotes ?? '')
-  const [shippingGuideVerified, setShippingGuideVerified] = useState(warehouseReceipt.shippingGuideVerified ?? false)
-  const [shippingGuideNotes, setShippingGuideNotes] = useState(warehouseReceipt.shippingGuideNotes ?? '')
-  const [notes, setNotes] = useState(warehouseReceipt.notes ?? '')
-  const [receivedPackageCount, setReceivedPackageCount] = useState(String(warehouseReceipt.receivedPackageCount))
-  const { enviando, error, ejecutar } = useSolicitud()
-
-  // Igual que en FormularioIniciarRecepcion: el backend exige la nota
-  // cuando el verificado respectivo es false (y va a bloquear el cierre si
-  // esto queda sin completar — se pide acá para no descubrirlo recién al
-  // intentar cerrar).
-  const notasDocumentosValidas =
-    (producerListVerified || producerListNotes.trim() !== '') && (shippingGuideVerified || shippingGuideNotes.trim() !== '')
-
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!notasDocumentosValidas) return
-    try {
-      await ejecutar(() =>
-        warehouseReceiptsService.actualizar(warehouseReceipt.id, {
-          producerListVerified,
-          producerListNotes: producerListVerified ? undefined : producerListNotes,
-          shippingGuideVerified,
-          shippingGuideNotes: shippingGuideVerified ? undefined : shippingGuideNotes,
-          notes: notes || undefined,
-          // El backend bloquea este campo en cuanto existe una resolución de
-          // Calidad (400) — se deshabilita acá para no ni intentarlo.
-          ...(tieneResolucion ? {} : { receivedPackageCount: Number(receivedPackageCount) }),
-        }),
-      )
-      onGuardado()
-    } catch {
-      // mensaje ya en `error`
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-white/60 p-4">
-      <h3 className="text-sm font-bold text-marron-cafe">Documentación</h3>
-      {error && (
-        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-      )}
-      <FormInput
-        label="Envases recibidos"
-        type="number"
-        min="1"
-        value={receivedPackageCount}
-        disabled={tieneResolucion}
-        hint={tieneResolucion ? 'Ya existe una resolución de Calidad — este dato quedó bloqueado.' : undefined}
-        onChange={(e) => setReceivedPackageCount(e.target.value)}
-      />
-      <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-marron-cafe">Lista de productores verificada</span>
-            <Switch checked={producerListVerified} onChange={setProducerListVerified} label="Lista de productores verificada" />
-          </div>
-          {!producerListVerified && (
-            <FormInput
-              label="Motivo (obligatorio si no está verificada)"
-              value={producerListNotes}
-              onChange={(e) => setProducerListNotes(e.target.value)}
-            />
-          )}
-        </div>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-marron-cafe">Guía de remisión verificada</span>
-            <Switch checked={shippingGuideVerified} onChange={setShippingGuideVerified} label="Guía de remisión verificada" />
-          </div>
-          {!shippingGuideVerified && (
-            <FormInput
-              label="Motivo (obligatorio si no está verificada)"
-              value={shippingGuideNotes}
-              onChange={(e) => setShippingGuideNotes(e.target.value)}
-            />
-          )}
-        </div>
-      </div>
-      <FormInput label="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} />
-      <Button type="submit" variant="secondary" disabled={enviando || !notasDocumentosValidas} className="self-start px-4 py-2 text-sm">
-        {enviando ? 'Guardando…' : 'Guardar documentación'}
-      </Button>
-    </form>
-  )
-}
-
-function FormularioCerrarRecepcion({ warehouseReceiptId, requierePesos, onCerrado }) {
-  const [acceptedGrossWeightKg, setAcceptedGrossWeightKg] = useState('')
-  const [acceptedNetWeightKg, setAcceptedNetWeightKg] = useState('')
-  const { enviando, error, ejecutar } = useSolicitud()
-
-  const puedeCerrar = !requierePesos || (acceptedGrossWeightKg !== '' && acceptedNetWeightKg !== '')
-
-  const submit = async (e) => {
-    e.preventDefault()
-    if (!puedeCerrar) return
-    try {
-      await ejecutar(() =>
-        warehouseReceiptsService.actualizar(warehouseReceiptId, {
-          complete: true,
-          ...(requierePesos
-            ? { acceptedGrossWeightKg: Number(acceptedGrossWeightKg), acceptedNetWeightKg: Number(acceptedNetWeightKg) }
-            : {}),
-        }),
-      )
-      onCerrado()
-    } catch {
-      // mensaje ya en `error`
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-verde-lima/10 p-4">
-      <h3 className="text-sm font-bold text-marron-cafe">Cerrar recepción</h3>
-      {error && (
-        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-      )}
-      {requierePesos ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormInput
-            label="Peso bruto aceptado (kg)"
-            type="number"
-            step="0.001"
-            value={acceptedGrossWeightKg}
-            onChange={(e) => setAcceptedGrossWeightKg(e.target.value)}
-          />
-          <FormInput
-            label="Peso neto aceptado (kg)"
-            type="number"
-            step="0.001"
-            value={acceptedNetWeightKg}
-            onChange={(e) => setAcceptedNetWeightKg(e.target.value)}
-          />
-        </div>
-      ) : (
-        <p className="text-xs text-marron-cafe/60">
-          Calidad rechazó el lote — se cierra sin registrar pesos (0 envases autorizados).
-        </p>
-      )}
-      <Button type="submit" disabled={enviando || !puedeCerrar} className="self-start px-4 py-2 text-sm">
-        {enviando ? 'Cerrando…' : 'Cerrar recepción'}
-      </Button>
-    </form>
   )
 }
 
