@@ -19,6 +19,7 @@ import PanelAprobacionResolucion from './pages/PanelAprobacionResolucion.jsx'
 import GestionUsuarios from './pages/GestionUsuarios.jsx'
 import PanelPaises from './pages/PanelPaises.jsx'
 import PanelFormularios from './pages/PanelFormularios.jsx'
+import PanelAreas from './pages/PanelAreas.jsx'
 import PanelPersonas from './pages/PanelPersonas.jsx'
 import PanelOrganizaciones from './pages/PanelOrganizaciones.jsx'
 import PanelProveedores from './pages/PanelProveedores.jsx'
@@ -76,6 +77,7 @@ function App() {
         <Route path="/panel/usuarios" element={<GestionUsuarios />} />
         <Route path="/panel/paises" element={<PanelPaises />} />
         <Route path="/panel/formularios" element={<PanelFormularios />} />
+        <Route path="/panel/areas" element={<PanelAreas />} />
         <Route path="/panel/personas" element={<PanelPersonas />} />
         <Route path="/panel/organizaciones" element={<PanelOrganizaciones />} />
         <Route path="/panel/proveedores" element={<PanelProveedores />} />

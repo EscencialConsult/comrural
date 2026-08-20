@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   SlidersHorizontal,
   ClipboardList,
+  LayoutGrid,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -62,6 +63,7 @@ export const GRUPOS_MAESTROS = [
         permiso: 'forms:read',
         Icon: ClipboardList,
       },
+      { id: 'areas', nombre: 'Áreas', ruta: '/panel/areas', permiso: 'areas:read', Icon: LayoutGrid },
     ],
   },
 ]
