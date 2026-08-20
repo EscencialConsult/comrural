@@ -145,7 +145,7 @@ export default function PanelRecepcionLote() {
 
   if (errorCarga) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-col items-start gap-3 p-6 md:p-10">
+      <main className="mx-auto flex w-full max-w-5xl flex-col items-start gap-3 p-6 md:p-10">
         <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
         <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={recargar}>
           Reintentar
@@ -156,7 +156,7 @@ export default function PanelRecepcionLote() {
 
   if (!datos) {
     return (
-      <main className="mx-auto w-full max-w-3xl p-6 md:p-10">
+      <main className="mx-auto w-full max-w-5xl p-6 md:p-10">
         <p className="text-sm text-marron-cafe/50">Cargando…</p>
       </main>
     )
@@ -165,7 +165,7 @@ export default function PanelRecepcionLote() {
   const { lot, summary, inspection, warehouseReceipt, qualityResolution } = datos
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6 md:p-10">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
       <div className="flex items-center gap-3">
         <button
           type="button"
