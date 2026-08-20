@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import { warehouseReceiptsService } from '../services/warehouseReceiptsService'
-import { inspectionsService } from '../services/inspectionsService'
 import { qualityResolutionsService } from '../services/qualityResolutionsService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
@@ -13,7 +12,6 @@ import Button from '../components/Button.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import Switch from '../components/Switch.jsx'
-import FormularioInspeccion from '../components/calidad/FormularioInspeccion.jsx'
 
 // Calidad y Laboratorio · Proceso 1 (recepción e inspección de materia
 // prima) — ver comrural_erp_backend/docs/raw-material-receptions.md,
@@ -57,9 +55,6 @@ export default function PanelRecepcionLote() {
   const [errorCarga, setErrorCarga] = useState(null)
   const [confirmacion, setConfirmacion] = useState(null)
 
-  const [inspeccionDetalle, setInspeccionDetalle] = useState(null)
-  const [errorInspeccion, setErrorInspeccion] = useState(null)
-
   const [resolucionDetalle, setResolucionDetalle] = useState(null)
 
   const recargar = useCallback(() => {
@@ -80,38 +75,6 @@ export default function PanelRecepcionLote() {
     const id = setTimeout(() => setConfirmacion(null), 4000)
     return () => clearTimeout(id)
   }, [confirmacion])
-
-  // El resumen consolidado no garantiza traer form/responses completos de
-  // la inspección (el ejemplo de la doc los muestra vacíos) — para el
-  // formulario dinámico se pide GET /inspections/:id aparte, que sí
-  // documenta el contrato completo {inspection, form, responses}.
-  //
-  // Depende de `datos` completo (no solo id/status): recargar() trae un
-  // objeto nuevo en cada mutación, incluida "guardar respuestas" — que no
-  // cambia ni el id ni el status de la inspección. Con la dependencia
-  // reducida a [id, status], después de guardar una respuesta esta pantalla
-  // nunca volvía a pedir el detalle, y el formulario se quedaba mostrando
-  // `iniciales` viejas hasta la próxima mutación que sí tocara el status.
-  useEffect(() => {
-    const inspectionId = datos?.inspection?.id
-    if (!inspectionId) {
-      setInspeccionDetalle(null)
-      return
-    }
-    let cancelado = false
-    setErrorInspeccion(null)
-    inspectionsService
-      .obtener(inspectionId)
-      .then((d) => {
-        if (!cancelado) setInspeccionDetalle(d)
-      })
-      .catch((err) => {
-        if (!cancelado) setErrorInspeccion(err.message)
-      })
-    return () => {
-      cancelado = true
-    }
-  }, [datos])
 
   // `canApprove` NO viene en la vista consolidada (ReceptionSummaryView del
   // backend no lo incluye — se verificó leyendo raw-material-reception.service.ts
@@ -221,17 +184,7 @@ export default function PanelRecepcionLote() {
         }}
       />
 
-      <SeccionInspeccion
-        lot={lot}
-        inspection={inspection}
-        inspeccionDetalle={inspeccionDetalle}
-        errorInspeccion={errorInspeccion}
-        permisos={permisos}
-        onCambio={(msg) => {
-          recargar()
-          setConfirmacion(msg)
-        }}
-      />
+      <SeccionInspeccion lot={lot} inspection={inspection} permisos={permisos} navigate={navigate} />
 
       <SeccionResolucion
         inspection={inspection}
@@ -650,41 +603,17 @@ function FormularioCerrarRecepcion({ warehouseReceiptId, requierePesos, onCerrad
 }
 
 // --- Inspección de Calidad ------------------------------------------------
+//
+// El formulario en sí (iniciar / responder / finalizar) vive en su propia
+// pantalla, pixel-perfect contra el papel real —
+// src/pages/PanelInspeccionMateriaPrima.jsx, ver
+// docs/formulario-inspeccion-materia-prima.md. Acá solo queda un resumen +
+// el botón que lleva ahí: mantener el renderer genérico viejo
+// (FormularioInspeccion.jsx) viviendo en paralelo era la receta para que
+// ambas pantallas se desincronizaran, como ya avisaba esa misma doc.
 
-function SeccionInspeccion({ lot, inspection, inspeccionDetalle, errorInspeccion, permisos, onCambio }) {
+function SeccionInspeccion({ lot, inspection, permisos, navigate }) {
   const puedeCrear = permisos.has('inspections:create')
-  const puedeEditar = permisos.has('inspections:update')
-  const [revisando, setRevisando] = useState(false)
-  const { enviando, error, ejecutar } = useSolicitud()
-
-  const iniciar = async () => {
-    try {
-      await ejecutar(() => inspectionsService.iniciar(lot.id, {}))
-      onCambio('Inspección iniciada.')
-    } catch {
-      // mensaje ya en `error`
-    }
-  }
-
-  const guardarRespuestas = async (cambios) => {
-    try {
-      await ejecutar(() => inspectionsService.guardarRespuestas(inspection.id, cambios))
-      onCambio('Respuestas guardadas.')
-    } catch {
-      // mensaje ya en `error`
-    }
-  }
-
-  const completar = async () => {
-    try {
-      await ejecutar(() => inspectionsService.completar(inspection.id, {}))
-      setRevisando(false)
-      onCambio('Inspección finalizada.')
-    } catch {
-      // mensaje ya en `error` — se deja `revisando` abierto para reintentar
-      // sin perder el contexto de qué se estaba por confirmar.
-    }
-  }
 
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-marron-tierra/5 p-6">
@@ -693,122 +622,23 @@ function SeccionInspeccion({ lot, inspection, inspeccionDetalle, errorInspeccion
         {inspection && <Badge tono={TONO_ESTADO_SUBFLUJO[inspection.status] ?? 'neutro'}>{inspection.status}</Badge>}
       </div>
 
-      {error && (
-        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-      )}
-
-      {!inspection ? (
-        puedeCrear ? (
-          <Button disabled={enviando} onClick={iniciar} className="self-start">
-            {enviando ? 'Iniciando…' : 'Iniciar inspección'}
-          </Button>
-        ) : (
-          <p className="text-sm text-marron-cafe/50">Todavía no se inició la inspección de este lote.</p>
-        )
-      ) : errorInspeccion ? (
-        <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar el formulario: {errorInspeccion}</p>
-      ) : !inspeccionDetalle ? (
-        <p className="text-sm text-marron-cafe/50">Cargando formulario…</p>
-      ) : revisando ? (
-        <RevisionRespuestas
-          form={inspeccionDetalle.form}
-          responses={inspeccionDetalle.responses}
-          enviando={enviando}
-          onVolver={() => setRevisando(false)}
-          onConfirmar={completar}
-        />
+      {!inspection && !puedeCrear ? (
+        <p className="text-sm text-marron-cafe/50">Todavía no se inició la inspección de este lote.</p>
       ) : (
-        <>
-          <FormularioInspeccion
-            form={inspeccionDetalle.form}
-            respuestasIniciales={inspeccionDetalle.responses}
-            soloLectura={inspection.status !== 'INICIADA' || !puedeEditar}
-            guardando={enviando}
-            error={null}
-            onGuardar={guardarRespuestas}
-          />
-          {inspection.status === 'INICIADA' && puedeEditar && (
-            <Button disabled={enviando} onClick={() => setRevisando(true)} className="self-start">
-              Revisar y finalizar
-            </Button>
-          )}
-          {inspection.status === 'FINALIZADA' && (
+        <div className="flex flex-wrap items-center gap-3">
+          {inspection?.status === 'FINALIZADA' && (
             <p className="text-sm text-marron-cafe/70">Sacos rechazados: {inspection.rejectedBagCount}</p>
           )}
-        </>
+          <Button
+            variant={inspection ? 'secondary' : 'primary'}
+            className="self-start px-4 py-2 text-sm"
+            onClick={() => navigate(`/panel/calidad/lotes/${lot.id}/inspeccion`)}
+          >
+            {!inspection ? 'Iniciar inspección' : inspection.status === 'INICIADA' ? 'Continuar inspección' : 'Ver formulario'}
+          </Button>
+        </div>
       )}
     </section>
-  )
-}
-
-// Pantalla de revisión previa a finalizar (ticket FE·F2·M5) — muestra lo que
-// YA quedó guardado en el servidor (inspeccionDetalle.responses, no los
-// valores todavía sin guardar del formulario) para que quede claro que
-// "finalizar" actúa sobre lo guardado, no sobre lo que se ve en pantalla si
-// alguien olvidó tocar "Guardar respuestas" antes de llegar acá.
-function RevisionRespuestas({ form, responses, enviando, onVolver, onConfirmar }) {
-  const valorLegible = (item, respuesta) => {
-    if (!respuesta) return '— sin responder —'
-    switch (item.dataType) {
-      case 'BOOLEAN':
-        return respuesta.valueBoolean ? 'Sí' : 'No'
-      case 'INTEGER':
-      case 'DECIMAL':
-        return respuesta.valueNumber != null ? `${respuesta.valueNumber}${item.unit ? ` ${item.unit}` : ''}` : '—'
-      case 'TEXT':
-        return respuesta.valueText || '—'
-      case 'DATE':
-        return respuesta.valueDate || '—'
-      case 'SELECT':
-        return item.config?.options?.find((o) => o.value === respuesta.valueOption)?.label ?? respuesta.valueOption ?? '—'
-      default:
-        return '—'
-    }
-  }
-
-  const porSeccion = new Map()
-  for (const item of form.items) {
-    if (!porSeccion.has(item.section)) porSeccion.set(item.section, [])
-    const respuestasItem = responses.filter((r) => r.itemId === item.id)
-    if (respuestasItem.length === 0) {
-      porSeccion.get(item.section).push({ item, occurrence: null, respuesta: null })
-    } else {
-      for (const r of respuestasItem) porSeccion.get(item.section).push({ item, occurrence: r.occurrence, respuesta: r })
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-marron-cafe/70">
-        Revisá las respuestas guardadas antes de finalizar — una vez finalizada, la inspección queda en solo lectura.
-      </p>
-      {Array.from(porSeccion.entries()).map(([section, filas]) => (
-        <div key={section} className="rounded-2xl bg-white/60 p-4">
-          <h4 className="mb-2 text-sm font-bold text-marron-cafe">{section}</h4>
-          <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {filas.map(({ item, occurrence, respuesta }, i) => (
-              <div key={`${item.id}:${occurrence ?? i}`}>
-                <dt className="text-xs text-marron-cafe/50">
-                  {item.label}
-                  {occurrence && occurrence > 1 ? ` (fila ${occurrence})` : ''}
-                </dt>
-                <dd className={`text-sm font-medium ${respuesta ? 'text-marron-cafe' : 'text-rojo-pasankalla'}`}>
-                  {valorLegible(item, respuesta)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ))}
-      <div className="flex gap-3">
-        <Button disabled={enviando} onClick={onConfirmar} className="self-start">
-          {enviando ? 'Finalizando…' : 'Confirmar finalización'}
-        </Button>
-        <Button variant="secondary" disabled={enviando} onClick={onVolver} className="self-start">
-          Volver a revisar
-        </Button>
-      </div>
-    </div>
   )
 }
 

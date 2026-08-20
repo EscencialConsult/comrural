@@ -1,0 +1,30 @@
+/* Estilos propios de la maqueta del formulario de calidad.
+   Vive acá y NO en src/index.css a propósito: la maqueta es un proyecto
+   aparte que todavía no está integrado al frontend, así que no toca ningún
+   archivo compartido. Lo importa CampoFechaHora.jsx, así que viaja con el
+   componente — cuando se integre, se mueve al index.css del destino o se
+   deja tal cual, las dos funcionan con Vite. */
+
+/* Chrome dibuja su propio ícono de calendario/reloj dentro del input, y
+   además el input solo abre el selector si se hace clic exactamente sobre
+   ese ícono. Eso dejaba dos problemas: un ícono nativo compitiendo al lado
+   del botón propio ("dos botones de hora"), y un campo que parece clickeable
+   entero pero solo responde en ~20px del borde.
+
+   Acá el indicador nativo se estira sobre el input y se vuelve invisible: se
+   sigue pudiendo hacer clic en cualquier parte para abrir el selector, pero
+   ya no se ve un segundo ícono. */
+.campo-fechahora::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  /* Termina antes del borde derecho: ahí vive el botón que estampa la
+     fecha/hora actual, y si el indicador llegara hasta el final se comería
+     ese clic y abriría el selector en lugar de estampar el valor. */
+  right: 2.75rem;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
