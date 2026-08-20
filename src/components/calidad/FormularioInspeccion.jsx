@@ -184,10 +184,20 @@ export default function FormularioInspeccion({ form, respuestasIniciales, soloLe
     })
   }, [form.items])
 
+  // `occurrences` tiene 3 formas reales (docs/form-items.md §4 +
+  // inspections.md §4, "completitud"): `1` (un solo campo), `null`
+  // (repetible ABIERTO — arranca en 1 fila, el usuario agrega a mano con
+  // "+ Agregar fila", sin tope) o un entero fijo > 1 (cantidad EXACTA de
+  // filas obligatorias siempre, sin botón de agregar/quitar). El bug real
+  // que esto corrige: para `occurrences` fijo (ej. 3), la función devolvía
+  // 1 fila igual que un repetible abierto — el backend exige las 3 desde
+  // el arranque (`assertAllRequiredAnswered`), así que "Finalizar" fallaba
+  // con 400 pidiendo las ocurrencias 2 y 3 que la pantalla nunca mostró.
   const ocurrenciasDe = (item) => {
+    if (item.occurrences === 1) return 1
+    if (item.occurrences !== null) return item.occurrences
     const guardadas = respuestasIniciales.filter((r) => r.itemId === item.id).map((r) => r.occurrence)
-    const base = item.occurrences === 1 ? 1 : Math.max(1, ...guardadas, filasExtra[item.groupCode ?? item.id] ?? 1)
-    return base
+    return Math.max(1, ...guardadas, filasExtra[item.groupCode ?? item.id] ?? 1)
   }
 
   const cambiarValor = (itemId, occurrence, valor) => {
@@ -243,13 +253,19 @@ export default function FormularioInspeccion({ form, respuestasIniciales, soloLe
 
           {sueltos.map((item) => {
             const filas = ocurrenciasDe(item)
-            const repetible = item.occurrences === null || item.occurrences > 1
+            // `puedeAgregar`: solo el repetible ABIERTO admite agregar/quitar
+            // filas a mano — con cantidad fija, las `filas` ya están todas
+            // presentes de entrada (ver `ocurrenciasDe`), no hay nada que
+            // agregar. `multiFila` es solo una cuestión visual (mostrar
+            // "Fila N"), independiente de si es fijo o abierto.
+            const puedeAgregar = item.occurrences === null
+            const multiFila = filas > 1
             return (
               <div key={item.id} className="flex flex-col gap-2">
                 {Array.from({ length: filas }, (_, i) => i + 1).map((occurrence) => (
                   <div key={occurrence} className="flex items-end gap-2">
                     <div className="flex-1">
-                      {repetible && filas > 1 && (
+                      {multiFila && (
                         <span className="text-xs font-semibold text-marron-cafe/40">Fila {occurrence}</span>
                       )}
                       <CampoItem
@@ -261,7 +277,7 @@ export default function FormularioInspeccion({ form, respuestasIniciales, soloLe
                     </div>
                   </div>
                 ))}
-                {repetible && !soloLectura && (
+                {puedeAgregar && !soloLectura && (
                   <button
                     type="button"
                     onClick={() => agregarFila(item.id, filas, item.occurrences)}
@@ -276,12 +292,13 @@ export default function FormularioInspeccion({ form, respuestasIniciales, soloLe
 
           {grupos.map(([groupCode, items]) => {
             const filas = ocurrenciasDe(items[0])
-            const repetible = items[0].occurrences === null || items[0].occurrences > 1
+            const puedeAgregar = items[0].occurrences === null
+            const multiFila = filas > 1
             return (
               <div key={groupCode} className="flex flex-col gap-2 rounded-xl bg-white/60 p-3">
                 {Array.from({ length: filas }, (_, i) => i + 1).map((occurrence) => (
                   <div key={occurrence} className="grid gap-3 sm:grid-cols-2">
-                    {repetible && filas > 1 && (
+                    {multiFila && (
                       <span className="col-span-full text-xs font-semibold text-marron-cafe/40">Fila {occurrence}</span>
                     )}
                     {items.map((item) => (
@@ -295,7 +312,7 @@ export default function FormularioInspeccion({ form, respuestasIniciales, soloLe
                     ))}
                   </div>
                 ))}
-                {repetible && !soloLectura && (
+                {puedeAgregar && !soloLectura && (
                   <button
                     type="button"
                     onClick={() => agregarFila(groupCode, filas, items[0].occurrences)}

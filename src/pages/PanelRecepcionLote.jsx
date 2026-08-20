@@ -333,7 +333,9 @@ function FormularioIniciarRecepcion({ lotId, onCreado }) {
   const [packagingType, setPackagingType] = useState(TIPOS_ENVASE[0])
   const [receivedPackageCount, setReceivedPackageCount] = useState('')
   const [producerListVerified, setProducerListVerified] = useState(false)
+  const [producerListNotes, setProducerListNotes] = useState('')
   const [shippingGuideVerified, setShippingGuideVerified] = useState(false)
+  const [shippingGuideNotes, setShippingGuideNotes] = useState('')
   const [notes, setNotes] = useState('')
   const [conductor, setConductor] = useState({ fullName: '', identityDocument: '', licenseNumber: '', licenseCategory: '' })
   const [vehiculo, setVehiculo] = useState({ plate: '', type: '', brand: '', model: '', color: '' })
@@ -360,8 +362,21 @@ function FormularioIniciarRecepcion({ lotId, onCreado }) {
   const transporteCompleto = camposTransporte.every((v) => v.trim() !== '')
   const transporteParcial = !transporteCompleto && camposTransporte.some((v) => v.trim() !== '')
 
+  // producerListNotes/shippingGuideNotes son obligatorias cuando el
+  // verificado respectivo es false — pero el CHECK de base solo lo exige al
+  // finalizar (status=FINALIZADA), no acá al crear. Se pide igual desde el
+  // arranque: es la única forma de que quien recibe deje constancia de por
+  // qué no pudo verificar algo, en vez de descubrir el bloqueo recién al
+  // intentar cerrar la recepción (donde ya no tiene el documento a mano).
+  const notasDocumentosValidas =
+    (producerListVerified || producerListNotes.trim() !== '') && (shippingGuideVerified || shippingGuideNotes.trim() !== '')
+
   const puedeGuardar =
-    receivedPackageCount !== '' && Number(receivedPackageCount) > 0 && packagingType !== '' && !transporteParcial
+    receivedPackageCount !== '' &&
+    Number(receivedPackageCount) > 0 &&
+    packagingType !== '' &&
+    !transporteParcial &&
+    notasDocumentosValidas
 
   const submit = async (e) => {
     e.preventDefault()
@@ -371,7 +386,9 @@ function FormularioIniciarRecepcion({ lotId, onCreado }) {
         packagingType,
         receivedPackageCount: Number(receivedPackageCount),
         producerListVerified,
+        producerListNotes: producerListVerified ? undefined : producerListNotes,
         shippingGuideVerified,
+        shippingGuideNotes: shippingGuideVerified ? undefined : shippingGuideNotes,
         notes: notes || undefined,
         ...(transporteCompleto ? { transportInfo: { driver: conductor, vehicle: vehiculo } } : {}),
       }
@@ -406,14 +423,32 @@ function FormularioIniciarRecepcion({ lotId, onCreado }) {
         />
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-        <div className="flex items-center justify-between gap-3 sm:flex-1">
-          <span className="text-sm text-marron-cafe">Lista de productores verificada</span>
-          <Switch checked={producerListVerified} onChange={setProducerListVerified} label="Lista de productores verificada" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-marron-cafe">Lista de productores verificada</span>
+            <Switch checked={producerListVerified} onChange={setProducerListVerified} label="Lista de productores verificada" />
+          </div>
+          {!producerListVerified && (
+            <FormInput
+              label="Motivo (obligatorio si no está verificada)"
+              value={producerListNotes}
+              onChange={(e) => setProducerListNotes(e.target.value)}
+            />
+          )}
         </div>
-        <div className="flex items-center justify-between gap-3 sm:flex-1">
-          <span className="text-sm text-marron-cafe">Guía de remisión verificada</span>
-          <Switch checked={shippingGuideVerified} onChange={setShippingGuideVerified} label="Guía de remisión verificada" />
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-marron-cafe">Guía de remisión verificada</span>
+            <Switch checked={shippingGuideVerified} onChange={setShippingGuideVerified} label="Guía de remisión verificada" />
+          </div>
+          {!shippingGuideVerified && (
+            <FormInput
+              label="Motivo (obligatorio si no está verificada)"
+              value={shippingGuideNotes}
+              onChange={(e) => setShippingGuideNotes(e.target.value)}
+            />
+          )}
         </div>
       </div>
 
@@ -467,18 +502,30 @@ function FormularioIniciarRecepcion({ lotId, onCreado }) {
 
 function FormularioDocumentacionRecepcion({ warehouseReceipt, tieneResolucion, onGuardado }) {
   const [producerListVerified, setProducerListVerified] = useState(warehouseReceipt.producerListVerified ?? false)
+  const [producerListNotes, setProducerListNotes] = useState(warehouseReceipt.producerListNotes ?? '')
   const [shippingGuideVerified, setShippingGuideVerified] = useState(warehouseReceipt.shippingGuideVerified ?? false)
+  const [shippingGuideNotes, setShippingGuideNotes] = useState(warehouseReceipt.shippingGuideNotes ?? '')
   const [notes, setNotes] = useState(warehouseReceipt.notes ?? '')
   const [receivedPackageCount, setReceivedPackageCount] = useState(String(warehouseReceipt.receivedPackageCount))
   const { enviando, error, ejecutar } = useSolicitud()
 
+  // Igual que en FormularioIniciarRecepcion: el backend exige la nota
+  // cuando el verificado respectivo es false (y va a bloquear el cierre si
+  // esto queda sin completar — se pide acá para no descubrirlo recién al
+  // intentar cerrar).
+  const notasDocumentosValidas =
+    (producerListVerified || producerListNotes.trim() !== '') && (shippingGuideVerified || shippingGuideNotes.trim() !== '')
+
   const submit = async (e) => {
     e.preventDefault()
+    if (!notasDocumentosValidas) return
     try {
       await ejecutar(() =>
         warehouseReceiptsService.actualizar(warehouseReceipt.id, {
           producerListVerified,
+          producerListNotes: producerListVerified ? undefined : producerListNotes,
           shippingGuideVerified,
+          shippingGuideNotes: shippingGuideVerified ? undefined : shippingGuideNotes,
           notes: notes || undefined,
           // El backend bloquea este campo en cuanto existe una resolución de
           // Calidad (400) — se deshabilita acá para no ni intentarlo.
@@ -506,18 +553,36 @@ function FormularioDocumentacionRecepcion({ warehouseReceipt, tieneResolucion, o
         hint={tieneResolucion ? 'Ya existe una resolución de Calidad — este dato quedó bloqueado.' : undefined}
         onChange={(e) => setReceivedPackageCount(e.target.value)}
       />
-      <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-        <div className="flex items-center justify-between gap-3 sm:flex-1">
-          <span className="text-sm text-marron-cafe">Lista de productores verificada</span>
-          <Switch checked={producerListVerified} onChange={setProducerListVerified} label="Lista de productores verificada" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-marron-cafe">Lista de productores verificada</span>
+            <Switch checked={producerListVerified} onChange={setProducerListVerified} label="Lista de productores verificada" />
+          </div>
+          {!producerListVerified && (
+            <FormInput
+              label="Motivo (obligatorio si no está verificada)"
+              value={producerListNotes}
+              onChange={(e) => setProducerListNotes(e.target.value)}
+            />
+          )}
         </div>
-        <div className="flex items-center justify-between gap-3 sm:flex-1">
-          <span className="text-sm text-marron-cafe">Guía de remisión verificada</span>
-          <Switch checked={shippingGuideVerified} onChange={setShippingGuideVerified} label="Guía de remisión verificada" />
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-marron-cafe">Guía de remisión verificada</span>
+            <Switch checked={shippingGuideVerified} onChange={setShippingGuideVerified} label="Guía de remisión verificada" />
+          </div>
+          {!shippingGuideVerified && (
+            <FormInput
+              label="Motivo (obligatorio si no está verificada)"
+              value={shippingGuideNotes}
+              onChange={(e) => setShippingGuideNotes(e.target.value)}
+            />
+          )}
         </div>
       </div>
       <FormInput label="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} />
-      <Button type="submit" variant="secondary" disabled={enviando} className="self-start px-4 py-2 text-sm">
+      <Button type="submit" variant="secondary" disabled={enviando || !notasDocumentosValidas} className="self-start px-4 py-2 text-sm">
         {enviando ? 'Guardando…' : 'Guardar documentación'}
       </Button>
     </form>
