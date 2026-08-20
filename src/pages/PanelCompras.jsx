@@ -143,11 +143,16 @@ export default function PanelCompras() {
             <p className="text-sm text-marron-cafe/60">Programa de descargüío de materia prima.</p>
           </div>
         </div>
-        <span
-          title={puedeEmitir ? undefined : 'Tu rol no tiene permiso para crear lotes (lots:create) — hablá con un administrador'}
-        >
-          <Button type="button" onClick={() => setFormAbierto((v) => !v)} disabled={!puedeEmitir}>
-            {formAbierto ? 'Cancelar' : '+ Nuevo programa'}
+        {/* Desactivado a propósito (temporal): el Programa de Descargüío
+            todavía tiene campos mock sin persistir (responsables,
+            elaborado/revisado por — ver comentario de cabecera de este
+            archivo) y el equipo está definiendo el flujo real de
+            Compras/Almacén antes de habilitar el alta desde acá. Deshabilitado
+            incondicionalmente, no solo por permiso — quitar este bloque
+            cuando esa parte quede completa. */}
+        <span title="Todavía no está habilitado — esta parte está incompleta.">
+          <Button type="button" disabled>
+            + Nuevo programa
           </Button>
         </span>
       </header>
