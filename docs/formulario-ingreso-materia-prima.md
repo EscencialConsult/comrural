@@ -22,13 +22,23 @@ Observaciones, Responsables.
 
 ### Dónde vive
 
+> ⚠️ **Corrección post-reunión**: la primera versión de esta pantalla vivía
+> en una ruta propia colgada de Calidad
+> (`/panel/calidad/lotes/:lotId/ingreso`). Es un error — la reunión con
+> Milenka es explícita: *"necesito ponerle otra subpestaña a este almacén
+> que diga recepción"* (video1788040555.txt). El punto de entrada real es
+> Almacén, como una subpestaña de esa misma pantalla, sin navegar a una URL
+> aparte. Se corrigió extrayendo el cuerpo del formulario a un componente
+> propio (`FormularioIngresoMateriaPrima.jsx`) que ambos puntos de entrada
+> montan.
+
 | Qué | Dónde |
 |---|---|
-| Pantalla | `src/pages/PanelIngresoMateriaPrima.jsx` |
-| Componentes nuevos | `src/components/formularios/DatosRecepcionLote.jsx`, `ControlDocumentos.jsx`, `DatosTransporte.jsx`, `DatosProductoYCantidad.jsx`, `ResumenRecepcion.jsx`, `PesajeFinal.jsx` |
+| Cuerpo del formulario (sin ruta) | `src/components/formularios/FormularioIngresoMateriaPrima.jsx` |
+| Componentes nuevos | `DatosRecepcionLote.jsx`, `ControlDocumentos.jsx`, `DatosTransporte.jsx`, `DatosProductoYCantidad.jsx`, `ResumenRecepcion.jsx`, `PesajeFinal.jsx` |
 | Componentes reusados sin cambios | `CabeceraFormulario`, `SeccionFormulario`, `OpcionSiNo`, `ContadorSacos`, `SelectorDeBase`, `CampoObservaciones`, `FirmasResponsables`, `AvisoFaltante`, `solicitudesDeAlta` |
-| Ruta | `/panel/calidad/lotes/:lotId/ingreso` |
-| Punto de entrada | Botón "Iniciar/Continuar recepción" en la sección "Recepción de Almacén" de `PanelRecepcionLote.jsx` |
+| **Punto de entrada real** | Subpestaña "Recepción" de `PanelAlmacen.jsx` — cambia de vista local (`pantalla.vista`), **no navega**, misma URL `/panel/almacen` todo el tiempo |
+| Ruta con URL propia (secundaria) | `/panel/calidad/lotes/:lotId/ingreso` (`PanelIngresoMateriaPrima.jsx`, envoltorio delgado) — para un link directo puntual, ej. desde el resumen de Calidad en `PanelRecepcionLote.jsx` |
 
 Confirma la promesa del primer formulario: los átomos ya construidos para
 Calidad sirvieron tal cual acá — ninguno tuvo que tocarse.
@@ -153,4 +163,6 @@ frontend en `:5173`, sesión real (`facundoescencial@gmail.com`):
 - El tercer formulario (Nota de Recepción, P-ADM-03/R-11) queda en espera:
   la propia reunión con Milenka lo definió como solo-imprimible, generado
   con los datos que ya cargan los formularios 1 y 2 — no es un formulario
-  de carga aparte.
+  de carga aparte. Su destino en la app, cuando se construya, es **Calidad
+  y Laboratorio** (no Almacén) — corrección directa de Facundo tras esta
+  entrega.
