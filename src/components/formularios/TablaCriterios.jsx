@@ -1,6 +1,5 @@
-import { useState } from 'react'
-import { CircleAlert, CircleCheck, MessageSquarePlus, X } from 'lucide-react'
-import OpcionSiNo from './OpcionSiNo.jsx'
+import { CircleAlert, CircleCheck } from 'lucide-react'
+import FilaPreguntaSiNo from './FilaPreguntaSiNo.jsx'
 
 // Sección 2 del papel: condiciones de llegada del transporte.
 //
@@ -34,99 +33,23 @@ export default function TablaCriterios({
     <div className="flex flex-col gap-3">
       <ol className="flex flex-col gap-2">
         {items.map((item, i) => (
-          <CriterioFila
+          <FilaPreguntaSiNo
             key={item.id}
-            item={item}
             numero={i + 1}
+            pregunta={item.label}
             valor={valorDe(item)}
             observacion={observacionDe?.(item) ?? ''}
             onCambiar={(v) => onCambiar(item, v)}
             onCambiarObservacion={(t) => onCambiarObservacion(item, t)}
             soloLectura={soloLectura}
-            esDecisivo={item.code === codigoDecisivo}
+            destacada={item.code === codigoDecisivo}
+            avisoSiVacia='Sin esta respuesta no se puede cerrar la inspección — si es "No", se rechaza el lote completo.'
           />
         ))}
       </ol>
 
       <ContadorPendientes total={items.length} sinResponder={sinResponder.length} decisivaFalta={decisivoSinResponder} />
     </div>
-  )
-}
-
-function CriterioFila({ item, numero, valor, observacion, onCambiar, onCambiarObservacion, soloLectura, esDecisivo }) {
-  const [abierta, setAbierta] = useState(false)
-  const mostrarObservacion = abierta || observacion !== ''
-  const respondido = valor !== null && valor !== undefined
-
-  return (
-    <li
-      className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl p-4 transition-colors duration-150 ${
-        esDecisivo ? 'bg-verde-pistacho/70 ring-1 ring-verde-hoja/40' : 'bg-white/80'
-      }`}
-    >
-      <p className="min-w-56 flex-1 text-sm leading-relaxed text-marron-cafe">
-        <span className="mr-2 font-bold text-verde-bosque/70">{numero}.</span>
-        {item.label}
-      </p>
-
-      <div className="flex shrink-0 items-center gap-2">
-        {/* La marca de "obligatoria" no va como asterisco al final del texto:
-            en una pregunta de 24 palabras queda perdida en el último
-            renglón. Va al lado de la respuesta, que es donde está el ojo
-            cuando decide si contestar o saltear. */}
-        {esDecisivo && (
-          <span className="rounded-full bg-verde-bosque px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-crema-quinua">
-            Obligatoria
-          </span>
-        )}
-        <OpcionSiNo valor={valor} onChange={onCambiar} disabled={soloLectura} etiquetaAccesible={item.label} />
-      </div>
-
-      {mostrarObservacion ? (
-        <div className="flex min-w-56 flex-1 items-center gap-1.5">
-          <input
-            type="text"
-            value={observacion}
-            disabled={soloLectura}
-            autoFocus={abierta && observacion === ''}
-            placeholder="Observación…"
-            onChange={(e) => onCambiarObservacion(e.target.value)}
-            aria-label={`Observación de: ${item.label}`}
-            className="w-full rounded-xl border border-marron-tierra/25 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima disabled:bg-marron-tierra/5 disabled:text-marron-cafe/60"
-          />
-          {!soloLectura && (
-            <button
-              type="button"
-              aria-label="Quitar la observación"
-              onClick={() => {
-                onCambiarObservacion('')
-                setAbierta(false)
-              }}
-              className="flex size-6 shrink-0 items-center justify-center rounded-full text-marron-cafe/65 transition-colors duration-150 hover:bg-marron-tierra/10 hover:text-marron-cafe"
-            >
-              <X className="size-3.5" strokeWidth={2.5} />
-            </button>
-          )}
-        </div>
-      ) : (
-        !soloLectura && (
-          <button
-            type="button"
-            onClick={() => setAbierta(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-marron-tierra/8 px-3 py-2 text-xs font-semibold text-marron-cafe/70 transition-colors duration-150 hover:bg-marron-tierra/18 hover:text-marron-cafe"
-          >
-            <MessageSquarePlus className="size-3.5" strokeWidth={2} />
-            Observación
-          </button>
-        )
-      )}
-
-      {esDecisivo && !respondido && (
-        <p className="w-full text-xs font-semibold text-marron-arcilla">
-          Sin esta respuesta no se puede cerrar la inspección — si es "No", se rechaza el lote completo.
-        </p>
-      )}
-    </li>
   )
 }
 

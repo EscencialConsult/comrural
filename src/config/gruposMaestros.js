@@ -1,4 +1,17 @@
-import { Globe, IdCard, Building2, Handshake, Boxes, Layers, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import {
+  Globe,
+  IdCard,
+  Building2,
+  Handshake,
+  Boxes,
+  Layers,
+  ShoppingCart,
+  SlidersHorizontal,
+  FlaskConical,
+  ClipboardList,
+  Warehouse,
+  Receipt,
+} from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
 // bajo qué módulo padre" (pedido explícito: Personas/Organizaciones/
@@ -44,5 +57,68 @@ export const GRUPOS_MAESTROS = [
     id: 'configuracion',
     padre: { nombre: 'Configuración', ruta: '/panel/configuracion', Icon: SlidersHorizontal },
     items: [{ id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe }],
+  },
+  {
+    id: 'calidad',
+    // Mismo criterio que Compras: "Calidad y Laboratorio" (el padre) es el
+    // Inicio del área — solo analytics — y "Inspección" (el único hijo por
+    // ahora, más van a sumarse con los próximos formularios) es donde vive
+    // la tabla de lotes con su estado y el formulario de inspección. El
+    // nombre es "Inspección", no "Recepción/Inspección" — la Recepción es
+    // tarea de Almacén (ver el grupo `almacen` de acá abajo), esta pantalla
+    // solo MUESTRA de lectura el estado de esa recepción como contexto
+    // para inspeccionar, no la gestiona. `permiso: 'lots:read'` en los dos
+    // porque hoy esa es la condición real que separa el camino completo
+    // (almacén/superadmin) del camino de cola simple para el rol `calidad`
+    // puro (ver PanelCalidad.jsx) — sin `lots:read` no hay Inicio con tabs
+    // ni tabla que agrupar, así que el padre queda como link plano y este
+    // grupo no se arma.
+    // "Calidad y Lab." acá (no "Calidad y Laboratorio" completo) — pedido
+    // explícito de Facundo para el nombre del área en el sidebar; el
+    // nombre completo se mantiene en las páginas públicas de
+    // mock/data/modulos.json y en el título de PanelCalidad.jsx, donde sí
+    // hay lugar de sobra.
+    padre: { nombre: 'Calidad y Lab.', ruta: '/panel/calidad', permiso: 'lots:read', Icon: FlaskConical },
+    items: [
+      {
+        id: 'inspeccion',
+        nombre: 'Inspección',
+        ruta: '/panel/calidad/inspeccion',
+        permiso: 'lots:read',
+        Icon: ClipboardList,
+      },
+      // Formulario 3 (Nota de Recepción, P-ADM-03/R-11) — de vuelta acá
+      // como sub-item normal, mismo molde que Inspección (se había sacado
+      // a un link suelto fuera del desplegable, ver historial de
+      // DashboardSidebar.jsx; pedido explícito de Facundo de volverlo a
+      // meter adentro de Calidad y Laboratorio).
+      {
+        id: 'remito',
+        nombre: 'Remito',
+        ruta: '/panel/calidad/remito',
+        permiso: 'lots:read',
+        Icon: Receipt,
+      },
+    ],
+  },
+  {
+    id: 'almacen',
+    // Mismo criterio que Calidad y Laboratorio: "Almacén" (el padre) es el
+    // Inicio del área — solo analytics — y "Recepción" (el único hijo por
+    // ahora) es donde vive la tabla de lotes pendientes/en curso y el
+    // formulario de ingreso de materia prima. Pedido explícito de Facundo:
+    // "que en almacén aparezca solo los datos como de inicio y se abra la
+    // nueva pestaña que sea recepción" — mismo patrón, un solo permiso
+    // (`almacen:read`) porque acá no hay split de roles como en Calidad.
+    padre: { nombre: 'Almacén', ruta: '/panel/almacen', permiso: 'almacen:read', Icon: Warehouse },
+    items: [
+      {
+        id: 'recepcion',
+        nombre: 'Recepción',
+        ruta: '/panel/almacen/recepcion',
+        permiso: 'almacen:read',
+        Icon: ClipboardList,
+      },
+    ],
   },
 ]

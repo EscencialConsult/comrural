@@ -15,10 +15,18 @@ Fecha: 2026-08-20 · Proyecto: COMRURAL XXI — Software de Gestión (frontend)
 
 La versión en pantalla del formulario que Almacén llena al recibir un lote
 de materia prima — desde que entra el camión hasta que se cierra la
-recepción con los pesos finales. Mantiene el orden del papel: Datos de
-recepción, Control de documentos, Datos del transporte, Datos del producto,
+recepción con los pesos finales. Mantiene el orden del papel: Control de
+documentos, Datos de recepción, Datos del transporte, Datos del producto,
 Resumen de recepción, Detalle de rechazos, Unidades de medida,
 Observaciones, Responsables.
+
+> **Corrección 2026-08-21**: esta primera versión tenía "Datos de
+> recepción" antes que "Control de documentos" — al revés. Se confirmó
+> contra una foto del papel real (registro P-ADM-03/R-02) que mandó
+> Facundo: "CONTROL DE DOCUMENTOS" es la primera sección de la hoja,
+> arriba de "DATOS DE RECEPCION". Se corrigió acá y en
+> `FormularioIngresoMateriaPrima.jsx` (los `numero` de `SeccionFormulario`
+> se intercambiaron).
 
 ### Dónde vive
 

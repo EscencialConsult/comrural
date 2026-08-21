@@ -10,9 +10,21 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // verdad navega es "Lote": elegir otro lote lleva a SU recepción, porque
 // cada lote tiene la suya.
 //
-// Fecha y horas son del acto de recepción (`startedAt` / `completedAt` de
-// warehouse_receipts) — el backend las sella, acá solo se muestran.
-export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLotes = [], cargandoLotes = false }) {
+// Fecha y horas SÍ son editables (como en DatosGeneralesLote.jsx, con el
+// mismo botón de "poner la fecha/hora de hoy" de CampoFechaHora) — pedido
+// explícito de Facundo: "debe ser exactamente los mismos componentes que
+// ya venimos usando en el otro formulario". No se mandan al backend
+// (`startedAt`/`completedAt` los sella el propio backend igual, ver
+// FormularioIngresoMateriaPrima.jsx), mismo criterio no-persistente que ya
+// tiene esta misma sección en Calidad.
+export default function DatosRecepcionLote({
+  valores,
+  onCambiar,
+  onCambiarLote,
+  opcionesLotes = [],
+  cargandoLotes = false,
+  soloLectura = false,
+}) {
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
       <SelectorDeBase
@@ -26,7 +38,14 @@ export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLot
       />
 
       <div className="sm:col-span-3">
-        <CampoFechaHora id="fecha-recepcion" tipo="date" label="Fecha de recepción" valor={valores.fecha} onChange={() => {}} disabled />
+        <CampoFechaHora
+          id="fecha-recepcion"
+          tipo="date"
+          label="Fecha de recepción"
+          valor={valores.fecha}
+          onChange={(v) => onCambiar('fecha', v)}
+          disabled={soloLectura}
+        />
       </div>
 
       <SelectorDeBase
@@ -45,8 +64,8 @@ export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLot
           tipo="time"
           label="Hora inicio"
           valor={valores.horaInicio}
-          onChange={() => {}}
-          disabled
+          onChange={(v) => onCambiar('horaInicio', v)}
+          disabled={soloLectura}
         />
       </div>
       <div className="sm:col-span-2">
@@ -55,8 +74,8 @@ export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLot
           tipo="time"
           label="Hora final"
           valor={valores.horaFin}
-          onChange={() => {}}
-          disabled
+          onChange={(v) => onCambiar('horaFin', v)}
+          disabled={soloLectura}
           hint={valores.horaFin ? undefined : 'Se completa al cerrar la recepción'}
         />
       </div>

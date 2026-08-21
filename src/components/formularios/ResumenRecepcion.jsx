@@ -5,10 +5,15 @@ import { CircleAlert } from 'lucide-react'
 // sistema ya calculó en otro paso, no algo que Almacén tipea en este
 // formulario.
 //
-// - Total de bolsas y peso promedio neto salen de `warehouse-receipts`
-//   (`receivedPackageCount`, `averageAcceptedNetWeightKg` — este último
-//   solo existe una vez que la recepción está FINALIZADA, el backend lo
-//   calcula, nunca lo manda el cliente).
+// - Total de bolsas es `storedPackageCount` (`receivedPackageCount -
+//   rejectedPackageCount`, congelado al FINALIZAR), NO `receivedPackageCount`
+//   — ese es el total ORIGINAL recibido (450 en el papel de ejemplo), antes
+//   del rechazo de Calidad; acá va el final después del rechazo (375). Bug
+//   real que hubo acá: los dos números se mostraban iguales porque este
+//   componente recibía `receivedPackageCount` para las dos cosas. Peso
+//   promedio neto es `averageAcceptedNetWeightKg` — igual que
+//   `storedPackageCount`, el backend lo calcula y solo existe una vez
+//   FINALIZADA.
 // - El N° de sacos rechazados sale de la INSPECCIÓN de Calidad
 //   (`rejectedBagCount`), no de acá — confirmado leyendo warehouse-receipt
 //   completo: el backend no tiene ningún campo de detalle de rechazo
