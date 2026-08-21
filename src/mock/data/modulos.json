@@ -9,7 +9,7 @@
   },
   {
     "id": "calidad",
-    "nombre": "Calidad y Laboratorio",
+    "nombre": "Calidad",
     "descripcion": "Recepción de materia prima, liberación de lotes, análisis interno y externo.",
     "estado": "relevado_parcial",
     "ruta": "/calidad",

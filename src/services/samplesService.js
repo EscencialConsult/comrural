@@ -10,6 +10,10 @@ export const samplesService = {
     return apiClient.post(`/raw-material-lots/${lotId}/samples`, dto)
   },
 
+  async listarPorLote(lotId) {
+    return apiClient.get(`/raw-material-lots/${lotId}/samples`)
+  },
+
   async obtener(sampleId) {
     return apiClient.get(`/samples/${sampleId}`)
   },
