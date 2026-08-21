@@ -3,6 +3,7 @@ import { Warehouse } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { productsService } from '../services/productsService'
 import { lotsService } from '../services/lotsService'
+import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Button from '../components/Button.jsx'
@@ -32,6 +33,16 @@ export default function PanelAlmacen() {
   const [lotes, setLotes] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [pantalla, setPantalla] = useState({ vista: 'lista', lotId: null })
+  // lotId -> vista consolidada real (o 'error') — NUNCA se usa
+  // `lot.currentStatus` para decidir si una recepción está iniciada,
+  // cerrada o sin arrancar. Se encontró en vivo que un lote puede quedar
+  // con `currentStatus: PROGRAMADO` aunque su `warehouseReceipt` ya esté
+  // FINALIZADA (el estado agregado del lote no siempre se pone al día) —
+  // con el criterio viejo, ese lote aparecía en "pendientes" con el botón
+  // "Iniciar recepción", como si nada se hubiera hecho todavía. La única
+  // fuente real de si YA se inició/cerró una recepción es
+  // `warehouseReceipt.status`, de la vista consolidada.
+  const [resumenes, setResumenes] = useState({})
 
   const recargarLotes = () => {
     lotsService
@@ -65,27 +76,60 @@ export default function PanelAlmacen() {
 
   const lotesPM = useMemo(() => (lotes ?? []).filter((l) => l.nature === 'PM'), [lotes])
 
-  // KPIs reales — cuentan currentStatus de verdad. Van a mostrar 0 en
-  // "Liberados"/"Rechazados" hasta que exista el flujo de liberación
-  // (Proceso 2, todavía sin endpoints) — no es un dato falso, es el estado
-  // real de la base hoy.
+  // Enriquecimiento con el estado real de recepción de cada lote PM — el
+  // volumen hoy es chico (decenas de lotes, no miles), así que se pide de
+  // una sola vez para toda la lista, no paginado como en PanelCalidad.jsx
+  // (que sí puede tener cientos de filas). Si el volumen real crece mucho,
+  // esto necesita el mismo acotado a la página visible.
+  useEffect(() => {
+    if (lotesPM.length === 0) return
+    let cancelado = false
+    Promise.allSettled(lotesPM.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
+      if (cancelado) return
+      setResumenes((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[lotesPM[i].id] = r.status === 'fulfilled' ? r.value : 'error'
+        })
+        return siguiente
+      })
+    })
+    return () => {
+      cancelado = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotes])
+
+  const receiptDe = (l) => {
+    const r = resumenes[l.id]
+    return r && r !== 'error' ? r.warehouseReceipt : undefined // undefined = todavía no llegó la respuesta
+  }
+
+  // KPIs reales — "Liberados"/"Rechazados" van a mostrar 0 hasta que exista
+  // el flujo de liberación (Proceso 2, todavía sin endpoints); no es un
+  // dato falso, es el estado real de la base hoy. Esos dos SÍ pueden
+  // quedarse en `currentStatus` (no dependen de warehouse-receipts). Las
+  // otras dos cuentan la recepción real, no el estado agregado del lote.
   const kpis = useMemo(() => {
-    const enProceso = ['EN_RECEPCION', 'ACEPTADO_RECEPCION', 'EN_ANALISIS', 'PENDIENTE_LIBERACION']
+    const cargados = lotesPM.filter((l) => receiptDe(l) !== undefined)
     return {
-      pendientes: lotesPM.filter((l) => l.currentStatus === 'PROGRAMADO').length,
-      enProceso: lotesPM.filter((l) => enProceso.includes(l.currentStatus)).length,
+      sinRecepcion: cargados.filter((l) => !receiptDe(l)).length,
+      enProceso: cargados.filter((l) => receiptDe(l)?.status === 'INICIADA').length,
       liberados: lotesPM.filter((l) => l.currentStatus === 'LIBERADO').length,
       rechazados: lotesPM.filter((l) => l.currentStatus === 'RECHAZADO').length,
     }
-  }, [lotesPM])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotesPM, resumenes])
 
   const pendientes = useMemo(
-    () => lotesPM.filter((l) => ['PROGRAMADO', 'EN_RECEPCION'].includes(l.currentStatus)),
-    [lotesPM],
+    () => lotesPM.filter((l) => receiptDe(l) === undefined || !receiptDe(l) || receiptDe(l).status === 'INICIADA'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotesPM, resumenes],
   )
   const cerradas = useMemo(
-    () => lotesPM.filter((l) => ['ACEPTADO_RECEPCION', 'RECHAZADO'].includes(l.currentStatus)),
-    [lotesPM],
+    () => lotesPM.filter((l) => receiptDe(l) && ['FINALIZADA', 'CANCELADA'].includes(receiptDe(l).status)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotesPM, resumenes],
   )
 
   const abrirRecepcion = (lotId) => setPantalla({ vista: 'recepcion', lotId })
@@ -119,7 +163,7 @@ export default function PanelAlmacen() {
       {pantalla.vista === 'lista' ? (
         <>
           <section className="grid gap-3 sm:grid-cols-4">
-            <StatCard valor={kpis.pendientes} etiqueta="Sin recepción" />
+            <StatCard valor={kpis.sinRecepcion} etiqueta="Sin recepción" />
             <StatCard valor={kpis.enProceso} etiqueta="En proceso" />
             <StatCard valor={kpis.liberados} etiqueta="Liberados" />
             <StatCard valor={kpis.rechazados} etiqueta="Rechazados" />
@@ -144,7 +188,7 @@ export default function PanelAlmacen() {
                       </p>
                     </div>
                     <Button className="px-4 py-1.5 text-sm" onClick={() => abrirRecepcion(l.id)}>
-                      {l.currentStatus === 'PROGRAMADO' ? 'Iniciar recepción' : 'Continuar recepción'}
+                      {receiptDe(l) === undefined ? 'Ver' : !receiptDe(l) ? 'Iniciar recepción' : 'Continuar recepción'}
                     </Button>
                   </div>
                 ))}
