@@ -25,6 +25,13 @@
   /* Neutros y acentos de producto */
   --color-crema-quinua: #faf4e8;
   --color-rojo-pasankalla: #c0392b;
+  /* Ámbar real para semáforos rojo/ámbar/verde (ej. borde de "Continuar
+     inspección" en Calidad y Laboratorio) — marron-arcilla ya está tomado
+     como el "alerta" genérico del sistema (Badge.jsx) pero es un rojizo
+     oscuro casi indistinguible de rojo-pasankalla en un borde fino de 2px,
+     que es justo el bug que reportó Facundo. Dorado real de la semilla de
+     quinua seca — encaja con la marca sin salir de su paleta terrosa. */
+  --color-oro-quinua: #d1962e;
 
   --font-sans: 'Montserrat', sans-serif;
 }
@@ -254,5 +261,25 @@ body {
   .sidebar-logo-fade,
   .sidebar-navitem {
     transition-duration: 1ms;
+  }
+}
+
+/*
+  Impresión de formularios (I-CAL-29/R-01 y similares) — pedido explícito:
+  imprimir SOLO el registro (de la cabecera del formulario a las firmas),
+  nunca el sidebar/header/reloj del dashboard, y mantener la paleta de
+  colores del sistema en el papel (los navegadores descartan fondos/colores
+  al imprimir salvo que se pida explícito). El armado de qué se oculta vive
+  en cada componente vía la utilidad `print:hidden` de Tailwind — esto solo
+  cubre lo que Tailwind no resuelve: el tamaño de página y forzar color.
+*/
+@media print {
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
   }
 }

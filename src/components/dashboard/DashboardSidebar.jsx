@@ -11,11 +11,12 @@ import AiAdvisorTeaser from './AiAdvisorTeaser'
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
 
-// Datos maestros (FE·M1-M6 del tablero): qué pantalla va agrupada bajo qué
-// módulo padre vive en config/gruposMaestros.js — es la MISMA fuente que
-// usa GrupoTabs.jsx para las pastillas de arriba de cada pantalla. Sumar
-// una pantalla nueva es una línea ahí, no acá.
-const SUBITEMS_COMPRAS = GRUPOS_MAESTROS.find((g) => g.id === 'compras').items
+// Datos maestros (FE·M1-M6 del tablero, + Calidad y Laboratorio): qué
+// pantalla va agrupada bajo qué módulo padre vive en config/gruposMaestros.js
+// — es la MISMA fuente que usa GrupoTabs.jsx para las pastillas de arriba de
+// cada pantalla. Sumar una pantalla nueva (o un módulo nuevo con sub-items)
+// es agregar/editar una entrada ahí — este archivo se queda genérico,
+// busca por `modulo.id` en vez de tener un caso hardcodeado por módulo.
 const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
@@ -31,10 +32,6 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   const modulos = useMemo(
     () => todosLosModulos.filter((m) => puedeVerModulo(m.id, permisos)),
     [todosLosModulos, permisos],
-  )
-  const subitemsCompras = useMemo(
-    () => SUBITEMS_COMPRAS.filter((s) => permisos.has(s.permiso)),
-    [permisos],
   )
   const subitemsConfiguracion = useMemo(
     () => SUBITEMS_CONFIGURACION.filter((s) => permisos.has(s.permiso)),
@@ -104,7 +101,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
       el.removeEventListener('scroll', actualizar)
       resizeObserver.disconnect()
     }
-  }, [modulos, subitemsCompras, subitemsConfiguracion, colapsadoEfectivo, navVersion])
+  }, [modulos, subitemsConfiguracion, colapsadoEfectivo, navVersion])
 
   const linkClass = ({ isActive }) =>
     `sidebar-navitem flex items-center rounded-xl py-2.5 text-sm font-medium ${
@@ -133,7 +130,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
           único scroll interno vive en el <nav> de más abajo), y fijar el
           handle ahí adentro lo recortaría en el eje X (overflow-y en un
           solo eje fuerza el otro a auto/clip también). */}
-      <div className="relative flex shrink-0">
+      <div className="relative flex shrink-0 print:hidden">
         <aside
           className={`sidebar-collapse fixed inset-y-0 left-0 z-40 flex h-svh flex-col bg-marron-cafe py-6 md:static ${
             colapsadoEfectivo ? 'w-20 px-2' : 'w-64 px-4'
@@ -198,19 +195,30 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {modulos.map((modulo) => {
                 const Icon = MODULO_ICON[modulo.id]
-                // Compras es el único módulo de negocio que además agrupa
-                // datos maestros (Personas, Organizaciones, y lo que siga
-                // de M4-M6) — pedido explícito, ver SUBITEMS_COMPRAS. Si
-                // el usuario no tiene ningún permiso de esos, queda como
-                // un link plano igual que el resto de los módulos.
-                if (modulo.id === 'compras' && subitemsCompras.length > 0) {
+                // Módulos de negocio que además agrupan datos maestros
+                // propios (Compras→Personas/Organizaciones/...,
+                // Calidad→Inspección, Almacén→Recepción) se buscan por `modulo.id`
+                // en GRUPOS_MAESTROS — sumar un módulo agrupado nuevo es una
+                // entrada ahí, no un caso más acá. Si el usuario no tiene
+                // ningún permiso de esos sub-items, queda como link plano
+                // igual que el resto de los módulos.
+                const grupo = GRUPOS_MAESTROS.find((g) => g.id === modulo.id)
+                const subitems = grupo ? grupo.items.filter((s) => permisos.has(s.permiso)) : []
+                if (subitems.length > 0) {
                   return (
                     <NavGroup
                       key={modulo.id}
-                      nombre={modulo.nombre}
+                      // `grupo.padre.nombre` gana sobre `modulo.nombre`
+                      // cuando existe — el sidebar tiene menos ancho que el
+                      // resto de la app, así que un módulo agrupado puede
+                      // pedir acá un nombre más corto que el que usan las
+                      // páginas públicas (mock/data/modulos.json) sin tocar
+                      // esas otras pantallas. Hoy solo lo usa Calidad
+                      // ("Calidad y Lab." en vez de "Calidad y Laboratorio").
+                      nombre={grupo.padre.nombre ?? modulo.nombre}
                       ruta={`/panel/${modulo.id}`}
                       Icon={Icon}
-                      subitems={subitemsCompras}
+                      subitems={subitems}
                       colapsadoEfectivo={colapsadoEfectivo}
                       linkClass={linkClass}
                       onToggle={alExpandirGrupo}
@@ -330,7 +338,7 @@ function NavGroup({ nombre, ruta, Icon, subitems, colapsadoEfectivo, linkClass, 
 
   if (colapsadoEfectivo) {
     return (
-      <NavLink to={ruta} className={linkClass} title={nombre}>
+      <NavLink to={ruta} end className={linkClass} title={nombre}>
         {Icon && <Icon className="size-5 shrink-0" strokeWidth={1.75} />}
       </NavLink>
     )
@@ -339,7 +347,14 @@ function NavGroup({ nombre, ruta, Icon, subitems, colapsadoEfectivo, linkClass, 
   return (
     <div>
       <div className="flex items-center gap-0.5">
-        <NavLink to={ruta} className={({ isActive }) => `${linkClass({ isActive })} flex-1`}>
+        {/* `end`: sin esto, NavLink marca "activo" en CUALQUIER subruta que
+            empiece con `ruta` — para Compras nunca se notó porque sus
+            hijos son rutas hermanas sueltas (/panel/personas, no
+            /panel/compras/personas), pero Calidad y Almacén SÍ anidan su
+            hijo bajo el mismo prefijo (/panel/calidad/inspeccion,
+            /panel/almacen/recepcion) y sin `end` los dos quedaban pintados
+            de verde a la vez. */}
+        <NavLink to={ruta} end className={({ isActive }) => `${linkClass({ isActive })} flex-1`}>
           {Icon && <Icon className="size-5 shrink-0" strokeWidth={1.75} />}
           <span className="sidebar-label">{nombre}</span>
         </NavLink>
