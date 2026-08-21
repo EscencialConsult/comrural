@@ -3,22 +3,29 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 
 // Sección 1 del papel: DATOS GENERALES.
 //
-// Producto, proveedor y lote se ELIGEN de los maestros que ya tiene el
-// sistema — se escribe para filtrar, no para inventar (ver SelectorDeBase).
-// Si lo buscado no está cargado, la salida es el aviso único de arriba a la
-// derecha de la pantalla (ver AvisoFaltante.jsx), no un link por campo.
+// Producto, proveedor y lote son atributos DEL LOTE — decisión de Compras,
+// no algo que el inspector elige acá (mismo criterio que ya usa
+// DatosRecepcionLote.jsx en el Formulario 2, sección 2). Corrección
+// post-revisión: hasta esta pasada, `SelectorDeBase` quedaba buscable/
+// editable con `disabled={soloLectura}`, como si el inspector pudiera
+// "cambiar" el producto de una inspección ya abierta — nunca tuvo sentido:
+// el lote llega fijo desde `recepcion.lot`, y esos campos nunca se mandan al
+// backend en `guardar()`. Quedan `disabled` siempre, la única forma real de
+// "cambiar de lote" es el selector "Lote", que navega a OTRA inspección
+// (ver `onCambiarLote` en FormularioInspeccionMateriaPrima.jsx) — ese sí
+// sigue activo.
 //
-// Fecha y horas son del acto de inspeccionar (`startedAt` / `completedAt`).
-// Los tres comparten el mismo control: se hace clic en cualquier parte del
-// campo para abrir el selector nativo, y hay una pastilla "Hoy" / "Ahora"
-// para completarlo con el momento actual sin abrir nada. La hora va en 24 h,
-// como en el formulario en papel.
+// Fecha y horas son del acto de inspeccionar (`startedAt` / `completedAt`),
+// selladas por el propio backend al crear/completar la inspección — no
+// aceptan `PATCH` (confirmado contra inspections.md). Quedan `disabled`
+// siempre por el mismo motivo que producto/proveedor: eran editables con el
+// botón "hoy" de CampoFechaHora, pero era un callejón sin salida — se podía
+// tocar, nunca se guardaba nada.
 export default function DatosGeneralesLote({
   valores,
-  onCambiar,
+  onCambiarLote,
   opciones = {},
   cargandoOpciones = false,
-  soloLectura = false,
 }) {
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
@@ -26,32 +33,23 @@ export default function DatosGeneralesLote({
         label="Producto"
         valor={valores.producto}
         opciones={opciones.productos ?? []}
-        onSeleccionar={(op) => onCambiar('producto', op)}
-        disabled={soloLectura}
-        cargando={cargandoOpciones}
-        placeholder="Buscá el producto…"
+        onSeleccionar={() => {}}
+        disabled
+        placeholder="—"
         className="sm:col-span-4"
       />
 
       <div className="sm:col-span-2">
-        <CampoFechaHora
-          id="fecha-inspeccion"
-          tipo="date"
-          label="Fecha"
-          valor={valores.fecha}
-          onChange={(v) => onCambiar('fecha', v)}
-          disabled={soloLectura}
-        />
+        <CampoFechaHora id="fecha-inspeccion" tipo="date" label="Fecha" valor={valores.fecha} onChange={() => {}} disabled />
       </div>
 
       <SelectorDeBase
         label="Proveedor"
         valor={valores.proveedor}
         opciones={opciones.proveedores ?? []}
-        onSeleccionar={(op) => onCambiar('proveedor', op)}
-        disabled={soloLectura}
-        cargando={cargandoOpciones}
-        placeholder="Buscá el proveedor…"
+        onSeleccionar={() => {}}
+        disabled
+        placeholder="—"
         className="sm:col-span-4"
       />
 
@@ -59,8 +57,7 @@ export default function DatosGeneralesLote({
         label="Lote"
         valor={valores.lote}
         opciones={opciones.lotes ?? []}
-        onSeleccionar={(op) => onCambiar('lote', op)}
-        disabled={soloLectura}
+        onSeleccionar={onCambiarLote}
         cargando={cargandoOpciones}
         placeholder="Buscá el lote…"
         className="sm:col-span-2"
@@ -72,8 +69,8 @@ export default function DatosGeneralesLote({
           tipo="time"
           label="Hora de inicio"
           valor={valores.horaInicio}
-          onChange={(v) => onCambiar('horaInicio', v)}
-          disabled={soloLectura}
+          onChange={() => {}}
+          disabled
         />
       </div>
       <div className="sm:col-span-3">
@@ -82,8 +79,8 @@ export default function DatosGeneralesLote({
           tipo="time"
           label="Hora de fin"
           valor={valores.horaFin}
-          onChange={(v) => onCambiar('horaFin', v)}
-          disabled={soloLectura}
+          onChange={() => {}}
+          disabled
           hint={valores.horaFin ? undefined : 'Se completa al cerrar la inspección'}
         />
       </div>

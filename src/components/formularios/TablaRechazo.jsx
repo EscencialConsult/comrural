@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import ContadorSacos from './ContadorSacos.jsx'
 
@@ -46,15 +46,14 @@ export default function TablaRechazo({
     return Math.max(0, ...guardadas, filasAgregadas[grupo.groupCode] ?? 0)
   }
 
-  // El total lo escribe el analista, no lo impone la pantalla: es su número,
-  // el que firma. Puede no coincidir con la suma aritmética de los renglones
-  // —un mismo saco puede caer en más de un defecto y contarse una sola vez—
-  // así que forzarlo al resultado de la suma sería corregirle el criterio.
-  //
-  // La suma sí se calcula, pero solo como referencia al lado del campo, y
-  // únicamente cuando difiere: es la forma barata de que se note un dedazo
-  // sin discutirle el número. Importa porque el backend lo valida contra lo
-  // que recibió Almacén y rechaza la inspección si se pasa.
+  // El total se suma solo — pedido explícito de Facundo probando en vivo
+  // ("las bolsas se suman automáticamente"). Antes era un campo que
+  // escribía el analista a mano, con la suma de renglones solo como
+  // referencia al lado (la razón de ese diseño anterior: "un mismo saco
+  // puede caer en más de un defecto y contarse una sola vez", así que
+  // forzarlo podía "corregirle el criterio" al analista) — ese argumento
+  // quedó descartado por el pedido en vivo: el total ahora ES la suma,
+  // sin excepción, y el campo ya no se tipea.
   const sumaRenglones = useMemo(() => {
     let suma = 0
     for (const col of columnas) {
@@ -66,6 +65,16 @@ export default function TablaRechazo({
     return suma
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnas, valorDe, ocurrenciasDe])
+
+  // Mantiene la respuesta guardada de `total_rejected_bags` en sincro con
+  // la suma en cuanto cambia algún renglón — así "Guardar respuestas"
+  // manda el número real sin que nadie lo tipee ni pueda desincronizarse.
+  useEffect(() => {
+    if (itemTotal && !soloLectura && total !== sumaRenglones) {
+      onCambiar(itemTotal, 1, sumaRenglones)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sumaRenglones, itemTotal, soloLectura, total])
 
   return (
     <div className="flex flex-col gap-3">
@@ -84,8 +93,12 @@ export default function TablaRechazo({
                   className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-marron-tierra/15 py-2"
                 >
                   <span className="flex-1 text-sm font-medium text-marron-cafe">{item.label}</span>
+                  {/* Sin valor cargado = ese hallazgo no apareció, que en un
+                      conteo de sacos es lo mismo que 0 — se muestra "0" de
+                      entrada en vez de un guion vacío, así el analista solo
+                      toca los renglones donde de verdad encontró algo. */}
                   <ContadorSacos
-                    valor={valorDe(item, 1)}
+                    valor={valorDe(item, 1) ?? 0}
                     onChange={(v) => onCambiar(item, 1, v)}
                     min={item.config?.min ?? 0}
                     max={item.config?.max}
@@ -122,28 +135,10 @@ export default function TablaRechazo({
 
       {itemTotal && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-verde-bosque px-5 py-4">
-          <div className="flex flex-col gap-0.5">
-            <label
-              htmlFor="total-bolsas-rechazadas"
-              className="text-sm font-bold uppercase tracking-wide text-crema-quinua"
-            >
-              {itemTotal.label}
-            </label>
-            {total !== sumaRenglones && sumaRenglones > 0 && (
-              <span className="text-xs text-crema-quinua/70">Los renglones suman {sumaRenglones}</span>
-            )}
-          </div>
-          <input
-            id="total-bolsas-rechazadas"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={total ?? ''}
-            disabled={soloLectura}
-            placeholder="—"
-            onChange={(e) => onCambiar(itemTotal, 1, e.target.value === '' ? null : Number(e.target.value))}
-            className="w-28 rounded-xl border-2 border-transparent bg-crema-quinua px-4 py-2 text-right text-lg font-extrabold tabular-nums text-verde-bosque outline-none transition-colors duration-150 focus-visible:border-verde-lima disabled:opacity-70"
-          />
+          <span className="text-sm font-bold uppercase tracking-wide text-crema-quinua">{itemTotal.label}</span>
+          <span className="w-28 rounded-xl bg-crema-quinua px-4 py-2 text-right text-lg font-extrabold tabular-nums text-verde-bosque">
+            {sumaRenglones}
+          </span>
         </div>
       )}
     </div>
