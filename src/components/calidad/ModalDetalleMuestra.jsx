@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, FlaskConical, Layers, Scale, Package, Clock3 } from 'lucide-react'
 import { samplesService } from '../../services/samplesService'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
+import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL } from '../../config/analisisLabels'
 import Modal from '../Modal.jsx'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
@@ -196,27 +197,56 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                 </p>
               </div>
               {solicitudDetalle ? (
-                <dl className="grid gap-4 sm:grid-cols-4">
+                <div className="flex flex-col gap-4">
+                  <dl className="grid gap-4 sm:grid-cols-3">
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Tipo</dt>
+                      <dd className="text-sm text-marron-cafe">
+                        {solicitudDetalle.effectiveType}
+                        {solicitudDetalle.reclassificationReason && ' (reclasificada)'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Estado</dt>
+                      <dd className="text-sm text-marron-cafe">{solicitudDetalle.status.replace(/_/g, ' ')}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Turno</dt>
+                      <dd className="text-sm text-marron-cafe">{solicitudDetalle.shift.name}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Naturaleza</dt>
+                      <dd className="text-sm text-marron-cafe">{NATURALEZA_LABEL[solicitudDetalle.productNature] ?? solicitudDetalle.productNature}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Uso</dt>
+                      <dd className="text-sm text-marron-cafe">{USO_LABEL[solicitudDetalle.intendedUse] ?? solicitudDetalle.intendedUse}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Responsable de entrega</dt>
+                      <dd className="text-sm text-marron-cafe">{solicitudDetalle.deliveryResponsible?.name ?? '—'}</dd>
+                    </div>
+                  </dl>
+
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Tipo</dt>
-                    <dd className="text-sm text-marron-cafe">
-                      {solicitudDetalle.effectiveType}
-                      {solicitudDetalle.reclassificationReason && ' (reclasificada)'}
-                    </dd>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">
+                      Ensayos ({solicitudDetalle.items.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {solicitudDetalle.items.map((item) => (
+                        <span
+                          key={item.id}
+                          className="flex items-center gap-1.5 rounded-full bg-marron-tierra/5 py-1 pr-1 pl-3 text-xs text-marron-cafe"
+                        >
+                          {item.isCustom ? item.otherTestName : item.name}
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-marron-cafe/50">
+                            {EXECUTION_MODE_LABEL[item.executionMode] ?? item.executionMode}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Estado</dt>
-                    <dd className="text-sm text-marron-cafe">{solicitudDetalle.status.replace(/_/g, ' ')}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Ensayos</dt>
-                    <dd className="text-sm text-marron-cafe">{solicitudDetalle.items.length}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Turno</dt>
-                    <dd className="text-sm text-marron-cafe">{solicitudDetalle.shift.name}</dd>
-                  </div>
-                </dl>
+                </div>
               ) : (
                 <p className="text-sm text-marron-cafe/50">Cargando…</p>
               )}
