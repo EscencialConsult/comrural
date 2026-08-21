@@ -3,6 +3,7 @@ import { X, FlaskConical, ClipboardList, Truck, Beaker, Bug, Skull, Eye } from '
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { laboratoryTestsService } from '../../services/laboratoryTestsService'
 import { useSolicitud } from '../../hooks/useSolicitud'
+import { NATURALEZA_LABEL, USO_LABEL } from '../../config/analisisLabels'
 import Modal from '../Modal.jsx'
 import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
@@ -16,15 +17,8 @@ import Badge from '../Badge.jsx'
 // analysis_requests_one_active_per_sample_idx) — por eso este modal ni se
 // abre si la muestra ya tiene una solicitud sin cerrar (lo decide quien
 // llama, pasando `muestra`).
-const NATURALEZAS = [
-  { value: 'MATERIA_PRIMA', label: 'Materia Prima (MP)' },
-  { value: 'PRODUCTO_PROCESO', label: 'Producto en Proceso' },
-  { value: 'PRODUCTO_TERMINADO', label: 'Producto Terminado (PT)' },
-]
-const USOS = [
-  { value: 'EXPORTACION', label: 'Exportación' },
-  { value: 'MERCADO_INTERNO', label: 'Mercado Interno' },
-]
+const NATURALEZAS = Object.entries(NATURALEZA_LABEL).map(([value, label]) => ({ value, label }))
+const USOS = Object.entries(USO_LABEL).map(([value, label]) => ({ value, label }))
 const TIPOS_SOLICITUD = [
   { value: 'REGULAR', label: 'Regular' },
   { value: 'EXPRESS', label: 'Express' },
