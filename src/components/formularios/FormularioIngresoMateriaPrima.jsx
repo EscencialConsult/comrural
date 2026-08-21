@@ -205,6 +205,18 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     (documentos.productores.verificado || documentos.productores.notas.trim() !== '') &&
     (documentos.guia.verificado || documentos.guia.notas.trim() !== '')
 
+  // Mismo problema que tenía "Finalizar inspección" antes de arreglarlo:
+  // el botón quedaba deshabilitado sin decir por qué, así que alguien con
+  // el formulario a medio llenar no tenía forma de saber qué le faltaba
+  // sin ir campo por campo. Se arma la lista una sola vez para reusarla en
+  // el aviso visible y en el `title` del botón.
+  const motivosFaltantes = []
+  if (receivedPackageCount == null || receivedPackageCount <= 0) motivosFaltantes.push('N. de bolsas')
+  if (!documentos.productores.verificado && documentos.productores.notas.trim() === '')
+    motivosFaltantes.push('Observaciones de lista de productores (no cumple)')
+  if (!documentos.guia.verificado && documentos.guia.notas.trim() === '')
+    motivosFaltantes.push('Observaciones de guía de remisión (no cumple)')
+
   const camposTransporte = [
     conductor.fullName,
     conductor.identityDocument,
@@ -407,28 +419,48 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
       </SeccionFormulario>
 
       {!soloLectura && (
-        <div className="flex flex-wrap items-center gap-3">
-          {!existe ? (
-            <Button disabled={enviando || !validoParaGuardar || !puedeCrear} onClick={iniciar}>
-              {enviando ? 'Iniciando…' : 'Iniciar recepción'}
-            </Button>
-          ) : (
-            <>
-              <Button disabled={enviando || !validoParaGuardar} onClick={guardar}>
-                {enviando ? 'Guardando…' : 'Guardar cambios'}
+        <div className="flex flex-col gap-2">
+          {motivosFaltantes.length > 0 && (
+            <p className="text-xs font-medium text-marron-arcilla">
+              Falta completar: {motivosFaltantes.join(' · ')}.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {!existe ? (
+              <Button
+                disabled={enviando || !validoParaGuardar || !puedeCrear}
+                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.join(', ')}` : undefined}
+                onClick={iniciar}
+              >
+                {enviando ? 'Iniciando…' : 'Iniciar recepción'}
               </Button>
-              {(puedeCerrarConPesos || puedeCerrarSinPesos) && (
-                <Button variant="secondary" disabled={enviando || !pesosValidos} onClick={cerrar}>
-                  {enviando ? 'Cerrando…' : 'Cerrar recepción'}
+            ) : (
+              <>
+                <Button
+                  disabled={enviando || !validoParaGuardar}
+                  title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.join(', ')}` : undefined}
+                  onClick={guardar}
+                >
+                  {enviando ? 'Guardando…' : 'Guardar cambios'}
                 </Button>
-              )}
-            </>
-          )}
-          {onVolver && (
-            <Button variant="secondary" disabled={enviando} onClick={onVolver}>
-              {tituloVolver}
-            </Button>
-          )}
+                {(puedeCerrarConPesos || puedeCerrarSinPesos) && (
+                  <Button
+                    variant="secondary"
+                    disabled={enviando || !pesosValidos}
+                    title={!pesosValidos ? 'Falta el peso bruto y neto para cerrar la recepción' : undefined}
+                    onClick={cerrar}
+                  >
+                    {enviando ? 'Cerrando…' : 'Cerrar recepción'}
+                  </Button>
+                )}
+              </>
+            )}
+            {onVolver && (
+              <Button variant="secondary" disabled={enviando} onClick={onVolver}>
+                {tituloVolver}
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>

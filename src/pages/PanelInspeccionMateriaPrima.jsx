@@ -457,6 +457,28 @@ export default function PanelInspeccionMateriaPrima() {
 
   const soloLectura = inspection.status !== 'INICIADA' || !permisos.has('inspections:update')
 
+  // Cuántas obligatorias faltan — antes esto no se calculaba en ningún
+  // lado: "Finalizar inspección" quedaba habilitado siempre que la
+  // inspección estuviera INICIADA, sin mirar si de verdad estaba
+  // respondida. En un formulario recién empezado (7 de 8 condiciones sin
+  // responder, incluida la decisiva) el botón se veía exactamente igual
+  // que en uno completo — el único aviso de "falta esto" vivía adentro de
+  // la sección 2 (`TablaCriterios`), donde nadie lo conecta con el botón
+  // de más abajo. No intenta reproducir `assertAllRequiredAnswered` al
+  // pixel (occurrences repetibles quedan del lado optimista: alcanza con 1
+  // fila cargada) — es una cota inferior para avisar ANTES de intentar, no
+  // el árbitro final. Si igual queda algo sin contar acá, el backend
+  // sigue siendo quien de verdad decide y su 400 real se sigue mostrando
+  // tal cual, como ya hacía.
+  const faltantes = form.items.filter((item) => {
+    if (!item.isRequired) return false
+    const ocurrenciasEsperadas = item.occurrences != null && item.occurrences > 1 ? item.occurrences : 1
+    for (let occ = 1; occ <= ocurrenciasEsperadas; occ++) {
+      if (leer(item, occ) === null) return true
+    }
+    return false
+  })
+
   const guardar = async () => {
     const cambios = []
     for (const k of tocados) {
@@ -477,13 +499,14 @@ export default function PanelInspeccionMateriaPrima() {
     }
   }
 
-  // `assertAllRequiredAnswered` del backend todavía exige TODAS las
-  // obligatorias sin excepción para la sección decisiva (ver nota en el
-  // banner de rechazo total, arriba) — así que finalizar con un rechazo
-  // total y las secciones 3/4 sin completar va a devolver el 400 real del
-  // backend, no uno inventado acá. El botón no lo evita: se deja que el
-  // mensaje de `error` lo cuente tal cual, mismo criterio que el resto de
-  // esta pantalla con los 409/400 de otros pasos.
+  // `faltantes` (arriba) ya bloquea el botón antes de intentar, pero
+  // `assertAllRequiredAnswered` del backend sigue siendo quien manda:
+  // exige TODAS las obligatorias sin excepción para la sección decisiva
+  // (ver nota en el banner de rechazo total), y `faltantes` es una cota
+  // inferior, no una copia exacta de esa regla. Si el backend igual
+  // rechaza por algo que el cálculo de acá no vio, el mensaje de `error`
+  // lo cuenta tal cual — mismo criterio que el resto de esta pantalla con
+  // los 409/400 de otros pasos.
   const finalizar = async () => {
     try {
       await ejecutar(() => inspectionsService.completar(inspection.id, {}))
@@ -527,6 +550,17 @@ export default function PanelInspeccionMateriaPrima() {
           No se aceptaron las condiciones de llegada — se rechaza el lote completo. El resto del formulario queda sin
           efecto; dejá el motivo en Observaciones.
         </p>
+      )}
+
+      {!soloLectura && faltantes.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm">
+          <p className="flex items-center gap-2 font-semibold text-marron-arcilla">
+            <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
+            Faltan {faltantes.length} {faltantes.length === 1 ? 'campo obligatorio' : 'campos obligatorios'} por
+            responder — todavía no se puede finalizar.
+          </p>
+          <p className="text-xs text-marron-cafe/70">{faltantes.map((i) => i.label).join(' · ')}</p>
+        </div>
       )}
 
       {/* El aviso de "falta un dato" vive acá y no en el encabezado: los
@@ -687,7 +721,12 @@ export default function PanelInspeccionMateriaPrima() {
               </Button>
             </>
           ) : (
-            <Button variant="secondary" disabled={enviando} onClick={() => setConfirmandoFinal(true)}>
+            <Button
+              variant="secondary"
+              disabled={enviando || faltantes.length > 0}
+              title={faltantes.length > 0 ? `Faltan ${faltantes.length} campos obligatorios por responder` : undefined}
+              onClick={() => setConfirmandoFinal(true)}
+            >
               Finalizar inspección
             </Button>
           )}

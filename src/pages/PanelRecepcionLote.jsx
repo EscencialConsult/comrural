@@ -234,6 +234,21 @@ function SeccionRecepcion({ lot, warehouseReceipt, permisos, navigate }) {
   )
 }
 
+// Usado por SeccionResolucion, más abajo — se había borrado por accidente
+// al simplificar SeccionRecepcion (que ya no lo necesita), y se llevó
+// puesta toda la pantalla: cualquier lote con una resolución de Calidad ya
+// emitida (justo los más avanzados) tiraba abajo el render entero con
+// "CampoDetalle is not defined" — página en blanco total, sin ningún aviso
+// de error visible para quien la mira.
+function CampoDetalle({ etiqueta, valor }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-marron-cafe/40">{etiqueta}</dt>
+      <dd className="text-sm text-marron-cafe">{valor ?? '—'}</dd>
+    </div>
+  )
+}
+
 // --- Inspección de Calidad ------------------------------------------------
 //
 // El formulario en sí (iniciar / responder / finalizar) vive en su propia
