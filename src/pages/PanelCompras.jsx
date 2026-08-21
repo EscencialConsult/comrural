@@ -132,7 +132,7 @@ export default function PanelCompras() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
+    <main className="flex w-full flex-col gap-8 p-6 md:p-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="rounded-full bg-verde-hoja/10 p-3">

@@ -86,7 +86,7 @@ export default function PanelAprobacionResolucion() {
 
   if (errorCarga) {
     return (
-      <main className="mx-auto flex w-full max-w-2xl flex-col items-start gap-3 p-6 md:p-10">
+      <main className="flex w-full flex-col items-start gap-3 p-6 md:p-10">
         <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
         <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={recargar}>
           Reintentar
@@ -97,7 +97,7 @@ export default function PanelAprobacionResolucion() {
 
   if (!datos) {
     return (
-      <main className="mx-auto w-full max-w-2xl p-6 md:p-10">
+      <main className="w-full p-6 md:p-10">
         <p className="text-sm text-marron-cafe/50">Cargando…</p>
       </main>
     )
@@ -116,7 +116,7 @@ export default function PanelAprobacionResolucion() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6 md:p-10">
+    <main className="flex w-full flex-col gap-6 p-6 md:p-10">
       <button
         type="button"
         onClick={() => navigate(-1)}

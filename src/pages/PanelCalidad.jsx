@@ -58,7 +58,7 @@ export default function PanelCalidad() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 md:p-10">
+    <main className="flex w-full flex-col gap-8 p-6 md:p-10">
       <header className="flex items-center gap-3">
         <div className="rounded-full bg-verde-hoja/10 p-3">
           <FlaskConical className="size-6 text-verde-bosque" strokeWidth={1.75} />
@@ -326,9 +326,18 @@ function ListadoLotesMateriaPrima() {
                     {resumen === 'error' ? (
                       <span className="text-xs text-marron-cafe/40">—</span>
                     ) : resumen ? (
-                      <Badge tono={resumen.summary.inspectionStatus === 'FINALIZADA' ? 'positivo' : 'alerta'}>
-                        {resumen.summary.inspectionStatus ?? 'SIN INICIAR'}
-                      </Badge>
+                      // Mismo criterio que la columna Recepción: "sin iniciar"
+                      // es texto plano, no una pastilla de color — antes usaba
+                      // el mismo tono "alerta" que INICIADA, así que una
+                      // inspección que ni empezó se veía con el mismo peso
+                      // visual que una que ya está en curso.
+                      resumen.summary.inspectionStatus ? (
+                        <Badge tono={resumen.summary.inspectionStatus === 'FINALIZADA' ? 'positivo' : 'alerta'}>
+                          {resumen.summary.inspectionStatus}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-marron-cafe/50">Inspección: No iniciada</span>
+                      )
                     ) : (
                       <span className="text-xs text-marron-cafe/40">Cargando…</span>
                     )}
