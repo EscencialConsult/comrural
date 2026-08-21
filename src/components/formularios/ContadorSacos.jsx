@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 // Contador de sacos: número tipeable con dos flechas al costado (izquierda
@@ -33,6 +34,26 @@ export default function ContadorSacos({
 }) {
   const actual = valor ?? null
 
+  // Texto que se ve en pantalla, aparte del número real — corrige un quirk
+  // visto en vivo probando el asistente: tipear "0" y después "2" podía
+  // dejar "02" en el campo aunque el valor ya se guardó como `2` puro
+  // (`<input type="number">` no siempre resincroniza el DOM cuando el
+  // string cambia pero el número representado da igual).
+  //
+  // Se resincroniza desde `actual` SOLO cuando el campo no está enfocado
+  // (`enfocado.current`) — si resincronizara en cada tecla, escribir un
+  // decimal como "0,4" se rompería: apenas se tipea "0," el número todavía
+  // es `0`, así que el efecto borraría la coma que se acaba de escribir.
+  // Con este guard, mientras se está tipeando el texto manda; al salir del
+  // campo (blur) o al mover con las flechas, se normaliza contra el valor
+  // real.
+  const [texto, setTexto] = useState(actual != null ? String(actual) : '')
+  const enfocado = useRef(false)
+
+  useEffect(() => {
+    if (!enfocado.current) setTexto(actual != null ? String(actual) : '')
+  }, [actual])
+
   const mover = (delta) => {
     const base = actual ?? 0
     // Redondeo explícito: con `paso` decimal (los porcentajes del tamaño de
@@ -44,9 +65,10 @@ export default function ContadorSacos({
     onChange(siguiente)
   }
 
-  const escribir = (texto) => {
-    if (texto === '') return onChange(null)
-    const n = Number(texto)
+  const escribir = (nuevoTexto) => {
+    setTexto(nuevoTexto)
+    if (nuevoTexto === '') return onChange(null)
+    const n = Number(nuevoTexto)
     if (Number.isNaN(n)) return
     onChange(n)
   }
@@ -67,9 +89,16 @@ export default function ContadorSacos({
           step={paso}
           min={min}
           max={max}
-          value={actual ?? ''}
+          value={texto}
           disabled={disabled}
           onChange={(e) => escribir(e.target.value)}
+          onFocus={() => {
+            enfocado.current = true
+          }}
+          onBlur={() => {
+            enfocado.current = false
+            setTexto(actual != null ? String(actual) : '')
+          }}
           aria-label={etiquetaAccesible}
           placeholder="—"
           className={`w-20 rounded-xl border border-marron-tierra/25 bg-white py-1.5 text-center text-sm tabular-nums text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima disabled:bg-marron-tierra/5 disabled:text-marron-cafe/70 ${sufijo ? 'pl-2 pr-5' : 'px-2'}`}

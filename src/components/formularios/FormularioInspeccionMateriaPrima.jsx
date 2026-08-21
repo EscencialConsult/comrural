@@ -11,11 +11,11 @@ import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
+import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
 import DatosGeneralesLote from './DatosGeneralesLote.jsx'
 import TablaCriterios from './TablaCriterios.jsx'
 import TablaRechazo from './TablaRechazo.jsx'
 import TablaMediciones from './TablaMediciones.jsx'
-import DatosComplementarios from './DatosComplementarios.jsx'
 import CampoObservaciones from './CampoObservaciones.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
 import AvisoFaltante from './AvisoFaltante.jsx'
@@ -109,7 +109,15 @@ const NOTA_MATERIAS_EXTRANIAS = '* Vidrio, metal, madera, semillas, semillas ale
 // Facundo pidió sacar puntualmente esto, no todo el aviso de "campos sin
 // clasificar" (que sigue sirviendo si el backend suma una sección de
 // verdad nueva mañana).
-const CODIGOS_PRUEBA_CONOCIDOS = new Set(['asd', 'nuevo_campo', 'adf'])
+//
+// OJO: `nueva_seccion` (código) y `nueva_seccion` (sección) son DOS restos
+// de prueba distintos, encontrados probando el asistente en vivo — el
+// ítem de código `nueva_seccion` vive DENTRO de la sección real
+// `grain_size` (TEXT, obligatorio), así que bloqueaba el paso "Tamaño de
+// grano" del asistente sin que se viera por qué (el aviso de "campos sin
+// clasificar" sí lo mostraba, pero coincidía con la etapa 4, no era obvio
+// que fuera basura de prueba y no un dato real faltante).
+const CODIGOS_PRUEBA_CONOCIDOS = new Set(['asd', 'nuevo_campo', 'adf', 'nueva_seccion'])
 
 const clave = (itemId, occurrence) => `${itemId}:${occurrence}`
 
@@ -155,7 +163,6 @@ const campoValor = (item, valor) => {
 }
 
 const GENERALES_VACIOS = { producto: null, proveedor: null, lote: null, fecha: '', horaInicio: null, horaFin: null }
-const COMPLEMENTARIOS_VACIOS = { totalRecibido: null, pesoNeto: null, seAcepta: null }
 
 export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote, onVolver, tituloVolver = 'Volver' }) {
   const { permisos } = useAuth()
@@ -168,7 +175,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   const [tocados, setTocados] = useState(new Set())
   const [observaciones, setObservaciones] = useState('')
   const [generales, setGenerales] = useState(GENERALES_VACIOS)
-  const [complementarios, setComplementarios] = useState(COMPLEMENTARIOS_VACIOS)
   const [listados, setListados] = useState({ productos: [], proveedores: [], lotes: [] })
   const [cargandoListados, setCargandoListados] = useState(true)
   // Observaciones por criterio de la sección 2, { [itemId]: texto }.
@@ -180,7 +186,14 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   const [observacionesCriterio, setObservacionesCriterio] = useState({})
   const [confirmacion, setConfirmacion] = useState(null)
   const [confirmandoFinal, setConfirmandoFinal] = useState(false)
+  const [pasoActual, setPasoActual] = useState(0)
   const { enviando, error, ejecutar } = useSolicitud()
+
+  // El asistente arranca desde el paso 1 cada vez que se entra a OTRO
+  // lote — mismo criterio que FormularioIngresoMateriaPrima.jsx.
+  useEffect(() => {
+    setPasoActual(0)
+  }, [lotId])
 
   // PDF real, no un screenshot de window.print() — Facundo lo pidió
   // explícito: el botón "Imprimir" abría el diálogo nativo del navegador,
@@ -375,11 +388,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       horaInicio: soloHora(detalle.inspection?.startedAt),
       horaFin: soloHora(detalle.inspection?.completedAt),
     })
-    setComplementarios({
-      totalRecibido: recepcion.summary?.receivedPackageCount ?? null,
-      pesoNeto: recepcion.summary?.acceptedNetWeightKg ?? null,
-      seAcepta: recepcion.qualityResolution ? recepcion.qualityResolution.decision === 'APROBADA' : null,
-    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formId])
 
@@ -421,12 +429,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     [valores],
   )
 
-  const cambiarGeneral = (campo, valor) => {
-    if (campo === 'lote') {
-      if (valor?.id && valor.id !== lotId) onCambiarLote?.(valor.id)
-      return
-    }
-    setGenerales((prev) => ({ ...prev, [campo]: valor }))
+  // Único campo que de verdad se puede "cambiar" en Datos generales — el
+  // resto (producto/proveedor/fecha/hora) quedó de solo lectura, ver
+  // DatosGeneralesLote.jsx. Elegir otro lote no edita esta inspección, abre
+  // LA SUYA.
+  const cambiarLoteGeneral = (valor) => {
+    if (valor?.id && valor.id !== lotId) onCambiarLote?.(valor.id)
   }
 
   // Pedido de alta de un maestro que falta. Hoy es un stub local de la
@@ -434,7 +442,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   // llega a nadie todavía porque falta definir quién carga cada maestro. La
   // interacción queda igual para cuando exista el endpoint de verdad.
   const solicitarAlta = ({ tipo, detalle }) => solicitarAltaDeMaestro({ tipo, detalle })
-  const cambiarComplementario = (campo, valor) => setComplementarios((prev) => ({ ...prev, [campo]: valor }))
 
   if (!puedeVer) return <AccesoDenegado mensaje="No tenés acceso a la inspección de materia prima." />
 
@@ -518,7 +525,7 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   }
 
   const { form, inspection } = detalle
-  const { summary, qualityResolution, warehouseReceipt } = recepcion
+  const { qualityResolution, warehouseReceipt } = recepcion
 
   // Cada sección se filtra al tipo de dato que su maquetación sabe dibujar.
   // No es defensa teórica: el formulario real tiene ítems TEXT sueltos en
@@ -624,6 +631,188 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     }
   }
 
+  // Completitud por etapa — reusa `faltantes` (ya calculado arriba, la
+  // misma fuente que gatea "Finalizar inspección"), filtrado por sección,
+  // en vez de reinventar una segunda regla de qué está respondido. Si
+  // `rechazoTotal` (se rechazó el lote completo), Rechazo y Tamaño de
+  // grano quedan `soloLectura` y su contenido "queda sin efecto" — no
+  // tiene sentido trabar el asistente ahí esperando respuestas que ya no
+  // se pueden cargar.
+  const seccionSinFaltantes = (codigoSeccion) => faltantes.every((i) => i.section !== codigoSeccion)
+  const condicionesCompleta = seccionSinFaltantes(SECCION.CONDICIONES)
+  const rechazoCompleta = rechazoTotal || seccionSinFaltantes(SECCION.RECHAZO)
+  const granoCompleta = rechazoTotal || seccionSinFaltantes(SECCION.TAMANIO_GRANO)
+  const motivoIncompleta = (codigoSeccion) =>
+    `Faltan: ${faltantes
+      .filter((i) => i.section === codigoSeccion)
+      .map((i) => i.label)
+      .join(' · ')}`
+
+  const etapas = [
+    {
+      id: 'generales',
+      titulo: 'Datos generales',
+      completa: true,
+      contenido: (
+        // El aviso de "falta un dato" vive acá y no en el encabezado: los
+        // campos que pueden quedarse sin opción (producto, proveedor, lote)
+        // son justo los de esta sección, así que la salida tiene que estar
+        // donde aparece el problema, no a media pantalla de distancia.
+        <SeccionFormulario numero={1} titulo="Datos generales" acciones={<AvisoFaltante onEnviar={solicitarAlta} />}>
+          <DatosGeneralesLote
+            valores={generales}
+            onCambiarLote={cambiarLoteGeneral}
+            opciones={listados}
+            cargandoOpciones={cargandoListados}
+          />
+        </SeccionFormulario>
+      ),
+    },
+    condiciones.length > 0 && {
+      id: 'condiciones',
+      titulo: 'Condiciones de llegada de transporte',
+      completa: condicionesCompleta,
+      motivoIncompleta: motivoIncompleta(SECCION.CONDICIONES),
+      contenido: (
+        <SeccionFormulario
+          numero={2}
+          titulo="Condiciones de llegada de transporte"
+          nota="Marcá Sí o No según corresponda. La observación de cada criterio es opcional y todavía no se guarda al recargar."
+        >
+          <TablaCriterios
+            items={condiciones}
+            valorDe={(item) => leer(item)}
+            observacionDe={(item) => observacionesCriterio[item.id] ?? ''}
+            onCambiar={(item, v) => escribir(item, 1, v)}
+            onCambiarObservacion={(item, texto) => setObservacionesCriterio((prev) => ({ ...prev, [item.id]: texto }))}
+            soloLectura={soloLectura}
+            codigoDecisivo={ITEM_ACEPTA_CONDICIONES}
+          />
+          <CamposSinClasificar items={sueltosCondiciones} />
+        </SeccionFormulario>
+      ),
+    },
+    seccionRechazo.length > 0 && {
+      id: 'rechazo',
+      titulo: 'Evaluación de inspección (rechazo)',
+      completa: rechazoCompleta,
+      motivoIncompleta: rechazoTotal ? undefined : motivoIncompleta(SECCION.RECHAZO),
+      contenido: (
+        <SeccionFormulario
+          numero={3}
+          titulo="Evaluación de inspección (rechazo)"
+          nota="Cantidad de sacos afectados por cada hallazgo. El total se suma solo."
+          className={rechazoTotal ? 'opacity-40' : ''}
+        >
+          <TablaRechazo
+            columnas={columnasRechazo}
+            itemTotal={itemTotalRechazadas}
+            notaAlPie={NOTA_MATERIAS_EXTRANIAS}
+            valorDe={(item, occ) => leer(item, occ)}
+            onCambiar={(item, occ, v) => escribir(item, occ, v)}
+            ocurrenciasDe={ocurrenciasDe}
+            soloLectura={soloLectura || rechazoTotal}
+          />
+          <CamposSinClasificar items={sueltosRechazo} />
+        </SeccionFormulario>
+      ),
+    },
+    tamanioGrano.length > 0 && {
+      id: 'grano',
+      titulo: 'Tamaño de grano',
+      completa: granoCompleta,
+      motivoIncompleta: rechazoTotal ? undefined : motivoIncompleta(SECCION.TAMANIO_GRANO),
+      contenido: (
+        <SeccionFormulario
+          numero={4}
+          titulo="Tamaño de grano"
+          nota="Porcentaje retenido en cada una de las tres mediciones."
+          className={rechazoTotal ? 'opacity-40' : ''}
+        >
+          <TablaMediciones
+            items={tamanioGrano}
+            valorDe={(item, occ) => leer(item, occ)}
+            onCambiar={(item, occ, v) => escribir(item, occ, v)}
+            soloLectura={soloLectura || rechazoTotal}
+          />
+          <CamposSinClasificar items={sueltosGrano} />
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'firmas',
+      titulo: 'Observaciones y Firmas',
+      completa: true,
+      contenido: (
+        <>
+          {otrasSecciones.map(([seccion, items]) => (
+            <SeccionFormulario key={seccion} titulo={seccion} nota="Sección sin maquetación propia todavía.">
+              <ul className="flex flex-col gap-1 text-sm text-marron-cafe/60">
+                {items.map((i) => (
+                  <li key={i.id}>{i.label}</li>
+                ))}
+              </ul>
+            </SeccionFormulario>
+          ))}
+
+          <SeccionFormulario titulo="Observaciones">
+            {/* La decisión de aceptar o no el lote no la toma esta
+                inspección — es el resultado de la resolución de Calidad, un
+                paso posterior con su propio endpoint (ver
+                PanelCalidadRecepcion.jsx). Antes vivía como un campo
+                editable en una sección propia ("Datos complementarios"),
+                duplicando algo que ya se decide en otro lado; acá se
+                muestra de solo lectura, al principio de esta etapa (la que
+                sigue a Tamaño de grano, etapa 4). */}
+            {qualityResolution && (
+              <p className="mb-3 text-sm font-medium text-marron-cafe/70">
+                ¿Se acepta el lote?{' '}
+                <span
+                  className={
+                    qualityResolution.decision === 'APROBADA' ? 'font-bold text-verde-bosque' : 'font-bold text-rojo-pasankalla'
+                  }
+                >
+                  {qualityResolution.decision === 'APROBADA' ? 'Sí' : 'No'}
+                </span>
+              </p>
+            )}
+            <CampoObservaciones valor={observaciones} onCambiar={setObservaciones} soloLectura={soloLectura} />
+          </SeccionFormulario>
+
+          <SeccionFormulario titulo="Responsables">
+            <FirmasResponsables
+              responsables={[
+                {
+                  rol: 'Analista de Calidad',
+                  usuario: inspection.createdByName,
+                  puesto: 'Control de Calidad',
+                  firmadoEn: inspection.completedAt,
+                },
+                {
+                  rol: 'Asistente de Almacenes',
+                  usuario: warehouseReceipt?.createdByName,
+                  puesto: 'Almacén',
+                  firmadoEn: warehouseReceipt?.completedAt,
+                },
+                { rol: 'Transporte', usuario: null, puesto: 'Externo', firmadoEn: null },
+                {
+                  rol: 'Gerente de Aseguramiento',
+                  usuario: qualityResolution?.reviewedByName,
+                  puesto: 'Aseguramiento de Calidad y Certificaciones',
+                  firmadoEn: qualityResolution?.reviewedAt,
+                },
+              ]}
+            />
+          </SeccionFormulario>
+
+          {inspection.status === 'FINALIZADA' && (
+            <p className="text-sm font-medium text-marron-cafe/70">Sacos rechazados: {inspection.rejectedBagCount}</p>
+          )}
+        </>
+      ),
+    },
+  ].filter(Boolean)
+
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="flex items-center justify-between gap-3 print:hidden">
@@ -694,148 +883,20 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
           </div>
         )}
 
-      {/* El aviso de "falta un dato" vive acá y no en el encabezado: los
-          campos que pueden quedarse sin opción (producto, proveedor, lote)
-          son justo los de esta sección, así que la salida tiene que estar
-          donde aparece el problema, no a media pantalla de distancia. */}
-      <SeccionFormulario
-        numero={1}
-        titulo="Datos generales"
-        acciones={<AvisoFaltante onEnviar={solicitarAlta} />}
-      >
-        <DatosGeneralesLote
-          valores={generales}
-          onCambiar={cambiarGeneral}
-          opciones={listados}
-          cargandoOpciones={cargandoListados}
-          soloLectura={soloLectura}
+        <AsistenteDeEtapas
+          etapas={etapas}
+          pasoActual={pasoActual}
+          onAvanzar={() => setPasoActual((p) => Math.min(p + 1, etapas.length - 1))}
+          onVolverA={setPasoActual}
+          modoImpresion={generandoPdf || soloLectura}
         />
-      </SeccionFormulario>
-
-      {condiciones.length > 0 && (
-        <SeccionFormulario
-          numero={2}
-          titulo="Condiciones de llegada de transporte"
-          nota="Marcá Sí o No según corresponda. La observación de cada criterio es opcional y todavía no se guarda al recargar."
-        >
-          <TablaCriterios
-            items={condiciones}
-            valorDe={(item) => leer(item)}
-            observacionDe={(item) => observacionesCriterio[item.id] ?? ''}
-            onCambiar={(item, v) => escribir(item, 1, v)}
-            onCambiarObservacion={(item, texto) =>
-              setObservacionesCriterio((prev) => ({ ...prev, [item.id]: texto }))
-            }
-            soloLectura={soloLectura}
-            codigoDecisivo={ITEM_ACEPTA_CONDICIONES}
-          />
-          <CamposSinClasificar items={sueltosCondiciones} />
-        </SeccionFormulario>
-      )}
-
-      {seccionRechazo.length > 0 && (
-        <SeccionFormulario
-          numero={3}
-          titulo="Evaluación de inspección (rechazo)"
-          nota="Cantidad de sacos afectados por cada hallazgo. El total se suma solo."
-          className={rechazoTotal ? 'opacity-40' : ''}
-        >
-          <TablaRechazo
-            columnas={columnasRechazo}
-            itemTotal={itemTotalRechazadas}
-            notaAlPie={NOTA_MATERIAS_EXTRANIAS}
-            valorDe={(item, occ) => leer(item, occ)}
-            onCambiar={(item, occ, v) => escribir(item, occ, v)}
-            ocurrenciasDe={ocurrenciasDe}
-            soloLectura={soloLectura || rechazoTotal}
-          />
-          <CamposSinClasificar items={sueltosRechazo} />
-        </SeccionFormulario>
-      )}
-
-      {tamanioGrano.length > 0 && (
-        <SeccionFormulario
-          numero={4}
-          titulo="Tamaño de grano"
-          nota="Porcentaje retenido en cada una de las tres mediciones."
-          className={rechazoTotal ? 'opacity-40' : ''}
-        >
-          <TablaMediciones
-            items={tamanioGrano}
-            valorDe={(item, occ) => leer(item, occ)}
-            onCambiar={(item, occ, v) => escribir(item, occ, v)}
-            soloLectura={soloLectura || rechazoTotal}
-          />
-          <CamposSinClasificar items={sueltosGrano} />
-        </SeccionFormulario>
-      )}
-
-      {/* Sección 5, en su lugar del papel: después del tamaño de grano y
-          antes de las observaciones. Los tres datos los completa el sistema
-          (lo que recibió Almacén, el peso, la decisión de Calidad) con el
-          botón "Traer del sistema", pero se pueden corregir a mano. */}
-      <SeccionFormulario
-        numero={5}
-        titulo="Datos complementarios"
-        nota="Los trae el sistema — se pueden corregir a mano si hace falta."
-      >
-        <DatosComplementarios
-          valores={complementarios}
-          onCambiar={cambiarComplementario}
-          summary={summary}
-          decision={qualityResolution?.decision}
-          soloLectura={soloLectura}
-        />
-      </SeccionFormulario>
-
-      {otrasSecciones.map(([seccion, items]) => (
-        <SeccionFormulario key={seccion} titulo={seccion} nota="Sección sin maquetación propia todavía.">
-          <ul className="flex flex-col gap-1 text-sm text-marron-cafe/60">
-            {items.map((i) => (
-              <li key={i.id}>{i.label}</li>
-            ))}
-          </ul>
-        </SeccionFormulario>
-      ))}
-
-      <SeccionFormulario titulo="Observaciones">
-        <CampoObservaciones valor={observaciones} onCambiar={setObservaciones} soloLectura={soloLectura} />
-      </SeccionFormulario>
-
-      <SeccionFormulario titulo="Responsables">
-        <FirmasResponsables
-          responsables={[
-            {
-              rol: 'Analista de Calidad',
-              usuario: inspection.createdByName,
-              puesto: 'Control de Calidad',
-              firmadoEn: inspection.completedAt,
-            },
-            {
-              rol: 'Asistente de Almacenes',
-              usuario: warehouseReceipt?.createdByName,
-              puesto: 'Almacén',
-              firmadoEn: warehouseReceipt?.completedAt,
-            },
-            { rol: 'Transporte', usuario: null, puesto: 'Externo', firmadoEn: null },
-            {
-              rol: 'Gerente de Aseguramiento',
-              usuario: qualityResolution?.reviewedByName,
-              puesto: 'Aseguramiento de Calidad y Certificaciones',
-              firmadoEn: qualityResolution?.reviewedAt,
-            },
-          ]}
-        />
-      </SeccionFormulario>
-
-        {inspection.status === 'FINALIZADA' && (
-          <p className="text-sm font-medium text-marron-cafe/70">Sacos rechazados: {inspection.rejectedBagCount}</p>
-        )}
       </div>
       {/* Cierra `areaImprimibleRef` — de acá para abajo (Guardar/Finalizar/
-          Volver) no es parte del papel, nunca entra al PDF. */}
+          Volver) no es parte del papel, nunca entra al PDF. Gateado al
+          último paso del asistente — mismo criterio que
+          FormularioIngresoMateriaPrima.jsx. */}
 
-      {!soloLectura && (
+      {!soloLectura && pasoActual === etapas.length - 1 && (
         <div className="flex flex-wrap items-center gap-3 print:hidden">
           <Button disabled={enviando} onClick={guardar}>
             {enviando ? 'Guardando…' : 'Guardar inspección'}

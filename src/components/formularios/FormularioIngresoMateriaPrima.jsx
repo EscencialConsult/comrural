@@ -9,6 +9,7 @@ import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
+import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
 import DatosRecepcionLote from './DatosRecepcionLote.jsx'
 import ControlDocumentos from './ControlDocumentos.jsx'
 import DatosTransporte from './DatosTransporte.jsx'
@@ -45,11 +46,15 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // DOS pasos del backend, no uno. El papel es una sola hoja continua, pero
 // `warehouse-receipts` exige crear primero (POST, con lo mínimo: envase +
 // cantidad) y recién después completar el resto por PATCH — no hay forma
-// de mandar la hoja entera de una. Por eso todas las secciones están
-// siempre visibles (para que se vea el documento completo, como en el
-// papel), pero el botón de abajo cambia según el estado real:
-// "Iniciar recepción" (todavía no existe) → "Guardar cambios" (existe,
+// de mandar la hoja entera de una. El botón de abajo cambia según el estado
+// real: "Iniciar recepción" (todavía no existe) → "Guardar cambios" (existe,
 // INICIADA) → nada (FINALIZADA, todo de solo lectura).
+//
+// Se ve UNA sección a la vez (AsistenteDeEtapas.jsx) — corrección
+// post-revisión: antes las secciones se mostraban todas juntas ("como el
+// papel completo"), pero eso permitía completar la 4 sin haber completado
+// la 1/2/3. Mientras `soloLectura` (FINALIZADA), no hay nada que "saltear"
+// — se ve todo de una, como un documento cerrado normal.
 const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
 
 const DOCUMENTOS_VACIOS = { productores: { verificado: null, notas: '' }, guia: { verificado: null, notas: '' } }
@@ -71,14 +76,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   const [confirmacion, setConfirmacion] = useState(null)
 
   const [documentos, setDocumentos] = useState(DOCUMENTOS_VACIOS)
-  // Editables con el mismo botón "poner fecha/hora de hoy" que usa
-  // DatosGeneralesLote.jsx en Calidad (ver CampoFechaHora.jsx) — pedido
-  // explícito de Facundo. Igual que ahí, no se mandan al backend:
-  // `startedAt`/`completedAt` los sella el propio `warehouse-receipts`
-  // solo, esto es una comodidad visual para quien llena el papel a mano.
-  const [fechaRecepcion, setFechaRecepcion] = useState('')
-  const [horaInicioRecepcion, setHoraInicioRecepcion] = useState(null)
-  const [horaFinRecepcion, setHoraFinRecepcion] = useState(null)
   const [conductor, setConductor] = useState(CONDUCTOR_VACIO)
   const [vehiculo, setVehiculo] = useState(VEHICULO_VACIO)
   const [packagingType, setPackagingType] = useState(TIPOS_ENVASE[0])
@@ -88,6 +85,7 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   const [pesoNeto, setPesoNeto] = useState('')
   const [lotesOpciones, setLotesOpciones] = useState([])
   const [cargandoLotes, setCargandoLotes] = useState(true)
+  const [pasoActual, setPasoActual] = useState(0)
 
   const { enviando, error, ejecutar } = useSolicitud()
 
@@ -136,6 +134,13 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
       setGenerandoPdf(false)
     }
   }
+
+  // El asistente arranca desde el paso 1 cada vez que se entra a OTRO
+  // lote — sin esto, cambiar de lote por el selector dejaría a alguien
+  // parado en el paso 4 del lote anterior, viendo los datos del nuevo.
+  useEffect(() => {
+    setPasoActual(0)
+  }, [lotId])
 
   const recargar = useCallback(() => {
     if (!puedeVer) return
@@ -189,9 +194,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   useEffect(() => {
     if (!recepcion) return
     const { warehouseReceipt } = recepcion
-    setFechaRecepcion(soloFecha(warehouseReceipt?.startedAt))
-    setHoraInicioRecepcion(soloHora(warehouseReceipt?.startedAt))
-    setHoraFinRecepcion(soloHora(warehouseReceipt?.completedAt))
     setDocumentos({
       productores: {
         verificado: warehouseReceipt?.producerListVerified ?? null,
@@ -345,6 +347,174 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     }
   }
 
+  // Completitud por etapa — decide cuándo se habilita "Siguiente" en el
+  // asistente. Reusa los mismos cálculos que ya existían para
+  // `motivosFaltantes`/`validoParaGuardar`, no inventa una segunda versión
+  // de la misma regla.
+  const documentosCompleta =
+    (documentos.productores.verificado === true || documentos.productores.notas.trim() !== '') &&
+    (documentos.guia.verificado === true || documentos.guia.notas.trim() !== '')
+  const transporteVacio = camposTransporte.every((v) => v.trim() === '')
+  const productoCompleta = packagingType !== '' && receivedPackageCount != null && receivedPackageCount > 0
+
+  // Etapas del asistente — números/títulos vienen de
+  // seccionesIngresoMateriaPrima.js (única fuente, la comparte con la
+  // tabla de PanelAlmacenRecepcion.jsx), acá solo se arma el `contenido`
+  // real y la `completa` de cada una.
+  const etapas = [
+    {
+      id: 'documentos',
+      titulo: 'Control de documentos',
+      completa: documentosCompleta,
+      motivoIncompleta: 'Marcá si cumple o no en las dos preguntas — con observación si no cumple.',
+      contenido: (
+        <SeccionFormulario numero={1} titulo="Control de documentos">
+          <ControlDocumentos valores={documentos} onCambiar={cambiarDocumento} soloLectura={soloLectura} />
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'recepcion',
+      titulo: 'Datos de recepción',
+      completa: true,
+      contenido: (
+        <SeccionFormulario numero={2} titulo="Datos de recepción">
+          <DatosRecepcionLote
+            valores={{
+              producto: lot.productId ? { id: lot.productId, nombre: lot.productName ?? '' } : null,
+              fecha: soloFecha(warehouseReceipt?.startedAt),
+              horaInicio: soloHora(warehouseReceipt?.startedAt),
+              horaFin: soloHora(warehouseReceipt?.completedAt),
+              lote: { id: lot.id, nombre: lot.code },
+            }}
+            onCambiarLote={(op) => op?.id && op.id !== lotId && onCambiarLote?.(op.id)}
+            opcionesLotes={lotesOpciones}
+            cargandoLotes={cargandoLotes}
+          />
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'transporte',
+      titulo: 'Datos del transporte',
+      completa: transporteCompleto || transporteVacio,
+      motivoIncompleta: 'Es opcional en conjunto — completá los 9 datos, o dejalos todos vacíos.',
+      contenido: (
+        <SeccionFormulario
+          numero={3}
+          titulo="Datos del transporte"
+          nota="Opcional en conjunto — si se carga uno, hay que completar los 9."
+        >
+          <DatosTransporte
+            conductor={conductor}
+            vehiculo={vehiculo}
+            onCambiarConductor={cambiarConductor}
+            onCambiarVehiculo={cambiarVehiculo}
+            soloLectura={soloLectura}
+          />
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'producto',
+      titulo: 'Datos del producto',
+      completa: productoCompleta,
+      motivoIncompleta: 'Falta el tipo de envase o el N. de bolsas.',
+      // Sección 4 completa — pedido explícito de Facundo, guiándose por los
+      // encabezados en VERDE INTENSO del papel real: solo hay 4 secciones
+      // numeradas, no 6. "Datos del producto" en el papel incluye, bajo el
+      // MISMO encabezado, tipo de envase/N. de bolsas, resumen de
+      // recepción, detalle de rechazos y unidades de medida.
+      contenido: (
+        <SeccionFormulario numero={4} titulo="Datos del producto">
+          <DatosProductoYCantidad
+            tipoEnvase={packagingType}
+            nBolsas={receivedPackageCount}
+            tiposEnvase={TIPOS_ENVASE}
+            onCambiarTipoEnvase={setPackagingType}
+            onCambiarNBolsas={setReceivedPackageCount}
+            soloLectura={soloLectura || cantidadBloqueada}
+          />
+          {cantidadBloqueada && !finalizada && (
+            <p className="text-xs text-marron-cafe/50">
+              Ya existe una resolución de Calidad para este lote — la cantidad de bolsas quedó bloqueada.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2 border-t border-verde-hoja/20 pt-4">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-verde-bosque/80">
+              Resumen de recepción y detalle de rechazos
+            </h3>
+            <ResumenRecepcion
+              totalBolsas={warehouseReceipt?.storedPackageCount}
+              pesoPromedioNetoKg={warehouseReceipt?.averageAcceptedNetWeightKg}
+              sacosRechazados={warehouseReceipt?.rejectedPackageCount}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-verde-hoja/20 pt-4">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-verde-bosque/80">
+              Unidades de medida
+              <span className="ml-1.5 font-normal normal-case text-marron-cafe/50">
+                — peso total bruto y neto, se completa al cerrar la recepción
+              </span>
+            </h3>
+            {!existe ? (
+              <p className="text-sm text-marron-cafe/50">Se habilita al iniciar la recepción.</p>
+            ) : finalizada ? (
+              <PesajeFinal bruto={pesoBruto} neto={pesoNeto} soloLectura />
+            ) : puedeCerrarConPesos ? (
+              <PesajeFinal bruto={pesoBruto} neto={pesoNeto} onCambiarBruto={setPesoBruto} onCambiarNeto={setPesoNeto} soloLectura={!puedeEditar} />
+            ) : puedeCerrarSinPesos ? (
+              <p className="text-sm text-marron-cafe/60">
+                Calidad rechazó el lote — la recepción se cierra sin registrar pesos (0 bolsas autorizadas).
+              </p>
+            ) : (
+              <p className="text-sm text-marron-cafe/50">
+                {summary.qualityDecision == null
+                  ? 'Se habilita cuando Calidad emita su resolución.'
+                  : 'Esperando el permiso para cerrar la recepción.'}
+              </p>
+            )}
+          </div>
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'firmas',
+      titulo: 'Observaciones y Firmas',
+      completa: true,
+      contenido: (
+        <>
+          <SeccionFormulario titulo="Observaciones">
+            <CampoObservaciones valor={notes} onCambiar={setNotes} soloLectura={soloLectura} />
+          </SeccionFormulario>
+
+          {/* `usuario` queda siempre en null: warehouse-receipts solo
+              expone `receivedBy` como id crudo (sin `*Name`, a diferencia
+              de la inspección de Calidad que sí trae `createdByName`) y la
+              resolución compuesta tampoco trae `reviewedByName` — eso solo
+              vive en GET /quality-resolutions/:id, que esta pantalla no
+              pide. Mostrar un nombre inventado sería peor que mostrar
+              "Pendiente"; `firmadoEn` ya alcanza para decir que ese paso
+              ocurrió. "Transporte" NO va acá — en el papel real la firma
+              del conductor está pegada a Datos del transporte, no acá
+              abajo (ver DatosTransporte.jsx). Estos son los 3 firmantes
+              reales del pie de la hoja. */}
+          <SeccionFormulario titulo="Responsables">
+            <FirmasResponsables
+              responsables={[
+                { rol: 'Responsable de Recepción', usuario: null, puesto: 'Asistente de Almacenes', firmadoEn: warehouseReceipt?.startedAt },
+                { rol: 'Inspectora de Calidad', usuario: null, puesto: 'VoBo Calidad', firmadoEn: recepcion.qualityResolution?.resolvedAt },
+                { rol: 'Responsable de Almacén', usuario: null, puesto: 'VoBo Inmediato Superior', firmadoEn: warehouseReceipt?.completedAt },
+              ]}
+            />
+          </SeccionFormulario>
+        </>
+      ),
+    },
+  ]
+
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="flex items-center justify-between gap-3 print:hidden">
@@ -397,142 +567,21 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
           </p>
         )}
 
-      {/* Orden corregido contra el papel real (foto de Facundo, registro
-          P-ADM-03/R-02): "Control de documentos" va PRIMERO, "Datos de
-          recepción" segundo — al revés de como había quedado antes. El
-          doc (formulario-ingreso-materia-prima.md §1) decía el orden
-          contrario; se corrige acá y ahí. */}
-      <SeccionFormulario numero={1} titulo="Control de documentos">
-        <ControlDocumentos valores={documentos} onCambiar={cambiarDocumento} soloLectura={soloLectura} />
-      </SeccionFormulario>
-
-      <SeccionFormulario numero={2} titulo="Datos de recepción">
-        <DatosRecepcionLote
-          valores={{
-            producto: lot.productId ? { id: lot.productId, nombre: lot.productName ?? '' } : null,
-            fecha: fechaRecepcion,
-            horaInicio: horaInicioRecepcion,
-            horaFin: horaFinRecepcion,
-            lote: { id: lot.id, nombre: lot.code },
-          }}
-          onCambiar={(campo, valor) => {
-            if (campo === 'fecha') setFechaRecepcion(valor)
-            if (campo === 'horaInicio') setHoraInicioRecepcion(valor)
-            if (campo === 'horaFin') setHoraFinRecepcion(valor)
-          }}
-          onCambiarLote={(op) => op?.id && op.id !== lotId && onCambiarLote?.(op.id)}
-          opcionesLotes={lotesOpciones}
-          cargandoLotes={cargandoLotes}
-          soloLectura={soloLectura}
+        <AsistenteDeEtapas
+          etapas={etapas}
+          pasoActual={pasoActual}
+          onAvanzar={() => setPasoActual((p) => Math.min(p + 1, etapas.length - 1))}
+          onVolverA={setPasoActual}
+          modoImpresion={generandoPdf || soloLectura}
         />
-      </SeccionFormulario>
-
-      <SeccionFormulario numero={3} titulo="Datos del transporte" nota="Opcional en conjunto — si se carga uno, hay que completar los 9.">
-        <DatosTransporte
-          conductor={conductor}
-          vehiculo={vehiculo}
-          onCambiarConductor={cambiarConductor}
-          onCambiarVehiculo={cambiarVehiculo}
-          soloLectura={soloLectura}
-        />
-      </SeccionFormulario>
-
-      {/* Sección 4 completa — pedido explícito de Facundo, guiándose por
-          los encabezados en VERDE INTENSO del papel real: solo hay 4
-          secciones numeradas, no 6. "Datos del producto" en el papel
-          incluye, bajo el MISMO encabezado, tipo de envase/N. de bolsas,
-          resumen de recepción, detalle de rechazos y unidades de medida —
-          antes estaban repartidos en tres SeccionFormulario (4/5/6)
-          separadas, que además desincronizaba las casillas de etapa de
-          PanelAlmacenRecepcion.jsx (mostraba 6 cuando el formulario real
-          tiene 4 + firmas). Los números y títulos reales viven ahora en
-          seccionesIngresoMateriaPrima.js, que también lee la tabla — un
-          solo lugar, no dos listas a mano. */}
-      <SeccionFormulario numero={4} titulo="Datos del producto">
-        <DatosProductoYCantidad
-          tipoEnvase={packagingType}
-          nBolsas={receivedPackageCount}
-          tiposEnvase={TIPOS_ENVASE}
-          onCambiarTipoEnvase={setPackagingType}
-          onCambiarNBolsas={setReceivedPackageCount}
-          soloLectura={soloLectura || cantidadBloqueada}
-        />
-        {cantidadBloqueada && !finalizada && (
-          <p className="text-xs text-marron-cafe/50">
-            Ya existe una resolución de Calidad para este lote — la cantidad de bolsas quedó bloqueada.
-          </p>
-        )}
-
-        {/* Resumen de recepción + Detalle de rechazos — siempre visibles,
-            con `existe` o sin, mismo criterio que el resto: los
-            componentes ya saben mostrar "—"/hints para datos ausentes. */}
-        <div className="flex flex-col gap-2 border-t border-verde-hoja/20 pt-4">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-verde-bosque/80">
-            Resumen de recepción y detalle de rechazos
-          </h3>
-          <ResumenRecepcion
-            totalBolsas={warehouseReceipt?.storedPackageCount}
-            pesoPromedioNetoKg={warehouseReceipt?.averageAcceptedNetWeightKg}
-            sacosRechazados={warehouseReceipt?.rejectedPackageCount}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-verde-hoja/20 pt-4">
-          <h3 className="text-xs font-bold uppercase tracking-wide text-verde-bosque/80">
-            Unidades de medida
-            <span className="ml-1.5 font-normal normal-case text-marron-cafe/50">
-              — peso total bruto y neto, se completa al cerrar la recepción
-            </span>
-          </h3>
-          {!existe ? (
-            <p className="text-sm text-marron-cafe/50">Se habilita al iniciar la recepción.</p>
-          ) : finalizada ? (
-            <PesajeFinal bruto={pesoBruto} neto={pesoNeto} soloLectura />
-          ) : puedeCerrarConPesos ? (
-            <PesajeFinal bruto={pesoBruto} neto={pesoNeto} onCambiarBruto={setPesoBruto} onCambiarNeto={setPesoNeto} soloLectura={!puedeEditar} />
-          ) : puedeCerrarSinPesos ? (
-            <p className="text-sm text-marron-cafe/60">
-              Calidad rechazó el lote — la recepción se cierra sin registrar pesos (0 bolsas autorizadas).
-            </p>
-          ) : (
-            <p className="text-sm text-marron-cafe/50">
-              {summary.qualityDecision == null
-                ? 'Se habilita cuando Calidad emita su resolución.'
-                : 'Esperando el permiso para cerrar la recepción.'}
-            </p>
-          )}
-        </div>
-      </SeccionFormulario>
-
-      <SeccionFormulario titulo="Observaciones">
-        <CampoObservaciones valor={notes} onCambiar={setNotes} soloLectura={soloLectura} />
-      </SeccionFormulario>
-
-      <SeccionFormulario titulo="Responsables">
-        {/* `usuario` queda siempre en null: warehouse-receipts solo expone
-            `receivedBy` como id crudo (sin `*Name`, a diferencia de la
-            inspección de Calidad que sí trae `createdByName`) y la
-            resolución compuesta tampoco trae `reviewedByName` — eso solo
-            vive en GET /quality-resolutions/:id, que esta pantalla no pide.
-            Mostrar un nombre inventado sería peor que mostrar "Pendiente";
-            `firmadoEn` ya alcanza para decir que ese paso ocurrió.
-            "Transporte" NO va acá — en el papel real la firma del
-            conductor está pegada a Datos del transporte, no acá abajo (ver
-            DatosTransporte.jsx). Estos son los 3 firmantes reales del pie
-            de la hoja. */}
-        <FirmasResponsables
-          responsables={[
-            { rol: 'Responsable de Recepción', usuario: null, puesto: 'Asistente de Almacenes', firmadoEn: warehouseReceipt?.startedAt },
-            { rol: 'Inspectora de Calidad', usuario: null, puesto: 'VoBo Calidad', firmadoEn: recepcion.qualityResolution?.resolvedAt },
-            { rol: 'Responsable de Almacén', usuario: null, puesto: 'VoBo Inmediato Superior', firmadoEn: warehouseReceipt?.completedAt },
-          ]}
-        />
-      </SeccionFormulario>
       </div>
       {/* Cierra `areaImprimibleRef` — de acá para abajo (Iniciar/Guardar/
-          Cerrar/Volver) no es parte del papel, nunca entra al PDF. */}
+          Cerrar/Volver) no es parte del papel, nunca entra al PDF. Gateado
+          al último paso del asistente: los botones de guardar/cerrar
+          recién tienen sentido una vez que se pasó por todas las etapas —
+          antes de eso ya está el botón "Siguiente" de cada una. */}
 
-      {!soloLectura && (
+      {!soloLectura && pasoActual === etapas.length - 1 && (
         <div className="flex flex-col gap-2 print:hidden">
           {motivosFaltantes.length > 0 && (
             <p className="text-xs font-medium text-marron-arcilla">
