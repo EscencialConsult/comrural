@@ -9,6 +9,8 @@ import {
   SlidersHorizontal,
   ClipboardList,
   LayoutGrid,
+  FlaskConical,
+  TestTubes,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -49,6 +51,22 @@ export const GRUPOS_MAESTROS = [
       },
       { id: 'productos', nombre: 'Productos', ruta: '/panel/productos', permiso: 'products:read', Icon: Boxes },
       { id: 'lotes', nombre: 'Lotes', ruta: '/panel/lotes', permiso: 'lots:read', Icon: Layers },
+    ],
+  },
+  {
+    id: 'calidad',
+    // Mismo criterio que Compras: "Calidad" es el módulo de negocio real
+    // (gateado por calidad:read, ya usado hoy para mostrar/ocultar el ítem
+    // del sidebar), "Laboratorio" es su hermana — pantalla propia
+    // (PanelLaboratorio.jsx) con las pestañas de Muestras/Solicitudes que
+    // antes vivían mezcladas dentro de PanelCalidad.jsx. Se gatea con
+    // samples:read (no calidad:read) porque es el permiso técnico real que
+    // protege esos endpoints — más preciso que el flag de visibilidad del
+    // módulo, mismo criterio que Compras usa lots:read para su hermana
+    // "Lotes" en vez de compras:read.
+    padre: { nombre: 'Calidad', ruta: '/panel/calidad', permiso: 'calidad:read', Icon: FlaskConical },
+    items: [
+      { id: 'laboratorio', nombre: 'Laboratorio', ruta: '/panel/laboratorio', permiso: 'samples:read', Icon: TestTubes },
     ],
   },
   {

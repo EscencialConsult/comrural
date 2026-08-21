@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf, X } from 'lucide-react'
+import { FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf, X, Activity } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
@@ -14,10 +14,24 @@ import Button from '../components/Button.jsx'
 import SearchInput from '../components/SearchInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
+import PillTabs from '../components/dashboard/PillTabs.jsx'
 
-// Calidad y Laboratorio — llena el placeholder que ya existía en el sidebar
-// (mock/data/modulos.json trae `calidad` desde antes, con ícono FlaskConical
-// ya cableado en moduloIcons.js; hasta hoy caía en el catch-all
+// Pestañas internas de esta pantalla (no son rutas — mismo criterio que la
+// subpestaña "Recepción" de PanelAlmacen.jsx: es un cambio de vista local,
+// no una navegación real). "Actividad" sigue vacía a propósito: no hay
+// bitácora de actividad de Calidad en el backend todavía. Las pantallas de
+// Muestras/Solicitudes (análisis de laboratorio) se mudaron a
+// PanelLaboratorio.jsx — "Laboratorio" es ahora la pantalla hermana de esta,
+// ver config/gruposMaestros.js (mismo mecanismo de pastillas de ruta que ya
+// usa Compras para Personas/Organizaciones/...).
+const PESTAÑAS_CALIDAD = [
+  { id: 'pendientes', nombre: 'Pendientes', Icon: ClipboardList },
+  { id: 'actividad', nombre: 'Actividad', Icon: Activity },
+]
+
+// Calidad — llena el placeholder que ya existía en el sidebar (mock/data/
+// modulos.json trae `calidad` desde antes, con ícono FlaskConical ya
+// cableado en moduloIcons.js; hasta hoy caía en el catch-all
 // PanelModulo.jsx). Ver comrural_erp_backend/0019_business_modules_permissions.sql:
 // el rol `calidad` NO tiene `lots:read` (solo `almacen`/`superadmin` lo
 // tienen) — por eso esta pantalla tiene DOS caminos reales, no un modo demo:
@@ -32,7 +46,6 @@ import FormInput from '../components/FormInput.jsx'
 // (PanelRecepcionLote.jsx), que tiene su propio gate por
 // `raw-material-receptions:read` — no depende de esta pantalla ni de
 // `lots:read` tampoco.
-const NATURE_LABEL_LOTE = 'Materia prima'
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
@@ -53,8 +66,10 @@ export default function PanelCalidad() {
   const puedeVerResoluciones = permisos.has('quality-resolutions:read')
   const puedeVer = puedeVerLotes || puedeVerResoluciones || permisos.has('raw-material-receptions:read')
 
+  const [pestaña, setPestaña] = useState('pendientes')
+
   if (!puedeVer) {
-    return <AccesoDenegado mensaje="No tenés acceso a Calidad y Laboratorio." />
+    return <AccesoDenegado mensaje="No tenés acceso a Calidad." />
   }
 
   return (
@@ -64,12 +79,20 @@ export default function PanelCalidad() {
           <FlaskConical className="size-6 text-verde-bosque" strokeWidth={1.75} />
         </div>
         <div>
-          <h1 className="text-2xl font-extrabold text-marron-cafe">Calidad y Laboratorio</h1>
+          <h1 className="text-2xl font-extrabold text-marron-cafe">Calidad</h1>
           <p className="text-sm text-marron-cafe/60">Recepción e inspección de materia prima.</p>
         </div>
       </header>
 
-      {puedeVerLotes ? <ListadoLotesMateriaPrima /> : <ColaPendientesVistoBueno />}
+      <PillTabs pestañas={PESTAÑAS_CALIDAD} activa={pestaña} onCambiar={setPestaña} />
+
+      {pestaña === 'pendientes' && (puedeVerLotes ? <ListadoLotesMateriaPrima /> : <ColaPendientesVistoBueno />)}
+
+      {pestaña === 'actividad' && (
+        <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
+          Todavía no hay una bitácora de actividad de Calidad en el backend.
+        </p>
+      )}
     </main>
   )
 }

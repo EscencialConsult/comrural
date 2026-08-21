@@ -15,7 +15,13 @@ const MEDIA_ESCRITORIO = '(min-width: 768px)'
 // módulo padre vive en config/gruposMaestros.js — es la MISMA fuente que
 // usa GrupoTabs.jsx para las pastillas de arriba de cada pantalla. Sumar
 // una pantalla nueva es una línea ahí, no acá.
-const SUBITEMS_COMPRAS = GRUPOS_MAESTROS.find((g) => g.id === 'compras').items
+// 'configuracion' se maneja aparte más abajo (acceso libre, nunca gatea su
+// padre) — el resto de los grupos SÍ son módulos de negocio reales (mismo
+// `id` que su entrada en modulos.json), así que se resuelven genéricamente
+// por id en vez de un caso hardcodeado por grupo. Sumar un grupo nuevo acá
+// (gruposMaestros.js) alcanza para que también aparezca desplegable en el
+// sidebar — este archivo no vuelve a tocarse.
+const GRUPOS_POR_MODULO = new Map(GRUPOS_MAESTROS.filter((g) => g.id !== 'configuracion').map((g) => [g.id, g.items]))
 const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
@@ -32,10 +38,18 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
     () => todosLosModulos.filter((m) => puedeVerModulo(m.id, permisos)),
     [todosLosModulos, permisos],
   )
-  const subitemsCompras = useMemo(
-    () => SUBITEMS_COMPRAS.filter((s) => permisos.has(s.permiso)),
-    [permisos],
-  )
+  // Un array por módulo (no un Map — Map no es una dependencia estable para
+  // useMemo/effects de abajo), ya filtrado por permiso real de cada
+  // sub-item. Vacío para cualquier módulo sin grupo propio en
+  // gruposMaestros.js (la mayoría), o si el usuario no tiene permiso para
+  // ninguna de las hermanas.
+  const subitemsPorModulo = useMemo(() => {
+    const mapa = {}
+    for (const [moduloId, items] of GRUPOS_POR_MODULO) {
+      mapa[moduloId] = items.filter((s) => permisos.has(s.permiso))
+    }
+    return mapa
+  }, [permisos])
   const subitemsConfiguracion = useMemo(
     () => SUBITEMS_CONFIGURACION.filter((s) => permisos.has(s.permiso)),
     [permisos],
@@ -104,7 +118,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
       el.removeEventListener('scroll', actualizar)
       resizeObserver.disconnect()
     }
-  }, [modulos, subitemsCompras, subitemsConfiguracion, colapsadoEfectivo, navVersion])
+  }, [modulos, subitemsPorModulo, subitemsConfiguracion, colapsadoEfectivo, navVersion])
 
   const linkClass = ({ isActive }) =>
     `sidebar-navitem flex items-center rounded-xl py-2.5 text-sm font-medium ${
@@ -198,19 +212,20 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {modulos.map((modulo) => {
                 const Icon = MODULO_ICON[modulo.id]
-                // Compras es el único módulo de negocio que además agrupa
-                // datos maestros (Personas, Organizaciones, y lo que siga
-                // de M4-M6) — pedido explícito, ver SUBITEMS_COMPRAS. Si
-                // el usuario no tiene ningún permiso de esos, queda como
-                // un link plano igual que el resto de los módulos.
-                if (modulo.id === 'compras' && subitemsCompras.length > 0) {
+                // Compras y Calidad son los módulos de negocio que además
+                // agrupan pantallas hermanas (Personas/Organizaciones/... y
+                // Laboratorio respectivamente) — ver gruposMaestros.js. Si
+                // el usuario no tiene permiso para ninguna hermana, queda
+                // como un link plano igual que el resto de los módulos.
+                const subitems = subitemsPorModulo[modulo.id]
+                if (subitems && subitems.length > 0) {
                   return (
                     <NavGroup
                       key={modulo.id}
                       nombre={modulo.nombre}
                       ruta={`/panel/${modulo.id}`}
                       Icon={Icon}
-                      subitems={subitemsCompras}
+                      subitems={subitems}
                       colapsadoEfectivo={colapsadoEfectivo}
                       linkClass={linkClass}
                       onToggle={alExpandirGrupo}
