@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, SlidersHorizontal, Users, ChevronDown, X } from 'lucide-react'
+import { LayoutDashboard, SlidersHorizontal, Users, TestTubes, ChevronDown, X } from 'lucide-react'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
 import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
@@ -212,11 +212,15 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {modulos.map((modulo) => {
                 const Icon = MODULO_ICON[modulo.id]
-                // Compras y Calidad son los módulos de negocio que además
-                // agrupan pantallas hermanas (Personas/Organizaciones/... y
-                // Laboratorio respectivamente) — ver gruposMaestros.js. Si
-                // el usuario no tiene permiso para ninguna hermana, queda
-                // como un link plano igual que el resto de los módulos.
+                // Compras es el módulo de negocio que además agrupa
+                // pantallas hermanas (Personas/Organizaciones/...) — ver
+                // gruposMaestros.js. Si el usuario no tiene permiso para
+                // ninguna hermana, queda como un link plano igual que el
+                // resto de los módulos. Calidad y Laboratorio van
+                // deliberadamente SEPARADOS (pedido explícito) — Laboratorio
+                // no es un módulo de negocio real (no tiene fila en
+                // modulos.json ni permiso "laboratorio:read"), así que va
+                // como link manual más abajo, no por acá.
                 const subitems = subitemsPorModulo[modulo.id]
                 if (subitems && subitems.length > 0) {
                   return (
@@ -244,6 +248,23 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                   </NavLink>
                 )
               })}
+
+              {/* Laboratorio: módulo aparte de Calidad, a pedido explícito
+                  (antes eran pantallas hermanas con un navbar compartido) —
+                  no viene de modulos.json, así que va como link manual,
+                  mismo criterio que "Usuarios" más abajo. Gate por
+                  samples:read (el permiso técnico real), no por un flag de
+                  módulo que no existe. */}
+              {permisos.has('samples:read') && (
+                <NavLink
+                  to="/panel/laboratorio"
+                  className={linkClass}
+                  title={colapsadoEfectivo ? 'Laboratorio' : undefined}
+                >
+                  <TestTubes className="size-5 shrink-0" strokeWidth={1.75} />
+                  <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Laboratorio</span>
+                </NavLink>
+              )}
 
               {/* Gestión de usuarios/roles — solo superadmin hoy (permiso
                   real "iam:read", no un código de rol hardcodeado). */}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf, X, Activity } from 'lucide-react'
+import { FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf, X, Activity, TestTubes } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
@@ -15,17 +15,18 @@ import SearchInput from '../components/SearchInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import PillTabs from '../components/dashboard/PillTabs.jsx'
+import SeccionMuestras from '../components/calidad/SeccionMuestras.jsx'
 
 // Pestañas internas de esta pantalla (no son rutas — mismo criterio que la
 // subpestaña "Recepción" de PanelAlmacen.jsx: es un cambio de vista local,
 // no una navegación real). "Actividad" sigue vacía a propósito: no hay
-// bitácora de actividad de Calidad en el backend todavía. Las pantallas de
-// Muestras/Solicitudes (análisis de laboratorio) se mudaron a
-// PanelLaboratorio.jsx — "Laboratorio" es ahora la pantalla hermana de esta,
-// ver config/gruposMaestros.js (mismo mecanismo de pastillas de ruta que ya
-// usa Compras para Personas/Organizaciones/...).
+// bitácora de actividad de Calidad en el backend todavía. "Muestras"
+// (SeccionMuestras.jsx) es el MISMO componente que usa PanelLaboratorio.jsx
+// — pedido explícito: Calidad y Laboratorio son módulos separados en el
+// sidebar, pero comparten esta pestaña, no cada uno tiene su copia.
 const PESTAÑAS_CALIDAD = [
   { id: 'pendientes', nombre: 'Pendientes', Icon: ClipboardList },
+  { id: 'muestras', nombre: 'Muestras', Icon: TestTubes },
   { id: 'actividad', nombre: 'Actividad', Icon: Activity },
 ]
 
@@ -64,7 +65,8 @@ export default function PanelCalidad() {
   const { permisos } = useAuth()
   const puedeVerLotes = permisos.has('lots:read')
   const puedeVerResoluciones = permisos.has('quality-resolutions:read')
-  const puedeVer = puedeVerLotes || puedeVerResoluciones || permisos.has('raw-material-receptions:read')
+  const puedeVer =
+    puedeVerLotes || puedeVerResoluciones || permisos.has('raw-material-receptions:read') || permisos.has('samples:read')
 
   const [pestaña, setPestaña] = useState('pendientes')
 
@@ -87,6 +89,8 @@ export default function PanelCalidad() {
       <PillTabs pestañas={PESTAÑAS_CALIDAD} activa={pestaña} onCambiar={setPestaña} />
 
       {pestaña === 'pendientes' && (puedeVerLotes ? <ListadoLotesMateriaPrima /> : <ColaPendientesVistoBueno />)}
+
+      {pestaña === 'muestras' && <SeccionMuestras />}
 
       {pestaña === 'actividad' && (
         <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
