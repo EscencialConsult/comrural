@@ -1,56 +1,41 @@
-import OpcionSiNo from './OpcionSiNo.jsx'
-import FormInput from '../FormInput.jsx'
+import FilaPreguntaSiNo from './FilaPreguntaSiNo.jsx'
 
-// Sección "CONTROL DE DOCUMENTOS" del papel P-ADM-03/R-02: dos renglones,
-// Lista de Productores y Guía de Remisión, cada uno con una columna CUMPLE
-// (✓ / ✗) y una de OBSERVACIONES.
+// Sección "CONTROL DE DOCUMENTOS" del papel P-ADM-03/R-02: dos preguntas,
+// Lista de Productores y Guía de Remisión.
 //
-// El papel marca CUMPLE con un tilde o una cruz — acá es el mismo control
-// Sí/No de tres estados que ya usa la sección 2 de Calidad (ver
-// OpcionSiNo.jsx), por la misma razón: un switch no puede representar "sin
-// marcar todavía", y acá "sin marcar" es un estado real mientras el
-// documento no se revisó.
+// Antes esto era una tabla propia con encabezado DESCRIPCIÓN/CUMPLE — pero
+// es la misma clase de dato que Condiciones de llegada del formulario de
+// Inspección (pregunta → Sí/No → observación), y no se veía igual. Pedido
+// explícito de Facundo viendo las dos capturas lado a lado: "siempre que
+// haya este formato... es un formato predeterminado" — usa el mismo
+// renglón (FilaPreguntaSiNo.jsx), no una tabla aparte.
 //
-// La observación solo se pide cuando NO cumple — el backend la exige
-// (`producerListNotes`/`shippingGuideNotes` obligatorias si el verificado
-// es `false`) y no tiene sentido pedir una nota de por qué algo sí cumple.
+// La observación es OBLIGATORIA en cuanto la respuesta es "No" — el
+// backend exige `producerListNotes`/`shippingGuideNotes` en ese caso — así
+// que queda siempre desplegada y sin botón para cerrarla
+// (`observacionObligatoria`), a diferencia de Condiciones de llegada donde
+// la observación siempre es opcional.
 const DOCUMENTOS = [
-  { clave: 'productores', etiqueta: 'Lista de productores' },
-  { clave: 'guia', etiqueta: 'Guía de remisión' },
+  { clave: 'productores', pregunta: '¿Tiene lista de productores?' },
+  { clave: 'guia', pregunta: '¿Tiene guía de remisión?' },
 ]
 
 export default function ControlDocumentos({ valores, onCambiar, soloLectura = false }) {
   return (
-    <div className="overflow-hidden rounded-2xl bg-white/60">
-      <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-verde-hoja/20 px-4 py-2 text-xs font-bold uppercase tracking-wide text-verde-bosque">
-        <span>Descripción</span>
-        <span>Cumple</span>
-      </div>
-      {DOCUMENTOS.map(({ clave, etiqueta }) => {
-        const cumple = valores[clave]?.verificado ?? null
-        const notas = valores[clave]?.notas ?? ''
-        return (
-          <div key={clave} className="flex flex-col gap-2 border-b border-verde-hoja/10 px-4 py-3 last:border-b-0">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-sm font-medium text-marron-cafe">{etiqueta}</span>
-              <OpcionSiNo
-                valor={cumple}
-                onChange={(v) => onCambiar(clave, 'verificado', v)}
-                disabled={soloLectura}
-                etiquetaAccesible={`¿${etiqueta} cumple?`}
-              />
-            </div>
-            {cumple === false && (
-              <FormInput
-                label="Observaciones (obligatorio si no cumple)"
-                value={notas}
-                disabled={soloLectura}
-                onChange={(e) => onCambiar(clave, 'notas', e.target.value)}
-              />
-            )}
-          </div>
-        )
-      })}
-    </div>
+    <ol className="flex flex-col gap-2">
+      {DOCUMENTOS.map(({ clave, pregunta }, i) => (
+        <FilaPreguntaSiNo
+          key={clave}
+          numero={i + 1}
+          pregunta={pregunta}
+          valor={valores[clave]?.verificado ?? null}
+          observacion={valores[clave]?.notas ?? ''}
+          onCambiar={(v) => onCambiar(clave, 'verificado', v)}
+          onCambiarObservacion={(t) => onCambiar(clave, 'notas', t)}
+          soloLectura={soloLectura}
+          observacionObligatoria={valores[clave]?.verificado === false}
+        />
+      ))}
+    </ol>
   )
 }

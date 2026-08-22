@@ -9,6 +9,10 @@ import {
   SlidersHorizontal,
   ClipboardList,
   LayoutGrid,
+  FlaskConical,
+  Warehouse,
+  Receipt,
+  TestTubes,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -64,6 +68,78 @@ export const GRUPOS_MAESTROS = [
         Icon: ClipboardList,
       },
       { id: 'areas', nombre: 'Áreas', ruta: '/panel/areas', permiso: 'areas:read', Icon: LayoutGrid },
+    ],
+  },
+  {
+    id: 'calidad',
+    // Mismo criterio que Compras: "Calidad" (el padre) es el Inicio del
+    // área — solo analytics — e "Inspección" (el único hijo por ahora, más
+    // van a sumarse con los próximos formularios) es donde vive la tabla
+    // de lotes con su estado y el formulario de inspección. El nombre es
+    // "Inspección", no "Recepción/Inspección" — la Recepción es tarea de
+    // Almacén (ver el grupo `almacen` de acá abajo), esta pantalla solo
+    // MUESTRA de lectura el estado de esa recepción como contexto para
+    // inspeccionar, no la gestiona. `permiso: 'lots:read'` en los dos
+    // porque hoy esa es la condición real que separa el camino completo
+    // (almacén/superadmin) del camino de cola simple para el rol `calidad`
+    // puro (ver PanelCalidad.jsx) — sin `lots:read` no hay Inicio con tabs
+    // ni tabla que agrupar, así que el padre queda como link plano y este
+    // grupo no se arma.
+    // Nombre del padre "Calidad" a secas (no "Calidad y Lab.") — pedido
+    // explícito: Laboratorio quedó como módulo aparte en el sidebar (ver
+    // DashboardSidebar.jsx, link manual gateado por samples:read), no una
+    // hermana más acá adentro.
+    padre: { nombre: 'Calidad', ruta: '/panel/calidad', permiso: 'lots:read', Icon: FlaskConical },
+    items: [
+      {
+        id: 'inspeccion',
+        nombre: 'Inspección',
+        ruta: '/panel/calidad/inspeccion',
+        permiso: 'lots:read',
+        Icon: ClipboardList,
+      },
+      // Formulario 3 (Nota de Recepción, P-ADM-03/R-11) — sub-item normal,
+      // mismo molde que Inspección.
+      {
+        id: 'remito',
+        nombre: 'Remito',
+        ruta: '/panel/calidad/remito',
+        permiso: 'lots:read',
+        Icon: Receipt,
+      },
+      // Muestreo + solicitud de análisis de laboratorio — permiso propio
+      // (samples:read, no lots:read como sus hermanas) porque es el
+      // permiso técnico real que protege esos endpoints, mismo criterio
+      // que Compras usa lots:read para su hermana "Lotes" en vez de
+      // compras:read. Mismo componente (SeccionMuestras.jsx) que también
+      // usa PanelLaboratorio.jsx — pedido explícito, no una copia.
+      {
+        id: 'muestras',
+        nombre: 'Muestras',
+        ruta: '/panel/calidad/muestras',
+        permiso: 'samples:read',
+        Icon: TestTubes,
+      },
+    ],
+  },
+  {
+    id: 'almacen',
+    // Mismo criterio que Calidad: "Almacén" (el padre) es el
+    // Inicio del área — solo analytics — y "Recepción" (el único hijo por
+    // ahora) es donde vive la tabla de lotes pendientes/en curso y el
+    // formulario de ingreso de materia prima. Pedido explícito de Facundo:
+    // "que en almacén aparezca solo los datos como de inicio y se abra la
+    // nueva pestaña que sea recepción" — mismo patrón, un solo permiso
+    // (`almacen:read`) porque acá no hay split de roles como en Calidad.
+    padre: { nombre: 'Almacén', ruta: '/panel/almacen', permiso: 'almacen:read', Icon: Warehouse },
+    items: [
+      {
+        id: 'recepcion',
+        nombre: 'Recepción',
+        ruta: '/panel/almacen/recepcion',
+        permiso: 'almacen:read',
+        Icon: ClipboardList,
+      },
     ],
   },
 ]

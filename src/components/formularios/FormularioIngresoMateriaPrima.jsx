@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronLeft, Printer } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
@@ -9,6 +9,7 @@ import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
+import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
 import DatosRecepcionLote from './DatosRecepcionLote.jsx'
 import ControlDocumentos from './ControlDocumentos.jsx'
 import DatosTransporte from './DatosTransporte.jsx'
@@ -45,11 +46,15 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // DOS pasos del backend, no uno. El papel es una sola hoja continua, pero
 // `warehouse-receipts` exige crear primero (POST, con lo mínimo: envase +
 // cantidad) y recién después completar el resto por PATCH — no hay forma
-// de mandar la hoja entera de una. Por eso todas las secciones están
-// siempre visibles (para que se vea el documento completo, como en el
-// papel), pero el botón de abajo cambia según el estado real:
-// "Iniciar recepción" (todavía no existe) → "Guardar cambios" (existe,
+// de mandar la hoja entera de una. El botón de abajo cambia según el estado
+// real: "Iniciar recepción" (todavía no existe) → "Guardar cambios" (existe,
 // INICIADA) → nada (FINALIZADA, todo de solo lectura).
+//
+// Se ve UNA sección a la vez (AsistenteDeEtapas.jsx) — corrección
+// post-revisión: antes las secciones se mostraban todas juntas ("como el
+// papel completo"), pero eso permitía completar la 4 sin haber completado
+// la 1/2/3. Mientras `soloLectura` (FINALIZADA), no hay nada que "saltear"
+// — se ve todo de una, como un documento cerrado normal.
 const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
 
 const DOCUMENTOS_VACIOS = { productores: { verificado: null, notas: '' }, guia: { verificado: null, notas: '' } }
@@ -80,8 +85,62 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   const [pesoNeto, setPesoNeto] = useState('')
   const [lotesOpciones, setLotesOpciones] = useState([])
   const [cargandoLotes, setCargandoLotes] = useState(true)
+  const [pasoActual, setPasoActual] = useState(0)
 
   const { enviando, error, ejecutar } = useSolicitud()
+
+  // PDF real, mismo mecanismo que FormularioInspeccionMateriaPrima.jsx
+  // (ver ese archivo para el porqué completo): captura el bloque ya
+  // aislado (cabecera → firmas) a un canvas de buena resolución y arma un
+  // PDF paginado a A4 con jsPDF — el botón "Imprimir" abre ESE archivo,
+  // nunca el diálogo de impresión del navegador.
+  const areaImprimibleRef = useRef(null)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
+  const [errorPdf, setErrorPdf] = useState(null)
+
+  const generarPdf = async () => {
+    const ventana = window.open('', '_blank')
+    setGenerandoPdf(true)
+    setErrorPdf(null)
+    try {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
+      const nodo = areaImprimibleRef.current
+      if (!nodo) throw new Error('No se encontró el contenido del formulario.')
+      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor: '#faf4e8', useCORS: true })
+      const imagen = canvas.toDataURL('image/jpeg', 0.95)
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+      const anchoPagina = pdf.internal.pageSize.getWidth()
+      const altoPagina = pdf.internal.pageSize.getHeight()
+      const altoImagen = (canvas.height * anchoPagina) / canvas.width
+      let alturaRestante = altoImagen
+      let posicionY = 0
+      pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
+      alturaRestante -= altoPagina
+      while (alturaRestante > 0) {
+        posicionY = alturaRestante - altoImagen
+        pdf.addPage()
+        pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
+        alturaRestante -= altoPagina
+      }
+      const url = URL.createObjectURL(pdf.output('blob'))
+      if (ventana) ventana.location.href = url
+      else window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      ventana?.close()
+      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
+
+  // El asistente arranca desde el paso 1 cada vez que se entra a OTRO
+  // lote — sin esto, cambiar de lote por el selector dejaría a alguien
+  // parado en el paso 4 del lote anterior, viendo los datos del nuevo.
+  useEffect(() => {
+    setPasoActual(0)
+  }, [lotId])
 
   const recargar = useCallback(() => {
     if (!puedeVer) return
@@ -288,138 +347,242 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     }
   }
 
-  return (
-    <div className="flex w-full flex-col gap-6">
-      {onVolver && (
-        <button
-          type="button"
-          onClick={onVolver}
-          className="flex w-fit items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
-        >
-          <ChevronLeft className="size-4" strokeWidth={1.75} />
-          {tituloVolver}
-        </button>
-      )}
+  // Completitud por etapa — decide cuándo se habilita "Siguiente" en el
+  // asistente. Reusa los mismos cálculos que ya existían para
+  // `motivosFaltantes`/`validoParaGuardar`, no inventa una segunda versión
+  // de la misma regla.
+  const documentosCompleta =
+    (documentos.productores.verificado === true || documentos.productores.notas.trim() !== '') &&
+    (documentos.guia.verificado === true || documentos.guia.notas.trim() !== '')
+  const transporteVacio = camposTransporte.every((v) => v.trim() === '')
+  const productoCompleta = packagingType !== '' && receivedPackageCount != null && receivedPackageCount > 0
 
-      <CabeceraFormulario
-        antetitulo="Registro"
-        titulo="Ingreso de Materia Prima"
-        codigo="P-ADM-03/R-02"
-        version="05"
-        acciones={<AvisoFaltante onEnviar={solicitarAlta} />}
-      />
-
-      {confirmacion && (
-        <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-medium text-verde-bosque">{confirmacion}</p>
-      )}
-      {error && (
-        <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla">{error}</p>
-      )}
-      {!existe && !puedeCrear && (
-        <p className="rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-medium text-marron-arcilla">
-          Tu rol no tiene permiso para iniciar una recepción (`warehouse-receipts:create`).
-        </p>
-      )}
-
-      <SeccionFormulario numero={1} titulo="Datos de recepción">
-        <DatosRecepcionLote
-          valores={{
-            producto: lot.productId ? { id: lot.productId, nombre: lot.productName ?? '' } : null,
-            fecha: soloFecha(warehouseReceipt?.startedAt),
-            horaInicio: soloHora(warehouseReceipt?.startedAt),
-            horaFin: soloHora(warehouseReceipt?.completedAt),
-            lote: { id: lot.id, nombre: lot.code },
-          }}
-          onCambiarLote={(op) => op?.id && op.id !== lotId && onCambiarLote?.(op.id)}
-          opcionesLotes={lotesOpciones}
-          cargandoLotes={cargandoLotes}
-        />
-      </SeccionFormulario>
-
-      <SeccionFormulario numero={2} titulo="Control de documentos">
-        <ControlDocumentos valores={documentos} onCambiar={cambiarDocumento} soloLectura={soloLectura} />
-      </SeccionFormulario>
-
-      <SeccionFormulario numero={3} titulo="Datos del transporte" nota="Opcional en conjunto — si se carga uno, hay que completar los 9.">
-        <DatosTransporte
-          conductor={conductor}
-          vehiculo={vehiculo}
-          onCambiarConductor={cambiarConductor}
-          onCambiarVehiculo={cambiarVehiculo}
-          soloLectura={soloLectura}
-        />
-      </SeccionFormulario>
-
-      <SeccionFormulario numero={4} titulo="Datos del producto">
-        <DatosProductoYCantidad
-          tipoEnvase={packagingType}
-          nBolsas={receivedPackageCount}
-          tiposEnvase={TIPOS_ENVASE}
-          onCambiarTipoEnvase={setPackagingType}
-          onCambiarNBolsas={setReceivedPackageCount}
-          soloLectura={soloLectura || cantidadBloqueada}
-        />
-        {cantidadBloqueada && !finalizada && (
-          <p className="text-xs text-marron-cafe/50">
-            Ya existe una resolución de Calidad para este lote — la cantidad de bolsas quedó bloqueada.
-          </p>
-        )}
-      </SeccionFormulario>
-
-      {existe && (
-        <SeccionFormulario numero={5} titulo="Resumen de recepción">
-          <ResumenRecepcion
-            totalBolsas={warehouseReceipt.receivedPackageCount}
-            pesoPromedioNetoKg={warehouseReceipt.averageAcceptedNetWeightKg}
-            sacosRechazados={warehouseReceipt.rejectedPackageCount}
+  // Etapas del asistente — números/títulos vienen de
+  // seccionesIngresoMateriaPrima.js (única fuente, la comparte con la
+  // tabla de PanelAlmacenRecepcion.jsx), acá solo se arma el `contenido`
+  // real y la `completa` de cada una.
+  const etapas = [
+    {
+      id: 'documentos',
+      titulo: 'Control de documentos',
+      completa: documentosCompleta,
+      motivoIncompleta: 'Marcá si cumple o no en las dos preguntas — con observación si no cumple.',
+      contenido: (
+        <SeccionFormulario numero={1} titulo="Control de documentos">
+          <ControlDocumentos valores={documentos} onCambiar={cambiarDocumento} soloLectura={soloLectura} />
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'recepcion',
+      titulo: 'Datos de recepción',
+      completa: true,
+      contenido: (
+        <SeccionFormulario numero={2} titulo="Datos de recepción">
+          <DatosRecepcionLote
+            valores={{
+              producto: lot.productId ? { id: lot.productId, nombre: lot.productName ?? '' } : null,
+              fecha: soloFecha(warehouseReceipt?.startedAt),
+              horaInicio: soloHora(warehouseReceipt?.startedAt),
+              horaFin: soloHora(warehouseReceipt?.completedAt),
+              lote: { id: lot.id, nombre: lot.code },
+            }}
+            onCambiarLote={(op) => op?.id && op.id !== lotId && onCambiarLote?.(op.id)}
+            opcionesLotes={lotesOpciones}
+            cargandoLotes={cargandoLotes}
           />
         </SeccionFormulario>
-      )}
-
-      {existe && (
-        <SeccionFormulario numero={6} titulo="Unidades de medida" nota="Peso total bruto y neto — se completa al cerrar la recepción.">
-          {finalizada ? (
-            <PesajeFinal bruto={pesoBruto} neto={pesoNeto} soloLectura />
-          ) : puedeCerrarConPesos ? (
-            <PesajeFinal bruto={pesoBruto} neto={pesoNeto} onCambiarBruto={setPesoBruto} onCambiarNeto={setPesoNeto} soloLectura={!puedeEditar} />
-          ) : puedeCerrarSinPesos ? (
-            <p className="text-sm text-marron-cafe/60">
-              Calidad rechazó el lote — la recepción se cierra sin registrar pesos (0 bolsas autorizadas).
-            </p>
-          ) : (
-            <p className="text-sm text-marron-cafe/50">
-              {summary.qualityDecision == null
-                ? 'Se habilita cuando Calidad emita su resolución.'
-                : 'Esperando el permiso para cerrar la recepción.'}
+      ),
+    },
+    {
+      id: 'transporte',
+      titulo: 'Datos del transporte',
+      completa: transporteCompleto || transporteVacio,
+      motivoIncompleta: 'Es opcional en conjunto — completá los 9 datos, o dejalos todos vacíos.',
+      contenido: (
+        <SeccionFormulario
+          numero={3}
+          titulo="Datos del transporte"
+          nota="Opcional en conjunto — si se carga uno, hay que completar los 9."
+        >
+          <DatosTransporte
+            conductor={conductor}
+            vehiculo={vehiculo}
+            onCambiarConductor={cambiarConductor}
+            onCambiarVehiculo={cambiarVehiculo}
+            soloLectura={soloLectura}
+          />
+        </SeccionFormulario>
+      ),
+    },
+    {
+      id: 'producto',
+      titulo: 'Datos del producto',
+      completa: productoCompleta,
+      motivoIncompleta: 'Falta el tipo de envase o el N. de bolsas.',
+      // Sección 4 completa — pedido explícito de Facundo, guiándose por los
+      // encabezados en VERDE INTENSO del papel real: solo hay 4 secciones
+      // numeradas, no 6. "Datos del producto" en el papel incluye, bajo el
+      // MISMO encabezado, tipo de envase/N. de bolsas, resumen de
+      // recepción, detalle de rechazos y unidades de medida.
+      contenido: (
+        <SeccionFormulario numero={4} titulo="Datos del producto">
+          <DatosProductoYCantidad
+            tipoEnvase={packagingType}
+            nBolsas={receivedPackageCount}
+            tiposEnvase={TIPOS_ENVASE}
+            onCambiarTipoEnvase={setPackagingType}
+            onCambiarNBolsas={setReceivedPackageCount}
+            soloLectura={soloLectura || cantidadBloqueada}
+          />
+          {cantidadBloqueada && !finalizada && (
+            <p className="text-xs text-marron-cafe/50">
+              Ya existe una resolución de Calidad para este lote — la cantidad de bolsas quedó bloqueada.
             </p>
           )}
+
+          <div className="flex flex-col gap-2 border-t border-verde-hoja/20 pt-4">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-verde-bosque/80">
+              Resumen de recepción y detalle de rechazos
+            </h3>
+            <ResumenRecepcion
+              totalBolsas={warehouseReceipt?.storedPackageCount}
+              pesoPromedioNetoKg={warehouseReceipt?.averageAcceptedNetWeightKg}
+              sacosRechazados={warehouseReceipt?.rejectedPackageCount}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-verde-hoja/20 pt-4">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-verde-bosque/80">
+              Unidades de medida
+              <span className="ml-1.5 font-normal normal-case text-marron-cafe/50">
+                — peso total bruto y neto, se completa al cerrar la recepción
+              </span>
+            </h3>
+            {!existe ? (
+              <p className="text-sm text-marron-cafe/50">Se habilita al iniciar la recepción.</p>
+            ) : finalizada ? (
+              <PesajeFinal bruto={pesoBruto} neto={pesoNeto} soloLectura />
+            ) : puedeCerrarConPesos ? (
+              <PesajeFinal bruto={pesoBruto} neto={pesoNeto} onCambiarBruto={setPesoBruto} onCambiarNeto={setPesoNeto} soloLectura={!puedeEditar} />
+            ) : puedeCerrarSinPesos ? (
+              <p className="text-sm text-marron-cafe/60">
+                Calidad rechazó el lote — la recepción se cierra sin registrar pesos (0 bolsas autorizadas).
+              </p>
+            ) : (
+              <p className="text-sm text-marron-cafe/50">
+                {summary.qualityDecision == null
+                  ? 'Se habilita cuando Calidad emita su resolución.'
+                  : 'Esperando el permiso para cerrar la recepción.'}
+              </p>
+            )}
+          </div>
         </SeccionFormulario>
-      )}
+      ),
+    },
+    {
+      id: 'firmas',
+      titulo: 'Observaciones y Firmas',
+      completa: true,
+      contenido: (
+        <>
+          <SeccionFormulario titulo="Observaciones">
+            <CampoObservaciones valor={notes} onCambiar={setNotes} soloLectura={soloLectura} />
+          </SeccionFormulario>
 
-      <SeccionFormulario titulo="Observaciones">
-        <CampoObservaciones valor={notes} onCambiar={setNotes} soloLectura={soloLectura} />
-      </SeccionFormulario>
+          {/* `usuario` queda siempre en null: warehouse-receipts solo
+              expone `receivedBy` como id crudo (sin `*Name`, a diferencia
+              de la inspección de Calidad que sí trae `createdByName`) y la
+              resolución compuesta tampoco trae `reviewedByName` — eso solo
+              vive en GET /quality-resolutions/:id, que esta pantalla no
+              pide. Mostrar un nombre inventado sería peor que mostrar
+              "Pendiente"; `firmadoEn` ya alcanza para decir que ese paso
+              ocurrió. "Transporte" NO va acá — en el papel real la firma
+              del conductor está pegada a Datos del transporte, no acá
+              abajo (ver DatosTransporte.jsx). Estos son los 3 firmantes
+              reales del pie de la hoja. */}
+          <SeccionFormulario titulo="Responsables">
+            <FirmasResponsables
+              responsables={[
+                { rol: 'Responsable de Recepción', usuario: null, puesto: 'Asistente de Almacenes', firmadoEn: warehouseReceipt?.startedAt },
+                { rol: 'Inspectora de Calidad', usuario: null, puesto: 'VoBo Calidad', firmadoEn: recepcion.qualityResolution?.resolvedAt },
+                { rol: 'Responsable de Almacén', usuario: null, puesto: 'VoBo Inmediato Superior', firmadoEn: warehouseReceipt?.completedAt },
+              ]}
+            />
+          </SeccionFormulario>
+        </>
+      ),
+    },
+  ]
 
-      <SeccionFormulario titulo="Responsables">
-        {/* `usuario` queda siempre en null: warehouse-receipts solo expone
-            `receivedBy` como id crudo (sin `*Name`, a diferencia de la
-            inspección de Calidad que sí trae `createdByName`) y la
-            resolución compuesta tampoco trae `reviewedByName` — eso solo
-            vive en GET /quality-resolutions/:id, que esta pantalla no pide.
-            Mostrar un nombre inventado sería peor que mostrar "Pendiente";
-            `firmadoEn` ya alcanza para decir que ese paso ocurrió. */}
-        <FirmasResponsables
-          responsables={[
-            { rol: 'Responsable de Recepción', usuario: null, puesto: 'Asistente de Almacenes', firmadoEn: warehouseReceipt?.startedAt },
-            { rol: 'Transporte', usuario: null, puesto: 'Conductor', firmadoEn: null },
-            { rol: 'Inspectora de Calidad', usuario: null, puesto: 'VoBo Calidad', firmadoEn: recepcion.qualityResolution?.resolvedAt },
-            { rol: 'Responsable de Almacén', usuario: null, puesto: 'VoBo Inmediato Superior', firmadoEn: warehouseReceipt?.completedAt },
-          ]}
+  return (
+    <div className="flex w-full flex-col gap-6">
+      <div className="flex items-center justify-between gap-3 print:hidden">
+        {onVolver ? (
+          <button
+            type="button"
+            onClick={onVolver}
+            className="flex w-fit items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
+          >
+            <ChevronLeft className="size-4" strokeWidth={1.75} />
+            {tituloVolver}
+          </button>
+        ) : (
+          <span />
+        )}
+        {errorPdf && <span className="text-xs font-medium text-rojo-pasankalla">{errorPdf}</span>}
+        <button
+          type="button"
+          onClick={generarPdf}
+          disabled={generandoPdf}
+          className="flex items-center gap-1.5 rounded-full bg-marron-tierra/10 px-3 py-1.5 text-xs font-semibold text-marron-cafe transition-colors duration-150 hover:bg-marron-tierra/20 disabled:opacity-50"
+        >
+          <Printer className="size-3.5" strokeWidth={2} />
+          {generandoPdf ? 'Generando PDF…' : 'Imprimir'}
+        </button>
+      </div>
+
+      <div ref={areaImprimibleRef} className="flex flex-col gap-6">
+        <CabeceraFormulario
+          antetitulo="Registro"
+          titulo="Ingreso de Materia Prima"
+          codigo="P-ADM-03/R-02"
+          version="05"
+          acciones={<AvisoFaltante onEnviar={solicitarAlta} />}
         />
-      </SeccionFormulario>
 
-      {!soloLectura && (
-        <div className="flex flex-col gap-2">
+        {confirmacion && !generandoPdf && (
+          <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-medium text-verde-bosque print:hidden">
+            {confirmacion}
+          </p>
+        )}
+        {error && !generandoPdf && (
+          <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla print:hidden">
+            {error}
+          </p>
+        )}
+        {!existe && !puedeCrear && !generandoPdf && (
+          <p className="rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-medium text-marron-arcilla print:hidden">
+            Tu rol no tiene permiso para iniciar una recepción (`warehouse-receipts:create`).
+          </p>
+        )}
+
+        <AsistenteDeEtapas
+          etapas={etapas}
+          pasoActual={pasoActual}
+          onAvanzar={() => setPasoActual((p) => Math.min(p + 1, etapas.length - 1))}
+          onVolverA={setPasoActual}
+          modoImpresion={generandoPdf || soloLectura}
+        />
+      </div>
+      {/* Cierra `areaImprimibleRef` — de acá para abajo (Iniciar/Guardar/
+          Cerrar/Volver) no es parte del papel, nunca entra al PDF. Gateado
+          al último paso del asistente: los botones de guardar/cerrar
+          recién tienen sentido una vez que se pasó por todas las etapas —
+          antes de eso ya está el botón "Siguiente" de cada una. */}
+
+      {!soloLectura && pasoActual === etapas.length - 1 && (
+        <div className="flex flex-col gap-2 print:hidden">
           {motivosFaltantes.length > 0 && (
             <p className="text-xs font-medium text-marron-arcilla">
               Falta completar: {motivosFaltantes.join(' · ')}.

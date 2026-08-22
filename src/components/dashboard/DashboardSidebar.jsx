@@ -11,17 +11,18 @@ import AiAdvisorTeaser from './AiAdvisorTeaser'
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
 
-// Datos maestros (FE·M1-M6 del tablero): qué pantalla va agrupada bajo qué
-// módulo padre vive en config/gruposMaestros.js — es la MISMA fuente que
-// usa GrupoTabs.jsx para las pastillas de arriba de cada pantalla. Sumar
-// una pantalla nueva es una línea ahí, no acá.
+// Datos maestros (FE·M1-M6 del tablero, + Calidad/Almacén): qué pantalla va
+// agrupada bajo qué módulo padre vive en config/gruposMaestros.js — es la
+// MISMA fuente que usa GrupoTabs.jsx para las pastillas de arriba de cada
+// pantalla. Sumar una pantalla nueva (o un módulo nuevo con sub-items) es
+// agregar/editar una entrada ahí — este archivo se queda genérico, busca
+// por `modulo.id` en vez de tener un caso hardcodeado por módulo.
 // 'configuracion' se maneja aparte más abajo (acceso libre, nunca gatea su
-// padre) — el resto de los grupos SÍ son módulos de negocio reales (mismo
-// `id` que su entrada en modulos.json), así que se resuelven genéricamente
-// por id en vez de un caso hardcodeado por grupo. Sumar un grupo nuevo acá
-// (gruposMaestros.js) alcanza para que también aparezca desplegable en el
-// sidebar — este archivo no vuelve a tocarse.
-const GRUPOS_POR_MODULO = new Map(GRUPOS_MAESTROS.filter((g) => g.id !== 'configuracion').map((g) => [g.id, g.items]))
+// padre). Mapa por `grupo` completo (no solo `items`) porque el render
+// necesita también `grupo.padre.nombre` — algunos grupos (Calidad) piden un
+// nombre más corto acá que el que usan las páginas públicas de
+// mock/data/modulos.json.
+const GRUPOS_POR_MODULO = new Map(GRUPOS_MAESTROS.filter((g) => g.id !== 'configuracion').map((g) => [g.id, g]))
 const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
@@ -45,8 +46,8 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   // ninguna de las hermanas.
   const subitemsPorModulo = useMemo(() => {
     const mapa = {}
-    for (const [moduloId, items] of GRUPOS_POR_MODULO) {
-      mapa[moduloId] = items.filter((s) => permisos.has(s.permiso))
+    for (const [moduloId, grupo] of GRUPOS_POR_MODULO) {
+      mapa[moduloId] = grupo.items.filter((s) => permisos.has(s.permiso))
     }
     return mapa
   }, [permisos])
@@ -147,7 +148,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
           único scroll interno vive en el <nav> de más abajo), y fijar el
           handle ahí adentro lo recortaría en el eje X (overflow-y en un
           solo eje fuerza el otro a auto/clip también). */}
-      <div className="relative flex shrink-0">
+      <div className="relative flex shrink-0 print:hidden">
         <aside
           className={`sidebar-collapse fixed inset-y-0 left-0 z-40 flex h-svh flex-col bg-marron-cafe py-6 md:static ${
             colapsadoEfectivo ? 'w-20 px-2' : 'w-64 px-4'
@@ -212,21 +213,31 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {modulos.map((modulo) => {
                 const Icon = MODULO_ICON[modulo.id]
-                // Compras es el módulo de negocio que además agrupa
-                // pantallas hermanas (Personas/Organizaciones/...) — ver
-                // gruposMaestros.js. Si el usuario no tiene permiso para
-                // ninguna hermana, queda como un link plano igual que el
-                // resto de los módulos. Calidad y Laboratorio van
-                // deliberadamente SEPARADOS (pedido explícito) — Laboratorio
-                // no es un módulo de negocio real (no tiene fila en
-                // modulos.json ni permiso "laboratorio:read"), así que va
-                // como link manual más abajo, no por acá.
+                // Módulos de negocio que además agrupan pantallas hermanas
+                // (Compras→Personas/Organizaciones/..., Calidad→Inspección/
+                // Remito, Almacén→Recepción) se resuelven por `modulo.id` en
+                // GRUPOS_POR_MODULO — sumar un módulo agrupado nuevo es una
+                // entrada en gruposMaestros.js, no un caso más acá. Si el
+                // usuario no tiene ningún permiso de esos sub-items, queda
+                // como link plano igual que el resto de los módulos.
+                // Laboratorio va deliberadamente SEPARADO de Calidad (pedido
+                // explícito) — no es un módulo de negocio real (no tiene
+                // fila en modulos.json ni permiso "laboratorio:read"), así
+                // que va como link manual más abajo, no por acá.
+                const grupo = GRUPOS_POR_MODULO.get(modulo.id)
                 const subitems = subitemsPorModulo[modulo.id]
                 if (subitems && subitems.length > 0) {
                   return (
                     <NavGroup
                       key={modulo.id}
-                      nombre={modulo.nombre}
+                      // `grupo.padre.nombre` gana sobre `modulo.nombre`
+                      // cuando existe — el sidebar tiene menos ancho que el
+                      // resto de la app, así que un módulo agrupado puede
+                      // pedir acá un nombre más corto que el que usan las
+                      // páginas públicas (mock/data/modulos.json) sin tocar
+                      // esas otras pantallas. Hoy solo lo usa Calidad
+                      // ("Calidad" a secas en vez de "Calidad y Laboratorio").
+                      nombre={grupo.padre.nombre ?? modulo.nombre}
                       ruta={`/panel/${modulo.id}`}
                       Icon={Icon}
                       subitems={subitems}
@@ -366,7 +377,7 @@ function NavGroup({ nombre, ruta, Icon, subitems, colapsadoEfectivo, linkClass, 
 
   if (colapsadoEfectivo) {
     return (
-      <NavLink to={ruta} className={linkClass} title={nombre}>
+      <NavLink to={ruta} end className={linkClass} title={nombre}>
         {Icon && <Icon className="size-5 shrink-0" strokeWidth={1.75} />}
       </NavLink>
     )
@@ -375,7 +386,14 @@ function NavGroup({ nombre, ruta, Icon, subitems, colapsadoEfectivo, linkClass, 
   return (
     <div>
       <div className="flex items-center gap-0.5">
-        <NavLink to={ruta} className={({ isActive }) => `${linkClass({ isActive })} flex-1`}>
+        {/* `end`: sin esto, NavLink marca "activo" en CUALQUIER subruta que
+            empiece con `ruta` — para Compras nunca se notó porque sus
+            hijos son rutas hermanas sueltas (/panel/personas, no
+            /panel/compras/personas), pero Calidad y Almacén SÍ anidan su
+            hijo bajo el mismo prefijo (/panel/calidad/inspeccion,
+            /panel/almacen/recepcion) y sin `end` los dos quedaban pintados
+            de verde a la vez. */}
+        <NavLink to={ruta} end className={({ isActive }) => `${linkClass({ isActive })} flex-1`}>
           {Icon && <Icon className="size-5 shrink-0" strokeWidth={1.75} />}
           <span className="sidebar-label">{nombre}</span>
         </NavLink>

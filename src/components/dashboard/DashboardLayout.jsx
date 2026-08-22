@@ -58,17 +58,17 @@ export default function DashboardLayout() {
     <div className="flex h-svh overflow-hidden bg-crema-quinua">
       <DashboardSidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <DashboardHeader
-          clima={clima}
-          climaError={climaError}
-          usuario={usuario}
-          onAbrirMenu={() => setSidebarAbierto(true)}
-        />
-        <GrupoTabs />
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <Outlet />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto print:overflow-visible">
+        <div className="print:hidden">
+          <DashboardHeader
+            clima={clima}
+            climaError={climaError}
+            usuario={usuario}
+            onAbrirMenu={() => setSidebarAbierto(true)}
+          />
+          <GrupoTabs />
         </div>
+        <Outlet />
       </div>
     </div>
   )

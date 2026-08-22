@@ -10,8 +10,13 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // verdad navega es "Lote": elegir otro lote lleva a SU recepción, porque
 // cada lote tiene la suya.
 //
-// Fecha y horas son del acto de recepción (`startedAt` / `completedAt` de
-// warehouse_receipts) — el backend las sella, acá solo se muestran.
+// Fecha y horas vuelven a `disabled` fijo — corrección post-revisión: se
+// habían hecho editables con el botón "hoy" de CampoFechaHora para igualar
+// el diseño de DatosGeneralesLote.jsx, pero `startedAt`/`completedAt` los
+// sella el propio backend y no aceptan `PATCH` (confirmado contra
+// warehouse-receipts.md) — era un callejón sin salida, se podía tocar,
+// nunca se guardaba. Mismo criterio ahora en los dos formularios: se
+// muestran, no se editan.
 export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLotes = [], cargandoLotes = false }) {
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
@@ -26,7 +31,15 @@ export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLot
       />
 
       <div className="sm:col-span-3">
-        <CampoFechaHora id="fecha-recepcion" tipo="date" label="Fecha de recepción" valor={valores.fecha} onChange={() => {}} disabled />
+        <CampoFechaHora
+          id="fecha-recepcion"
+          tipo="date"
+          label="Fecha de recepción"
+          valor={valores.fecha}
+          onChange={() => {}}
+          disabled
+          hint={valores.fecha ? undefined : 'Se completa al iniciar la recepción'}
+        />
       </div>
 
       <SelectorDeBase
@@ -47,6 +60,7 @@ export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLot
           valor={valores.horaInicio}
           onChange={() => {}}
           disabled
+          hint={valores.horaInicio ? undefined : 'Se completa al iniciar la recepción'}
         />
       </div>
       <div className="sm:col-span-2">

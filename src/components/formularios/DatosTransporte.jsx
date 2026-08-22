@@ -1,9 +1,15 @@
 import FormInput from '../FormInput.jsx'
+import FirmasResponsables from './FirmasResponsables.jsx'
 
 // Sección "DATOS DEL TRANSPORTE" del papel P-ADM-03/R-02: Vehículo, N. de
 // Placa, Color de Vehículo, Conductor, N. de Licencia + la firma del
-// conductor (que acá se une al resto de responsables al pie del
-// formulario — ver PanelIngresoMateriaPrima.jsx).
+// conductor, en el mismo bloque — pedido explícito de Facundo: en el
+// papel real el espacio de firma va pegado a la derecha de estos datos,
+// no al final junto con el resto de responsables, "ya que si esto una vez
+// se imprime la persona firma automáticamente desde acá". Reusa
+// FirmasResponsables.jsx con un solo recuadro en vez de rearmar el mismo
+// espacio punteado — mismo criterio que Control de Documentos con
+// CampoObservacionPlegable.jsx: no replicar, reusar.
 //
 // El backend exige 4 campos más que el papel no muestra explícito
 // (`identityDocument` y `licenseCategory` del conductor, `brand` y `model`
@@ -69,6 +75,12 @@ export default function DatosTransporte({ conductor, vehiculo, onCambiarConducto
           hint="No está en el papel, pero el sistema lo exige junto con el resto de datos del conductor."
         />
       </div>
+
+      <FirmasResponsables
+        responsables={[{ rol: 'Firma Conductor', usuario: null, puesto: 'Transporte', firmadoEn: null }]}
+        claseGrilla="max-w-xs"
+        mostrarNota={false}
+      />
     </div>
   )
 }
