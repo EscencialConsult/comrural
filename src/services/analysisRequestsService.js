@@ -30,4 +30,12 @@ export const analysisRequestsService = {
   async disponibilidadRegular() {
     return apiClient.get('/analysis-requests/regular-availability')
   },
+
+  // POST .../receive-sample — el laboratorio confirma que recibió la
+  // muestra físicamente. `dto` es una unión discriminada por
+  // acceptanceCriteriaMet: { acceptanceCriteriaMet: true, expectedResultDate,
+  // receptionNotes? } o { acceptanceCriteriaMet: false, rejectionReason }.
+  async recibirMuestra(requestId, dto) {
+    return apiClient.post(`/analysis-requests/${requestId}/receive-sample`, dto)
+  },
 }

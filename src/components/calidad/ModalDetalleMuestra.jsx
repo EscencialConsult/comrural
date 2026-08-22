@@ -17,6 +17,11 @@ import Button from '../Button.jsx'
 // existentes) queda acá: cabecera, datos de la muestra, el estado del
 // proceso en 4 pasos (no 5) y el detalle de la solicitud más reciente si
 // existe.
+//
+// "Recibir muestra" NO vive acá — es acción de Laboratorio, no de Calidad
+// (pedido explícito: Calidad solicita, Laboratorio recibe). Ver
+// SeccionPendientes.jsx (components/laboratorio/), pestaña Pendientes de
+// PanelLaboratorio.jsx.
 const ESTADOS_SOLICITUD_ACTIVA = ['PENDIENTE_MUESTRA', 'RECIBIDA', 'EN_PROCESO']
 const TONO_ESTADO_MUESTRA = {
   TOMADA: 'neutro',

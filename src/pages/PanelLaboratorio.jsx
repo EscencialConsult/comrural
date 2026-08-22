@@ -1,15 +1,20 @@
 import { useState } from 'react'
-import { TestTubes, Activity } from 'lucide-react'
+import { TestTubes, ClipboardList, Activity } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import PillTabs from '../components/dashboard/PillTabs.jsx'
-import SeccionMuestras from '../components/calidad/SeccionMuestras.jsx'
+import SeccionPendientes from '../components/laboratorio/SeccionPendientes.jsx'
 
 // Laboratorio — módulo aparte de Calidad en el sidebar (pedido explícito).
-// La pestaña Muestras (SeccionMuestras.jsx) es la MISMA que también vive en
-// PanelCalidad.jsx — un solo componente reutilizado, no una copia.
+// "Muestras" (crear muestra + solicitar análisis) ya NO vive acá — quedó
+// exclusiva de Calidad (PanelCalidadMuestras.jsx, sub-item del sidebar) para
+// no duplicar la misma pantalla en dos módulos. "Pendientes" es la cola de
+// trabajo propia de Laboratorio: todas las solicitudes que pidió Calidad,
+// con el botón "Recibir" para las que están en PENDIENTE_MUESTRA — a
+// diferencia de "crear/solicitar" (que es cosa de Calidad), "recibir" es
+// acción de Laboratorio (pedido explícito, ver SeccionPendientes.jsx).
 const PESTAÑAS_LABORATORIO = [
-  { id: 'muestras', nombre: 'Muestras', Icon: TestTubes },
+  { id: 'pendientes', nombre: 'Pendientes', Icon: ClipboardList },
   { id: 'actividad', nombre: 'Actividad', Icon: Activity },
 ]
 
@@ -20,7 +25,7 @@ export default function PanelLaboratorio() {
   // "Lotes" de Compras se gatea con lots:read.
   const puedeVer = permisos.has('samples:read')
 
-  const [pestaña, setPestaña] = useState('muestras')
+  const [pestaña, setPestaña] = useState('pendientes')
 
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso a Laboratorio." />
@@ -40,7 +45,7 @@ export default function PanelLaboratorio() {
 
       <PillTabs pestañas={PESTAÑAS_LABORATORIO} activa={pestaña} onCambiar={setPestaña} />
 
-      {pestaña === 'muestras' && <SeccionMuestras />}
+      {pestaña === 'pendientes' && <SeccionPendientes />}
 
       {pestaña === 'actividad' && (
         <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">

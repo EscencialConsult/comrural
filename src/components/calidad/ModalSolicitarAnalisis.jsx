@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, FlaskConical, ClipboardList, Truck, Beaker, Bug, Skull, Eye } from 'lucide-react'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { laboratoryTestsService } from '../../services/laboratoryTestsService'
+import { iamService } from '../../services/iamService'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { NATURALEZA_LABEL, USO_LABEL } from '../../config/analisisLabels'
 import Modal from '../Modal.jsx'
@@ -63,6 +64,9 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
   const [catalogo, setCatalogo] = useState(null)
   const [errorCatalogo, setErrorCatalogo] = useState(null)
 
+  const [usuarios, setUsuarios] = useState(null)
+  const [errorUsuarios, setErrorUsuarios] = useState(null)
+
   const [naturaleza, setNaturaleza] = useState('')
   const [uso, setUso] = useState('')
   const [tipoSolicitud, setTipoSolicitud] = useState('REGULAR')
@@ -82,6 +86,27 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
       .listar({ limit: 100 })
       .then((resp) => !cancelado && setCatalogo(resp.data))
       .catch((err) => !cancelado && setErrorCatalogo(err.message))
+    return () => {
+      cancelado = true
+    }
+  }, [abierto])
+
+  // Responsable de entrega — antes era un input de texto con el UUID a
+  // mano (el rol calidad no tiene users:read). Con superadmin de prueba sí
+  // hay acceso, así que se lista de verdad. Si el usuario logueado no
+  // tiene el permiso, el catch deja `usuarios` en `[]` — el campo cae solo
+  // a "no hay usuarios para elegir" en vez de romper el resto del modal.
+  useEffect(() => {
+    if (!abierto) return
+    let cancelado = false
+    iamService
+      .listarUsuarios()
+      .then((data) => !cancelado && setUsuarios(data.filter((u) => u.isActive)))
+      .catch((err) => {
+        if (cancelado) return
+        setErrorUsuarios(err.message)
+        setUsuarios([])
+      })
     return () => {
       cancelado = true
     }
@@ -334,14 +359,27 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
                 <span className="text-xs text-marron-cafe/40">Consultando…</span>
               )}
             </div>
-            <FormInput
+            <FormSelect
               label="Responsable de entrega"
-              placeholder="UUID del responsable"
               value={responsableEntregaId}
               onChange={(e) => setResponsableEntregaId(e.target.value)}
-              hint="Tu rol no puede listar personal todavía — se ingresa el id a mano."
+              hint={
+                errorUsuarios
+                  ? `No se pudo cargar la lista de personal: ${errorUsuarios}`
+                  : usuarios?.length === 0
+                    ? 'Tu rol no tiene acceso a listar personal (users:read).'
+                    : undefined
+              }
               className="sm:col-span-2"
-            />
+              disabled={usuarios === null}
+            >
+              <option value="">{usuarios === null ? 'Cargando…' : 'Seleccioná…'}</option>
+              {usuarios?.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.fullName} ({u.email})
+                </option>
+              ))}
+            </FormSelect>
           </div>
         </div>
 
