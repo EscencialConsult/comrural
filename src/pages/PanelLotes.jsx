@@ -214,8 +214,10 @@ export default function PanelLotes() {
                 </p>
               )}
 
-              <div className="grid gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-2 lg:grid-cols-4">
-                <SearchInput label="Buscar" placeholder="Código o producto…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <SearchInput label="Buscar" placeholder="Código o producto…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                </div>
                 <FormSelect label="Estado" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}>
                   <option value="">Todos</option>
                   {Object.keys(TONO_ESTADO_LOTE).map((e) => (

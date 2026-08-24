@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ClipboardList, CheckCircle2, ChevronLeft, Plus, Trash2, Pencil, Save } from 'lucide-react'
+import { ClipboardList, CheckCircle2, ChevronLeft, Plus, Trash2, Pencil, Save, TriangleAlert } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -15,6 +15,7 @@ import { DocumentSheet, DocumentFooter } from '../components/documento/DocumentS
 import { DocumentHeader } from '../components/documento/DocumentHeader.jsx'
 import { EditableTitleInput, EditableSelect, EditableCheckbox, EditableTextarea } from '../components/documento/EditableFields.jsx'
 import { DocumentTable, DocumentSectionTitle, DocumentRow } from '../components/documento/DocumentTable.jsx'
+import Badge from '../components/Badge.jsx'
 import {
   FORM_CODE_INSPECCION_MATERIA_PRIMA,
   CODIGOS_ITEM_CRITICOS_INSPECCION,
@@ -889,19 +890,28 @@ function CampoDocumentoFila({ item, puedeGestionar, deshabilitado, labelValue, o
               item.label
             )}
             {critico && (
-              <span
-                className="ml-1.5 inline-block align-middle text-[10px] font-normal normal-case text-rojo-pasankalla/70"
+              <Badge
+                tono="alerta"
+                className="ml-1.5 inline-flex items-center gap-1 align-middle normal-case"
                 title="Este campo tiene lógica propia en el formulario de Inspección de Materia Prima (por su código). Verifica antes de darlo de baja."
               >
-                ⚠ usado por Inspección
-              </span>
+                <TriangleAlert className="size-2.5" strokeWidth={2.5} />
+                Usado por Inspección
+              </Badge>
             )}
           </>
         }
         code={item.code}
         required={item.isRequired}
         unit={item.unit}
-        controlNode={<ControlDeCampo item={item} />}
+        controlNode={
+          <div className="flex flex-col gap-1.5">
+            <Badge tono="neutro" className="w-fit normal-case">
+              {DATA_TYPE_LABEL[item.dataType]}
+            </Badge>
+            <ControlDeCampo item={item} />
+          </div>
+        }
         actionsNode={
           puedeGestionar ? (
             <IconButton
@@ -1237,28 +1247,30 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
         <div className="flex flex-col gap-2">
           <span className="text-sm text-marron-cafe">Opciones</span>
           {opciones.map((op, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                value={op.value}
-                onChange={(e) =>
-                  setOpciones((prev) => prev.map((o, idx) => (idx === i ? { ...o, value: e.target.value } : o)))
-                }
-                placeholder="valor"
-                className="min-w-0 flex-1 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
-              <input
-                value={op.label}
-                onChange={(e) =>
-                  setOpciones((prev) => prev.map((o, idx) => (idx === i ? { ...o, label: e.target.value } : o)))
-                }
-                placeholder="etiqueta visible"
-                className="min-w-0 flex-1 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
-              />
+            <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-1 gap-2">
+                <input
+                  value={op.value}
+                  onChange={(e) =>
+                    setOpciones((prev) => prev.map((o, idx) => (idx === i ? { ...o, value: e.target.value } : o)))
+                  }
+                  placeholder="valor"
+                  className="min-w-0 flex-1 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
+                />
+                <input
+                  value={op.label}
+                  onChange={(e) =>
+                    setOpciones((prev) => prev.map((o, idx) => (idx === i ? { ...o, label: e.target.value } : o)))
+                  }
+                  placeholder="etiqueta visible"
+                  className="min-w-0 flex-1 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
+                />
+              </div>
               {opciones.length > 1 && (
                 <button
                   type="button"
                   onClick={() => setOpciones((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="text-xs font-medium text-rojo-pasankalla/80 hover:text-rojo-pasankalla"
+                  className="self-end text-xs font-medium text-rojo-pasankalla/80 hover:text-rojo-pasankalla sm:self-auto"
                 >
                   Quitar
                 </button>

@@ -9,9 +9,10 @@ const TONOS = {
   alerta: 'bg-marron-arcilla/15 text-marron-arcilla',
 }
 
-export default function Badge({ tono = 'neutro', className = '', children }) {
+export default function Badge({ tono = 'neutro', className = '', children, ...props }) {
   return (
     <span
+      {...props}
       className={`rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${TONOS[tono]} ${className}`}
     >
       {children}
