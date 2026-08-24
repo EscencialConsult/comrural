@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X, FlaskConical, ClipboardList, Truck, Beaker, Bug, Skull, Eye } from 'lucide-react'
+import { X, FlaskConical, ClipboardList, Truck, Beaker } from 'lucide-react'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { laboratoryTestsService } from '../../services/laboratoryTestsService'
 import { iamService } from '../../services/iamService'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { NATURALEZA_LABEL, USO_LABEL } from '../../config/analisisLabels'
+import { CATEGORIA_LABEL, CATEGORIA_ICON, CATEGORIA_ESTILO, ORDEN_CATEGORIAS } from '../../config/analisisCategorias'
 import Modal from '../Modal.jsx'
 import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
@@ -24,29 +25,11 @@ const TIPOS_SOLICITUD = [
   { value: 'REGULAR', label: 'Regular' },
   { value: 'EXPRESS', label: 'Express' },
 ]
-const CATEGORIA_LABEL = {
-  PHYSICOCHEMICAL: 'Fisicoquímico',
-  MICROBIOLOGICAL: 'Microbiológico',
-  TOXICOLOGICAL: 'Toxicológico',
-  SENSORY: 'Sensorial',
-}
-const CATEGORIA_ICON = {
-  PHYSICOCHEMICAL: Beaker,
-  MICROBIOLOGICAL: Bug,
-  TOXICOLOGICAL: Skull,
-  SENSORY: Eye,
-}
-// Un color propio por categoría — antes las 4 se veían idénticas (mismo
-// gris), costaba distinguir dónde empezaba una y terminaba otra. Clases
-// completas y literales (no armadas con template strings) porque Tailwind
-// necesita verlas tal cual en el código fuente para no purgarlas.
-const CATEGORIA_ESTILO = {
-  PHYSICOCHEMICAL: { borde: 'border-azul-andino/40', icono: 'bg-azul-andino/15 text-azul-andino', contador: 'text-azul-andino' },
-  MICROBIOLOGICAL: { borde: 'border-verde-bosque/40', icono: 'bg-verde-bosque/15 text-verde-bosque', contador: 'text-verde-bosque' },
-  TOXICOLOGICAL: { borde: 'border-rojo-pasankalla/40', icono: 'bg-rojo-pasankalla/15 text-rojo-pasankalla', contador: 'text-rojo-pasankalla' },
-  SENSORY: { borde: 'border-marron-arcilla/40', icono: 'bg-marron-arcilla/15 text-marron-arcilla', contador: 'text-marron-arcilla' },
-}
-const ORDEN_CATEGORIAS = ['PHYSICOCHEMICAL', 'MICROBIOLOGICAL', 'TOXICOLOGICAL', 'SENSORY']
+// El catálogo acá nunca trae 'OTHER' como ensayo elegible por checkbox (se
+// maneja aparte, ver testOtro más abajo) — por eso este modal sigue
+// filtrando esa categoría de porCategoria, aunque analisisCategorias.js ya
+// la incluya para el otro consumidor (FormularioIniciarAnalisis.jsx).
+const CATEGORIAS_CATALOGO = ORDEN_CATEGORIAS.filter((c) => c !== 'OTHER')
 
 // Cabecera de sección reutilizada 3 veces acá adentro — mismo patrón visual
 // que ModalDetalleMuestra.jsx (ícono chico + título), para que las dos
@@ -132,7 +115,7 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
       if (!mapa.has(t.category)) mapa.set(t.category, [])
       mapa.get(t.category).push(t)
     }
-    return ORDEN_CATEGORIAS.filter((c) => mapa.has(c)).map((c) => [c, mapa.get(c)])
+    return CATEGORIAS_CATALOGO.filter((c) => mapa.has(c)).map((c) => [c, mapa.get(c)])
   }, [catalogo])
 
   const testOtro = catalogo?.find((t) => t.category === 'OTHER')

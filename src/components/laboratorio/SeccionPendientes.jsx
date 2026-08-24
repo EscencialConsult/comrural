@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { PackageCheck } from 'lucide-react'
+import { FlaskConical, PackageCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import ModalRecibirMuestra from '../calidad/ModalRecibirMuestra.jsx'
+import FormularioIniciarAnalisis from './FormularioIniciarAnalisis.jsx'
 
 // Pestaña "Pendientes" de Laboratorio — Calidad solicita el análisis
 // (SeccionMuestras.jsx, en el sub-item Muestras de Calidad), la solicitud
@@ -25,10 +26,23 @@ const TONO_ESTADO_SOLICITUD = {
 export default function SeccionPendientes() {
   const { permisos } = useAuth()
   const puedeRecibir = permisos.has('analysis-requests:receive')
+  // "Iniciar análisis" — el backend todavía no tiene un endpoint que mueva
+  // la solicitud de RECIBIDA a EN_PROCESO (fuera de alcance del módulo
+  // laboratory actual, ver docs/laboratory.md §1). Por pedido explícito se
+  // implementa como acción local optimista: solo cambia el estado en el
+  // cliente, no persiste — se revierte si se recarga la página. Sí se pide
+  // el detalle real (GET /analysis-requests/:id) porque `items[].category`
+  // existe de verdad en el backend — solo el guardado de resultados está
+  // fuera de alcance, no el catálogo de ensayos ya solicitados. Reemplazar
+  // por una llamada real al servicio en cuanto exista el endpoint.
+  const puedeIniciarAnalisis = permisos.has('analysis-requests:receive')
 
   const [solicitudes, setSolicitudes] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [recibirPara, setRecibirPara] = useState(null) // solicitud | null
+  const [analisisEnCurso, setAnalisisEnCurso] = useState(null) // detalle completo | null
+  const [cargandoAnalisisId, setCargandoAnalisisId] = useState(null)
+  const [errorIniciarAnalisis, setErrorIniciarAnalisis] = useState(null)
 
   useEffect(() => {
     let cancelado = false
@@ -52,6 +66,24 @@ export default function SeccionPendientes() {
     setRecibirPara(null)
   }
 
+  const alClicarIniciarAnalisis = async (solicitudId) => {
+    setErrorIniciarAnalisis(null)
+    setCargandoAnalisisId(solicitudId)
+    try {
+      const detalle = await analysisRequestsService.obtener(solicitudId)
+      setSolicitudes((prev) => prev.map((s) => (s.id === solicitudId ? { ...s, status: 'EN_PROCESO' } : s)))
+      setAnalisisEnCurso(detalle)
+    } catch (err) {
+      setErrorIniciarAnalisis(err.message)
+    } finally {
+      setCargandoAnalisisId(null)
+    }
+  }
+
+  if (analisisEnCurso) {
+    return <FormularioIniciarAnalisis solicitud={analisisEnCurso} onVolver={() => setAnalisisEnCurso(null)} />
+  }
+
   if (errorCarga) {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
   }
@@ -69,6 +101,10 @@ export default function SeccionPendientes() {
           confirme que la recibió.
         </p>
       </div>
+
+      {errorIniciarAnalisis && (
+        <p className="text-sm font-medium text-rojo-pasankalla">No se pudo abrir el análisis: {errorIniciarAnalisis}</p>
+      )}
 
       {solicitudes.length === 0 ? (
         <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
@@ -92,6 +128,17 @@ export default function SeccionPendientes() {
                 <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setRecibirPara(s)}>
                   <PackageCheck className="size-3.5" strokeWidth={2} />
                   Recibir
+                </Button>
+              )}
+              {s.status === 'RECIBIDA' && puedeIniciarAnalisis && (
+                <Button
+                  variant="secondary"
+                  className="gap-1.5 px-3 py-1.5 text-xs"
+                  disabled={cargandoAnalisisId === s.id}
+                  onClick={() => alClicarIniciarAnalisis(s.id)}
+                >
+                  <FlaskConical className="size-3.5" strokeWidth={2} />
+                  {cargandoAnalisisId === s.id ? 'Abriendo…' : 'Iniciar análisis'}
                 </Button>
               )}
             </div>
