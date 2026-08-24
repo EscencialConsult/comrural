@@ -26,16 +26,14 @@ const TONO_ESTADO_SOLICITUD = {
 export default function SeccionPendientes() {
   const { permisos } = useAuth()
   const puedeRecibir = permisos.has('analysis-requests:receive')
-  // "Iniciar análisis" — el backend todavía no tiene un endpoint que mueva
-  // la solicitud de RECIBIDA a EN_PROCESO (fuera de alcance del módulo
-  // laboratory actual, ver docs/laboratory.md §1). Por pedido explícito se
-  // implementa como acción local optimista: solo cambia el estado en el
-  // cliente, no persiste — se revierte si se recarga la página. Sí se pide
-  // el detalle real (GET /analysis-requests/:id) porque `items[].category`
-  // existe de verdad en el backend — solo el guardado de resultados está
-  // fuera de alcance, no el catálogo de ensayos ya solicitados. Reemplazar
-  // por una llamada real al servicio en cuanto exista el endpoint.
-  const puedeIniciarAnalisis = permisos.has('analysis-requests:receive')
+  // "Iniciar análisis" — POST /analysis-requests/:id/start-analysis, ya
+  // real (RECIBIDA -> EN_PROCESO, más lots.currentStatus -> EN_ANALISIS
+  // del lado del servidor). Reusa analysis-requests:update porque el
+  // endpoint no tiene un permiso propio (ver analysis-request.controller.ts).
+  // Los RESULTADOS de los ensayos siguen siendo mock (useAnalisisDraft.js,
+  // localStorage) — eso sí sigue fuera de alcance hasta que exista la
+  // tabla de resultados.
+  const puedeIniciarAnalisis = permisos.has('analysis-requests:update')
 
   const [solicitudes, setSolicitudes] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -70,8 +68,31 @@ export default function SeccionPendientes() {
     setErrorIniciarAnalisis(null)
     setCargandoAnalisisId(solicitudId)
     try {
+      // Una sola llamada: start-analysis ya devuelve el detalle completo
+      // (con status en EN_PROCESO), no hace falta un obtener() aparte.
+      const detalle = await analysisRequestsService.iniciarAnalisis(solicitudId)
+      setSolicitudes((prev) => prev.map((s) => (s.id === solicitudId ? { ...s, status: detalle.status } : s)))
+      setAnalisisEnCurso(detalle)
+    } catch (err) {
+      setErrorIniciarAnalisis(err.message)
+    } finally {
+      setCargandoAnalisisId(null)
+    }
+  }
+
+  // "Continuar análisis" — para una solicitud que YA está EN_PROCESO
+  // (se inició en algún momento, en esta sesión o en otra): a diferencia
+  // de "Iniciar", acá no hay ninguna transición que disparar, solo volver
+  // a abrir la vista de categorías con el detalle actual. Hacía falta
+  // porque `analisisEnCurso` es estado de este componente, no de la URL —
+  // si el analista cambia de módulo y vuelve, se pierde y antes no había
+  // forma de retomarlo (el botón "Iniciar" ya no aparece una vez pasó a
+  // EN_PROCESO).
+  const alClicarContinuarAnalisis = async (solicitudId) => {
+    setErrorIniciarAnalisis(null)
+    setCargandoAnalisisId(solicitudId)
+    try {
       const detalle = await analysisRequestsService.obtener(solicitudId)
-      setSolicitudes((prev) => prev.map((s) => (s.id === solicitudId ? { ...s, status: 'EN_PROCESO' } : s)))
       setAnalisisEnCurso(detalle)
     } catch (err) {
       setErrorIniciarAnalisis(err.message)
@@ -139,6 +160,17 @@ export default function SeccionPendientes() {
                 >
                   <FlaskConical className="size-3.5" strokeWidth={2} />
                   {cargandoAnalisisId === s.id ? 'Abriendo…' : 'Iniciar análisis'}
+                </Button>
+              )}
+              {s.status === 'EN_PROCESO' && puedeIniciarAnalisis && (
+                <Button
+                  variant="secondary"
+                  className="gap-1.5 px-3 py-1.5 text-xs"
+                  disabled={cargandoAnalisisId === s.id}
+                  onClick={() => alClicarContinuarAnalisis(s.id)}
+                >
+                  <FlaskConical className="size-3.5" strokeWidth={2} />
+                  {cargandoAnalisisId === s.id ? 'Abriendo…' : 'Continuar análisis'}
                 </Button>
               )}
             </div>

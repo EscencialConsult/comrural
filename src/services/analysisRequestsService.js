@@ -38,4 +38,15 @@ export const analysisRequestsService = {
   async recibirMuestra(requestId, dto) {
     return apiClient.post(`/analysis-requests/${requestId}/receive-sample`, dto)
   },
+
+  // POST .../start-analysis — transición real RECIBIDA -> EN_PROCESO
+  // (también mueve lots.currentStatus a EN_ANALISIS del lado del
+  // servidor). Sin body. Devuelve el mismo detalle completo que
+  // `obtener()`, así que una sola llamada alcanza tanto para actualizar el
+  // estado en la lista de Pendientes como para abrir
+  // FormularioIniciarAnalisis.jsx con los ensayos ya agrupados por
+  // categoría.
+  async iniciarAnalisis(requestId) {
+    return apiClient.post(`/analysis-requests/${requestId}/start-analysis`)
+  },
 }
