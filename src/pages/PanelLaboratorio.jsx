@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import PillTabs from '../components/dashboard/PillTabs.jsx'
 import SeccionPendientes from '../components/laboratorio/SeccionPendientes.jsx'
+import SeccionActividad from '../components/laboratorio/SeccionActividad.jsx'
 
 // Laboratorio — módulo aparte de Calidad en el sidebar (pedido explícito).
 // "Muestras" (crear muestra + solicitar análisis) ya NO vive acá — quedó
@@ -47,11 +48,7 @@ export default function PanelLaboratorio() {
 
       {pestaña === 'pendientes' && <SeccionPendientes />}
 
-      {pestaña === 'actividad' && (
-        <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
-          Todavía no hay una bitácora de actividad de Laboratorio en el backend.
-        </p>
-      )}
+      {pestaña === 'actividad' && <SeccionActividad />}
     </main>
   )
 }
