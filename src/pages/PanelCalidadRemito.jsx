@@ -12,6 +12,7 @@ import SearchInput from '../components/SearchInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import NotaRecepcionMateriaPrima from '../components/formularios/NotaRecepcionMateriaPrima.jsx'
+import Paginacion from '../components/Paginacion.jsx'
 
 // Formulario 3 (Nota de Recepción, P-ADM-03/R-11) — a propósito FUERA del
 // molde de Inspección/Recepción (sin desplegable en el sidebar, ver
@@ -167,16 +168,18 @@ export default function PanelCalidadRemito() {
         <p className="text-sm text-marron-cafe/50">Cargando…</p>
       ) : (
         <>
-          <div className="grid gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-3 lg:grid-cols-6">
-            <SearchInput
-              label="Buscar"
-              placeholder="Código o producto…"
-              value={busqueda}
-              onChange={(e) => {
-                setBusqueda(e.target.value)
-                setPagina(0)
-              }}
-            />
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="col-span-2 sm:col-span-1">
+              <SearchInput
+                label="Buscar"
+                placeholder="Código o producto…"
+                value={busqueda}
+                onChange={(e) => {
+                  setBusqueda(e.target.value)
+                  setPagina(0)
+                }}
+              />
+            </div>
             <FormSelect
               label="Producto"
               value={productoId}
@@ -231,7 +234,7 @@ export default function PanelCalidadRemito() {
                 </option>
               ))}
             </FormSelect>
-            <div className="flex items-end">
+            <div className="col-span-2 flex items-end sm:col-span-1">
               <Button
                 variant="secondary"
                 className="w-full justify-center gap-1.5 px-3 py-2 text-sm"
@@ -245,7 +248,7 @@ export default function PanelCalidadRemito() {
           </div>
 
           <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
-            <table className="w-full table-fixed text-left text-sm">
+            <table className="w-full min-w-[820px] table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[9%]" />
                 <col className="w-[24%]" />
@@ -318,38 +321,14 @@ export default function PanelCalidadRemito() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-marron-cafe/60">
-            <span>
-              Mostrando {paginados.length === 0 ? 0 : pagina * TAMANIO_PAGINA + 1}–{pagina * TAMANIO_PAGINA + paginados.length} de{' '}
-              {filtrados.length} lotes
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>
-                Anterior
-              </Button>
-              {Array.from({ length: Math.max(1, Math.ceil(filtrados.length / TAMANIO_PAGINA)) }, (_, i) => i).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPagina(p)}
-                  aria-current={p === pagina ? 'page' : undefined}
-                  className={`flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-150 ${
-                    p === pagina ? 'bg-verde-lima text-marron-cafe' : 'text-marron-cafe/60 hover:bg-marron-tierra/10'
-                  }`}
-                >
-                  {p + 1}
-                </button>
-              ))}
-              <Button
-                variant="secondary"
-                className="px-3 py-1.5 text-xs"
-                disabled={(pagina + 1) * TAMANIO_PAGINA >= filtrados.length}
-                onClick={() => setPagina((p) => p + 1)}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
+          <Paginacion
+            pagina={pagina}
+            totalItems={filtrados.length}
+            tamanioPagina={TAMANIO_PAGINA}
+            cantidadMostrada={paginados.length}
+            etiqueta="lotes"
+            onCambiarPagina={setPagina}
+          />
         </>
       )}
     </main>

@@ -78,7 +78,7 @@ export default function TablaRechazo({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-x-6 gap-y-4 overflow-hidden rounded-2xl bg-white/70 p-4 lg:grid-cols-2">
+      <div className="grid gap-x-6 gap-y-4 overflow-hidden rounded-2xl bg-white/70 p-4 md:grid-cols-2">
         {columnas.map((col, i) => (
           <div key={i} className="flex flex-col">
             <div className="flex items-center justify-between border-b-2 border-verde-hoja/35 pb-2">

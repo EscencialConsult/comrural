@@ -14,24 +14,29 @@
 // cualquier formulario, tenga o no esa acción.
 export default function CabeceraFormulario({ antetitulo = 'Registro', titulo, codigo, version, pagina, acciones }) {
   return (
-    <header className="flex flex-col gap-4 rounded-3xl bg-verde-pistacho/40 px-6 py-5">
+    <header className="flex flex-col gap-4 rounded-3xl bg-verde-pistacho/40 px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
-        <div className="flex items-center gap-4">
+        {/* `min-w-0` acá y en el bloque de texto: por defecto un ítem flex
+            no se achica más allá del ancho de su contenido (min-width:
+            auto), así que sin esto el título nunca llegaba a bajar de
+            línea en mobile — el texto se cortaba contra el borde de la
+            pantalla en vez de ajustarse. */}
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <img
             src="/logos/logorealcolor.webp"
             alt="COMRURAL XXI S.R.L."
-            className="h-16 w-auto shrink-0 sm:h-20"
+            className="h-12 w-auto shrink-0 sm:h-16 lg:h-20"
             loading="lazy"
           />
-          <div className="flex flex-col gap-0.5 border-l border-verde-bosque/20 pl-4">
+          <div className="flex min-w-0 flex-col gap-0.5 border-l border-verde-bosque/20 pl-3 sm:pl-4">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-verde-bosque/80">{antetitulo}</span>
-            <h1 className="text-2xl font-extrabold tracking-tight text-marron-cafe">{titulo}</h1>
+            <h1 className="text-lg font-extrabold tracking-tight text-marron-cafe sm:text-2xl">{titulo}</h1>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-col items-start gap-2 sm:items-end">
           {acciones}
-          <dl className="flex flex-wrap items-center justify-end gap-2">
+          <dl className="flex flex-wrap items-center gap-2 sm:justify-end">
             <DatoCabecera etiqueta="Código" valor={codigo} />
             <DatoCabecera etiqueta="Versión" valor={version} />
             {pagina && <DatoCabecera etiqueta="Página" valor={pagina} />}

@@ -170,7 +170,7 @@ export default function NotaRecepcionMateriaPrima({ lotId, onVolver, tituloVolve
 
         <section className="flex flex-col gap-4 rounded-3xl bg-verde-pistacho/25 p-6">
           <h2 className="text-sm font-bold uppercase tracking-wide text-marron-cafe">Materia prima recepcionada</h2>
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Dato etiqueta="Producto" valor={lot?.productName} />
             <Dato etiqueta="Tipo de envase" valor={warehouseReceipt?.packagingType} />
             <Dato etiqueta="Cantidad (bolsas)" valor={warehouseReceipt?.storedPackageCount} />
