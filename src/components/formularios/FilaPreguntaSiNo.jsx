@@ -20,6 +20,11 @@ import CampoObservacionPlegable from './CampoObservacionPlegable.jsx'
 // `observacionObligatoria`: la observación queda SIEMPRE desplegada y sin
 // botón para cerrarla — el caso de Control de Documentos, donde el
 // backend exige la nota en cuanto la respuesta es "No".
+// `onCambiarObservacion` es OPCIONAL: si no llega, el campo de observación
+// ni se renderiza — caso de Condiciones de llegada (TablaCriterios.jsx,
+// formulario de Inspección), que lo tuvo un tiempo sin que el backend
+// tuviera dónde guardarlo (raw_material_inspections/form_responses no
+// tienen ninguna columna de nota por ítem) y se sacó por eso, no por gusto.
 export default function FilaPreguntaSiNo({
   numero,
   pregunta,
@@ -55,13 +60,15 @@ export default function FilaPreguntaSiNo({
         <OpcionSiNo valor={valor} onChange={onCambiar} disabled={soloLectura} etiquetaAccesible={pregunta} />
       </div>
 
-      <CampoObservacionPlegable
-        valor={observacion}
-        onCambiar={onCambiarObservacion}
-        soloLectura={soloLectura}
-        etiquetaAccesible={pregunta}
-        obligatoria={observacionObligatoria}
-      />
+      {onCambiarObservacion && (
+        <CampoObservacionPlegable
+          valor={observacion}
+          onCambiar={onCambiarObservacion}
+          soloLectura={soloLectura}
+          etiquetaAccesible={pregunta}
+          obligatoria={observacionObligatoria}
+        />
+      )}
 
       {destacada && !respondido && avisoSiVacia && (
         <p className="w-full text-xs font-semibold text-marron-arcilla">{avisoSiVacia}</p>

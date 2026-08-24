@@ -9,6 +9,9 @@ import { suppliersService } from '../../services/suppliersService'
 import { lotsService } from '../../services/lotsService'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import FormInput from '../FormInput.jsx'
+import FormSelect from '../FormSelect.jsx'
+import Switch from '../Switch.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
 import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
@@ -20,6 +23,7 @@ import CampoObservaciones from './CampoObservaciones.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
 import AvisoFaltante from './AvisoFaltante.jsx'
 import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
+import { ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS, COLUMNAS_RECHAZO } from './codigosCriticosInspeccion.js'
 
 // Registro I-CAL-29/R-01 — "Inspección de Materia Prima", maquetado según el
 // papel real. Cuerpo del formulario extraído como componente propio, sin
@@ -53,46 +57,21 @@ const SECCION = {
 
 // La pregunta que corta el formulario: si se responde "No", se rechaza el
 // lote entero y el resto de la hoja deja de aplicar.
-const ITEM_ACEPTA_CONDICIONES = 'arrival_conditions_accepted'
-const ITEM_TOTAL_RECHAZADAS = 'total_rejected_bags'
-
-// Cómo se parte en dos columnas la tabla de la sección 3.
 //
-// En el papel es UNA sola tabla de hallazgos impresa a dos columnas porque
-// no entra a lo largo: arranca en "Paja", baja nueve renglones y sigue en
-// "Granos dañados". No hay títulos de bloque ahí — es la misma lista que
-// continúa, y por eso acá tampoco los hay.
+// ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS y COLUMNAS_RECHAZO viven
+// en codigosCriticosInspeccion.js (no acá) para que PanelFormularios.jsx
+// pueda advertir antes de dar de baja uno de estos ítems sin tener que
+// importar este componente completo. Es la misma fuente que se usa más
+// abajo — no hay una segunda lista con estos códigos.
 //
-// El corte va por código y no por `sortOrder` partido al medio: los dos
-// grupos "Otros" van al final de la sección (sortOrder 15 a 18) aunque en
-// la hoja cada uno cierra SU columna, así que el orden de la base no
-// alcanza para reconstruir la disposición. Va explícito, en un solo lugar.
-const COLUMNAS_RECHAZO = [
-  {
-    grupoOtros: 'rejection_other_contaminant',
-    codigos: [
-      'straw_bags',
-      'mouse_droppings_bags',
-      'bird_droppings_bags',
-      'larvae_bags',
-      'quartz_stone_bags',
-      'hard_stone_bags',
-      'volcanic_stone_bags',
-      'foreign_material_bags',
-    ],
-  },
-  {
-    grupoOtros: 'rejection_other_grain',
-    codigos: [
-      'damaged_grains_bags',
-      'broken_grains_bags',
-      'immature_grains_bags',
-      'colored_grains_bags',
-      'coated_grains_bags',
-      'contrasting_varieties_bags',
-    ],
-  },
-]
+// En el papel, la tabla de rechazo (sección 3) es UNA sola tabla de
+// hallazgos impresa a dos columnas porque no entra a lo largo: arranca en
+// "Paja", baja nueve renglones y sigue en "Granos dañados". No hay
+// títulos de bloque ahí — es la misma lista que continúa, y por eso acá
+// tampoco los hay. El corte va por código y no por `sortOrder` partido al
+// medio: los dos grupos "Otros" van al final de la sección (sortOrder 15
+// a 18) aunque en la hoja cada uno cierra SU columna, así que el orden de
+// la base no alcanza para reconstruir la disposición.
 
 // Aclaración del asterisco de "Materias extrañas", al pie de toda la tabla.
 // No es decorativa: define qué cuenta como materia extraña, que es lo que
@@ -177,13 +156,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   const [generales, setGenerales] = useState(GENERALES_VACIOS)
   const [listados, setListados] = useState({ productos: [], proveedores: [], lotes: [] })
   const [cargandoListados, setCargandoListados] = useState(true)
-  // Observaciones por criterio de la sección 2, { [itemId]: texto }.
-  // Se escriben y se ven, pero todavía no se guardan: la migración 0020 cargó
-  // las 8 preguntas como BOOLEAN sueltos, sin un ítem TEXT hermano donde
-  // pueda vivir el texto. Se avisa una vez al pie de la sección en vez de
-  // bloquear los campos — bloquearlos era peor: no se podía dejar constancia
-  // de nada ni siquiera para leerlo en la misma sesión.
-  const [observacionesCriterio, setObservacionesCriterio] = useState({})
   const [confirmacion, setConfirmacion] = useState(null)
   const [confirmandoFinal, setConfirmandoFinal] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
@@ -674,21 +646,15 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       completa: condicionesCompleta,
       motivoIncompleta: motivoIncompleta(SECCION.CONDICIONES),
       contenido: (
-        <SeccionFormulario
-          numero={2}
-          titulo="Condiciones de llegada de transporte"
-          nota="Marcá Sí o No según corresponda. La observación de cada criterio es opcional y todavía no se guarda al recargar."
-        >
+        <SeccionFormulario numero={2} titulo="Condiciones de llegada de transporte" nota="Marcá Sí o No según corresponda.">
           <TablaCriterios
             items={condiciones}
             valorDe={(item) => leer(item)}
-            observacionDe={(item) => observacionesCriterio[item.id] ?? ''}
             onCambiar={(item, v) => escribir(item, 1, v)}
-            onCambiarObservacion={(item, texto) => setObservacionesCriterio((prev) => ({ ...prev, [item.id]: texto }))}
             soloLectura={soloLectura}
             codigoDecisivo={ITEM_ACEPTA_CONDICIONES}
           />
-          <CamposSinClasificar items={sueltosCondiciones} />
+          <CamposSinClasificar items={sueltosCondiciones} leer={leer} escribir={escribir} soloLectura={soloLectura} />
         </SeccionFormulario>
       ),
     },
@@ -713,7 +679,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
             ocurrenciasDe={ocurrenciasDe}
             soloLectura={soloLectura || rechazoTotal}
           />
-          <CamposSinClasificar items={sueltosRechazo} />
+          <CamposSinClasificar
+            items={sueltosRechazo}
+            leer={leer}
+            escribir={escribir}
+            soloLectura={soloLectura || rechazoTotal}
+          />
         </SeccionFormulario>
       ),
     },
@@ -735,7 +706,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
             onCambiar={(item, occ, v) => escribir(item, occ, v)}
             soloLectura={soloLectura || rechazoTotal}
           />
-          <CamposSinClasificar items={sueltosGrano} />
+          <CamposSinClasificar
+            items={sueltosGrano}
+            leer={leer}
+            escribir={escribir}
+            soloLectura={soloLectura || rechazoTotal}
+          />
         </SeccionFormulario>
       ),
     },
@@ -746,12 +722,18 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       contenido: (
         <>
           {otrasSecciones.map(([seccion, items]) => (
-            <SeccionFormulario key={seccion} titulo={seccion} nota="Sección sin maquetación propia todavía.">
-              <ul className="flex flex-col gap-1 text-sm text-marron-cafe/60">
-                {items.map((i) => (
-                  <li key={i.id}>{i.label}</li>
+            <SeccionFormulario key={seccion} titulo={seccion} nota="Sección agregada desde Configuración — sin maquetación propia del papel, un campo debajo del otro.">
+              <div className="flex flex-col gap-3">
+                {items.map((item) => (
+                  <CampoGenerico
+                    key={item.id}
+                    item={item}
+                    valor={leer(item)}
+                    onChange={(v) => escribir(item, 1, v)}
+                    soloLectura={soloLectura}
+                  />
                 ))}
-              </ul>
+              </div>
             </SeccionFormulario>
           ))}
 
@@ -937,34 +919,98 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   )
 }
 
-// Ítems que existen en el formulario pero no entran en la maquetación de su
-// sección. Hoy son restos de prueba cargados a mano en la base real
-// (`asd`/"asdf", `nueva_seccion`, `nuevo_campo`), y varios están marcados
-// como obligatorios — así que `assertAllRequiredAnswered` los va a exigir y
-// ninguna inspección se va a poder finalizar hasta que se borren.
-//
-// Se muestran señalados en vez de filtrarlos en silencio: si no se ven, el
-// 400 al finalizar llega sin ninguna explicación en pantalla.
-function CamposSinClasificar({ items }) {
+// Control genérico por dataType — para cualquier ítem que Configuración
+// (PanelFormularios.jsx) agregue a este formulario sin que el frontend
+// conozca su código de antemano. Mismo criterio de tipos que
+// FormularioInspeccion.jsx (el renderer 100% genérico, que sigue vivo sin
+// usarse en ningún lado — ver conversación), pero hookeado a `leer`/
+// `escribir` de ESTE componente. A propósito solo soporta 1 ocurrencia acá
+// (sin "+ agregar fila") — los ítems repetibles reales del papel (Rechazo,
+// Tamaño de grano) ya tienen su propia maquetación arriba; esto es
+// deliberadamente el camino simple para preguntas sueltas que el papel no
+// contemplaba.
+function CampoGenerico({ item, valor, onChange, soloLectura }) {
+  const label = `${item.label}${item.isRequired ? ' *' : ''}${item.unit ? ` (${item.unit})` : ''}`
+
+  if (item.dataType === 'BOOLEAN') {
+    return (
+      <div className="flex items-center justify-between gap-3 py-1">
+        <span className="text-sm text-marron-cafe">{label}</span>
+        <Switch checked={!!valor} onChange={onChange} disabled={soloLectura} label={item.label} />
+      </div>
+    )
+  }
+  if (item.dataType === 'SELECT') {
+    return (
+      <FormSelect label={label} value={valor ?? ''} onChange={(e) => onChange(e.target.value)} disabled={soloLectura}>
+        <option value="">Seleccioná…</option>
+        {item.config?.options?.map((op) => (
+          <option key={op.value} value={op.value}>
+            {op.label}
+          </option>
+        ))}
+      </FormSelect>
+    )
+  }
+  if (item.dataType === 'DATE') {
+    return (
+      <FormInput
+        label={label}
+        type="date"
+        value={valor ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={soloLectura}
+      />
+    )
+  }
+  if (item.dataType === 'INTEGER' || item.dataType === 'DECIMAL') {
+    return (
+      <FormInput
+        label={label}
+        type="number"
+        step={item.dataType === 'DECIMAL' ? Math.pow(10, -(item.config?.decimalPlaces ?? 2)) : 1}
+        value={valor ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={soloLectura}
+      />
+    )
+  }
+  return (
+    <FormInput
+      label={label}
+      type="text"
+      value={valor ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={soloLectura}
+    />
+  )
+}
+
+// Ítems que existen en el formulario pero no entran en la maquetación fija
+// de su sección (Condiciones/Rechazo/Tamaño de grano) — porque Configuración
+// (PanelFormularios.jsx) agregó algo que el papel real (I-CAL-29/R-01) no
+// tenía. Antes esto se mostraba como texto plano de solo lectura, sin
+// ningún input — un campo así, si quedaba obligatorio, bloqueaba
+// "Finalizar inspección" para siempre porque no había dónde responderlo
+// (exactamente lo que pasó con los 3 ítems de prueba que se borraron de la
+// base esta sesión). Ahora sí tiene un control real, vía CampoGenerico.
+function CamposSinClasificar({ items, leer, escribir, soloLectura }) {
   if (items.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl bg-marron-arcilla/12 p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-marron-arcilla">
-        Campos sin clasificar en el formulario
+    <div className="flex flex-col gap-3 rounded-2xl bg-marron-tierra/5 p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-marron-cafe/50">
+        Campos agregados desde Configuración
       </p>
-      <p className="text-xs text-marron-cafe/70">
-        No corresponden a ningún renglón del papel — parecen restos de prueba cargados en el formulario. Los marcados
-        como obligatorios impiden finalizar la inspección hasta que se borren de la base.
-      </p>
-      <ul className="flex flex-col gap-1 text-xs text-marron-cafe">
-        {items.map((i) => (
-          <li key={i.id}>
-            <code className="font-mono">{i.code}</code> — "{i.label}" ({i.dataType}
-            {i.isRequired ? ', obligatorio' : ''})
-          </li>
-        ))}
-      </ul>
+      {items.map((item) => (
+        <CampoGenerico
+          key={item.id}
+          item={item}
+          valor={leer(item)}
+          onChange={(v) => escribir(item, 1, v)}
+          soloLectura={soloLectura}
+        />
+      ))}
     </div>
   )
 }

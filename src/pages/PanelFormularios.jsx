@@ -15,6 +15,10 @@ import { DocumentSheet, DocumentFooter } from '../components/documento/DocumentS
 import { DocumentHeader } from '../components/documento/DocumentHeader.jsx'
 import { EditableTitleInput, EditableSelect, EditableCheckbox, EditableTextarea } from '../components/documento/EditableFields.jsx'
 import { DocumentTable, DocumentSectionTitle, DocumentRow } from '../components/documento/DocumentTable.jsx'
+import {
+  FORM_CODE_INSPECCION_MATERIA_PRIMA,
+  CODIGOS_ITEM_CRITICOS_INSPECCION,
+} from '../components/formularios/codigosCriticosInspeccion.js'
 
 // Mismo patrón que forms.code en el backend (ver form.dto.ts,
 // formCodeSchema): 3 a 50 caracteres, solo mayúsculas, números, '-' y '/'.
@@ -448,6 +452,14 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
   const grupos = agruparPorSeccion(itemsActivos)
   const secciones = [...new Set(itemsActivos.map((i) => i.section))]
 
+  // El formulario de Inspección de Materia Prima tiene lógica fija
+  // amarrada al `code` exacto de algunos ítems (ver
+  // codigosCriticosInspeccion.js) — darlos de baja no rompe nada visible,
+  // pero apaga esa lógica en silencio. Se advierte antes de dejar
+  // marcar la baja.
+  const esItemCritico = (item) =>
+    form.code === FORM_CODE_INSPECCION_MATERIA_PRIMA && CODIGOS_ITEM_CRITICOS_INSPECCION.has(item.code)
+
   const headerDirty =
     headerDraft.name.trim() !== form.name || headerDraft.areaId !== form.areaId || headerDraft.isActive !== form.isActive
   const labelsDirty = itemsActivos.some(
@@ -593,6 +605,7 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
                     <CampoDocumentoFila
                       key={item.id}
                       item={item}
+                      critico={esItemCritico(item)}
                       puedeGestionar={puedeGestionarItems}
                       deshabilitado={guardandoTodo}
                       labelValue={labelDrafts[item.id] ?? item.label}
@@ -838,21 +851,52 @@ function ControlDeCampo({ item }) {
 // se manda al backend cuando se toca "Guardar cambios" arriba, junto con
 // cualquier otro cambio pendiente. Es irreversible por API una vez
 // guardada (no hay forma de reactivar un campo dado de baja).
-function CampoDocumentoFila({ item, puedeGestionar, deshabilitado, labelValue, onLabelChange, bajaMarcada, motivoBaja, onToggleBaja, onMotivoChange }) {
+//
+// `critico` marca ítems de los que FormularioInspeccionMateriaPrima.jsx
+// depende por `code` exacto (ver codigosCriticosInspeccion.js): la baja
+// no rompe nada visible ahí, pero apaga en silencio la lógica de rechazo
+// o hace desaparecer una fila de su tabla fija. Para esos, el tacho no
+// marca la baja directo — primero pide una confirmación explícita.
+function CampoDocumentoFila({ item, puedeGestionar, deshabilitado, labelValue, onLabelChange, bajaMarcada, motivoBaja, onToggleBaja, onMotivoChange, critico }) {
+  const [confirmandoCritico, setConfirmandoCritico] = useState(false)
+
+  const manejarClickTacho = () => {
+    if (bajaMarcada) {
+      onToggleBaja(false)
+      setConfirmandoCritico(false)
+      return
+    }
+    if (critico && !confirmandoCritico) {
+      setConfirmandoCritico(true)
+      return
+    }
+    onToggleBaja(true)
+  }
+
   return (
     <>
       <DocumentRow
         labelNode={
-          puedeGestionar ? (
-            <EditableTextarea
-              value={labelValue}
-              onChange={(e) => onLabelChange(e.target.value)}
-              disabled={deshabilitado}
-              title="Editar etiqueta del campo"
-            />
-          ) : (
-            item.label
-          )
+          <>
+            {puedeGestionar ? (
+              <EditableTextarea
+                value={labelValue}
+                onChange={(e) => onLabelChange(e.target.value)}
+                disabled={deshabilitado}
+                title="Editar etiqueta del campo"
+              />
+            ) : (
+              item.label
+            )}
+            {critico && (
+              <span
+                className="ml-1.5 inline-block align-middle text-[10px] font-normal normal-case text-rojo-pasankalla/70"
+                title="Este campo tiene lógica propia en el formulario de Inspección de Materia Prima (por su código). Verifica antes de darlo de baja."
+              >
+                ⚠ usado por Inspección
+              </span>
+            )}
+          </>
         }
         code={item.code}
         required={item.isRequired}
@@ -864,13 +908,44 @@ function CampoDocumentoFila({ item, puedeGestionar, deshabilitado, labelValue, o
               title={bajaMarcada ? 'Cancelar la baja' : 'Marcar para dar de baja (se aplica al Guardar cambios)'}
               tono={bajaMarcada ? 'peligro' : 'normal'}
               disabled={deshabilitado}
-              onClick={() => onToggleBaja(!bajaMarcada)}
+              onClick={manejarClickTacho}
             >
               <Trash2 className="size-4" strokeWidth={1.75} />
             </IconButton>
           ) : null
         }
       />
+
+      {critico && confirmandoCritico && !bajaMarcada && (
+        <tr className="print:hidden">
+          <td colSpan={puedeGestionar ? 3 : 2} className="border border-marron-tierra/20 bg-[#fff5f5] px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-rojo-pasankalla">
+                "{item.label}" es un campo del que depende la lógica de la pestaña de Inspección (Calidad). Darlo de
+                baja no rompe la pantalla, pero puede apagar en silencio la pregunta de rechazo o hacer desaparecer
+                una fila de la tabla. ¿Seguro que quieres continuar?
+              </span>
+              <Button
+                variant="secondary"
+                className="px-2.5 py-1 text-xs"
+                onClick={() => setConfirmandoCritico(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="secondary"
+                className="border-rojo-pasankalla/40 px-2.5 py-1 text-xs text-rojo-pasankalla hover:bg-rojo-pasankalla/10"
+                onClick={() => {
+                  onToggleBaja(true)
+                  setConfirmandoCritico(false)
+                }}
+              >
+                Entiendo el riesgo, dar de baja
+              </Button>
+            </div>
+          </td>
+        </tr>
+      )}
 
       {bajaMarcada && (
         <tr className="print:hidden">
