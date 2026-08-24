@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { iamService } from '../../services/iamService'
+import Skeleton from '../Skeleton.jsx'
 
 // Fila expandida de un usuario en GestionUsuarios.jsx: carga sus
 // asignaciones de rol recién al expandirse (no de entrada para los N
@@ -54,7 +55,12 @@ export default function UsuarioRoles({ usuario, roles }) {
   }
 
   if (asignaciones === null) {
-    return <p className="px-4 py-3 text-sm text-marron-cafe/50">Cargando roles…</p>
+    return (
+      <div className="flex gap-2 px-4 py-3">
+        <Skeleton className="h-6 w-20 rounded-full" />
+        <Skeleton className="h-6 w-24 rounded-full" />
+      </div>
+    )
   }
 
   return (

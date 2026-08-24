@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Boxes, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { Boxes, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -7,6 +7,8 @@ import { productsService } from '../services/productsService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 // FE·M5 · Gestionar Producto (ver comrural_erp_backend/docs/products.md +
 // product.dto.ts/products.service.ts, leídos completos). El módulo más
@@ -34,7 +36,6 @@ export default function PanelProductos() {
     setDetalle: setProductoDetalle,
     errorDetalle,
     abrirDetalle: abrirDetalleHook,
-    confirmacion,
     setConfirmacion,
   } = useCatalogoMaestro(productsService, { puedeVer })
 
@@ -70,13 +71,6 @@ export default function PanelProductos() {
         </div>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -99,33 +93,50 @@ export default function PanelProductos() {
               </Button>
             </div>
           ) : productos === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-2xl bg-marron-tierra/5 p-4">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-5 w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : productos.length === 0 ? (
+            <EmptyState
+              Icon={Boxes}
+              titulo="Todavía no hay productos cargados"
+              descripcion={puedeCrear ? 'Agregá el primero para empezar.' : undefined}
+              accion={
+                puedeCrear && (
+                  <Button className="px-4 py-2 text-sm" onClick={() => setVista({ modo: 'crear', productId: null })}>
+                    + Agregar producto
+                  </Button>
+                )
+              }
+            />
           ) : (
             <>
-              <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {productosOrdenados.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => abrirDetalle(p.id)}
-                    className="flex w-full items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
+                    className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4 text-left transition-colors duration-150 hover:bg-marron-tierra/10"
                   >
-                    <span className="shrink-0 rounded-full bg-marron-tierra/10 px-2.5 py-1 font-mono text-xs font-semibold text-marron-cafe/70">
-                      {p.code}
-                    </span>
-                    <p className="font-semibold text-marron-cafe">{p.name}</p>
-                    {!p.isActive && (
-                      <span className="ml-auto shrink-0 rounded-full bg-marron-tierra/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-marron-cafe/40 uppercase">
-                        Inactivo
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 rounded-full bg-marron-tierra/10 px-2.5 py-1 font-mono text-xs font-semibold text-marron-cafe/70">
+                        {p.code}
                       </span>
-                    )}
+                      {!p.isActive && (
+                        <span className="ml-auto shrink-0 rounded-full bg-marron-tierra/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-marron-cafe/40 uppercase">
+                          Inactivo
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate font-semibold text-marron-cafe">{p.name}</p>
                   </button>
                 ))}
-                {productos.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
-                    No hay productos cargados todavía.
-                  </p>
-                )}
               </div>
 
               {errorCargarMas && (
@@ -168,7 +179,13 @@ export default function PanelProductos() {
               </Button>
             </div>
           ) : productoDetalle === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-6 w-16" />
+              </div>
+              <Skeleton className="h-7 w-52" />
+            </div>
           ) : (
             <>
               <div className="flex items-center gap-3">

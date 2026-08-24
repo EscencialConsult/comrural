@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Layers, CheckCircle2, ChevronLeft, Truck, Leaf, XCircle } from 'lucide-react'
+import { Layers, ChevronLeft, Truck, Leaf, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -13,6 +13,7 @@ import SearchInput from '../components/SearchInput.jsx'
 import Button from '../components/Button.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Badge from '../components/Badge.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
@@ -81,7 +82,6 @@ export default function PanelLotes() {
     setDetalle: setLoteDetalle,
     errorDetalle,
     abrirDetalle: abrirDetalleHook,
-    confirmacion,
     setConfirmacion,
   } = useCatalogoMaestro(lotsService, { puedeVer })
 
@@ -170,13 +170,6 @@ export default function PanelLotes() {
         </div>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -199,7 +192,14 @@ export default function PanelLotes() {
               </Button>
             </div>
           ) : lotes === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+              </div>
+              <Skeleton className="h-64" />
+            </div>
           ) : (
             <>
               <div className="grid gap-4 sm:grid-cols-3">
@@ -339,7 +339,18 @@ export default function PanelLotes() {
               </Button>
             </div>
           ) : loteDetalle === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-6 w-28" />
+              </div>
+              <Skeleton className="h-7 w-52" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+              </div>
+            </div>
           ) : (
             <>
               <div className="flex items-center gap-2">

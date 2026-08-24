@@ -11,6 +11,7 @@ import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
 import Button from '../Button.jsx'
 import Badge from '../Badge.jsx'
+import Skeleton from '../Skeleton.jsx'
 
 // Solo crea la SOLICITUD DE ANÁLISIS (POST /samples/:sampleId/analysis-requests)
 // sobre una muestra que YA existe — separado de ModalCrearMuestra.jsx a
@@ -234,7 +235,12 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
           {errorCatalogo && (
             <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar el catálogo: {errorCatalogo}</p>
           )}
-          {catalogo === null && !errorCatalogo && <p className="text-sm text-marron-cafe/50">Cargando catálogo…</p>}
+          {catalogo === null && !errorCatalogo && (
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+            </div>
+          )}
 
           {catalogo && (
             <div className="flex flex-col gap-3">

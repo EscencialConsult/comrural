@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { LayoutGrid, CheckCircle2 } from 'lucide-react'
+import { LayoutGrid } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { areasService } from '../services/areasService'
+import { toast } from '../lib/toast'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 // FE·Configuración · Gestionar Área (ver comrural_erp_backend/docs/areas.md,
 // leído completo). Catálogo mínimo y chico, mismo criterio que Países:
@@ -21,7 +23,6 @@ export default function PanelAreas() {
 
   const [areas, setAreas] = useState(null)
   const [vista, setVista] = useState({ modo: 'lista', areaId: null })
-  const [confirmacion, setConfirmacion] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
 
   const cargar = () => {
@@ -48,12 +49,6 @@ export default function PanelAreas() {
     }
   }, [puedeVer])
 
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
-
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso al catálogo de áreas." />
   }
@@ -71,13 +66,6 @@ export default function PanelAreas() {
           <p className="text-sm text-marron-cafe/60">Catálogo de áreas organizativas — referencia de Formularios.</p>
         </div>
       </header>
-
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
 
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
@@ -101,7 +89,13 @@ export default function PanelAreas() {
               </Button>
             </div>
           ) : areas === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+                  <Skeleton className="h-4 w-1/3" />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
               {areas.map((a) => (
@@ -135,7 +129,7 @@ export default function PanelAreas() {
           onGuardado={(nombre) => {
             cargar()
             setVista({ modo: 'lista', areaId: null })
-            setConfirmacion(`"${nombre}" se agregó al catálogo.`)
+            toast.success(`"${nombre}" se agregó al catálogo.`)
           }}
         />
       )}
@@ -147,7 +141,7 @@ export default function PanelAreas() {
           onGuardado={(nombre) => {
             cargar()
             setVista({ modo: 'lista', areaId: null })
-            setConfirmacion(`"${nombre}" se actualizó.`)
+            toast.success(`"${nombre}" se actualizó.`)
           }}
         />
       )}

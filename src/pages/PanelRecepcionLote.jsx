@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, CheckCircle2, FlaskConical } from 'lucide-react'
+import { ChevronLeft, FlaskConical } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import { qualityResolutionsService } from '../services/qualityResolutionsService'
+import { toast } from '../lib/toast'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
 import FormInput from '../components/FormInput.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 // Calidad y Laboratorio · Proceso 1 (recepción e inspección de materia
 // prima) — ver comrural_erp_backend/docs/raw-material-receptions.md,
@@ -48,7 +50,6 @@ export default function PanelRecepcionLote() {
 
   const [datos, setDatos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
 
   const [resolucionDetalle, setResolucionDetalle] = useState(null)
 
@@ -64,12 +65,6 @@ export default function PanelRecepcionLote() {
   useEffect(() => {
     recargar()
   }, [recargar])
-
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
 
   // `canApprove` NO viene en la vista consolidada (ReceptionSummaryView del
   // backend no lo incluye — se verificó leyendo raw-material-reception.service.ts
@@ -114,8 +109,10 @@ export default function PanelRecepcionLote() {
 
   if (!datos) {
     return (
-      <main className="w-full p-6 md:p-10">
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+      <main className="flex w-full flex-col gap-4 p-6 md:p-10">
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
       </main>
     )
   }
@@ -150,13 +147,6 @@ export default function PanelRecepcionLote() {
         </Badge>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {summary.receptionAccepted && (
         <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-semibold text-verde-bosque">
           Ciclo de recepción cerrado — el lote quedó aceptado y almacenado.
@@ -184,7 +174,7 @@ export default function PanelRecepcionLote() {
         usuario={usuario}
         onCambio={(msg) => {
           recargar()
-          setConfirmacion(msg)
+          toast.success(msg)
         }}
       />
     </main>

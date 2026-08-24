@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
 
@@ -122,7 +123,12 @@ export default function NotaRecepcionMateriaPrima({ lotId, onVolver, tituloVolve
   }
 
   if (!recepcion) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-32" />
+      </div>
+    )
   }
 
   const { lot, warehouseReceipt } = recepcion

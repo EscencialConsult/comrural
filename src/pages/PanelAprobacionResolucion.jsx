@@ -8,6 +8,8 @@ import { qualityResolutionsService } from '../services/qualityResolutionsService
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import { toast } from '../lib/toast'
 
 // FE·F2·M7 · Gestionar el visto bueno gerencial — ver comrural_erp_backend/
 // docs/quality-resolutions.md §5/§8, leído completo. Pantalla propia y
@@ -30,7 +32,6 @@ export default function PanelAprobacionResolucion() {
 
   const [datos, setDatos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
   const [resolucionDetalle, setResolucionDetalle] = useState(null)
   const { enviando, error, ejecutar } = useSolicitud()
 
@@ -74,12 +75,6 @@ export default function PanelAprobacionResolucion() {
     }
   }, [datos])
 
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
-
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso a la revisión de resoluciones de Calidad." />
   }
@@ -97,8 +92,9 @@ export default function PanelAprobacionResolucion() {
 
   if (!datos) {
     return (
-      <main className="w-full p-6 md:p-10">
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+      <main className="flex w-full flex-col gap-4 p-6 md:p-10">
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="h-40" />
       </main>
     )
   }
@@ -108,7 +104,7 @@ export default function PanelAprobacionResolucion() {
   const aprobar = async () => {
     try {
       await ejecutar(() => qualityResolutionsService.aprobar(qualityResolution.id))
-      setConfirmacion('Visto bueno registrado.')
+      toast.success('Visto bueno registrado.')
       recargar()
     } catch {
       // mensaje ya en `error`
@@ -137,10 +133,6 @@ export default function PanelAprobacionResolucion() {
           </p>
         </div>
       </header>
-
-      {confirmacion && (
-        <p className="rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">{confirmacion}</p>
-      )}
 
       {!qualityResolution ? (
         <p className="rounded-3xl bg-marron-tierra/5 p-6 text-sm text-marron-cafe/50">

@@ -7,6 +7,7 @@ import UsuarioRoles from '../components/dashboard/UsuarioRoles.jsx'
 import Switch from '../components/Switch.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 const MODULOS_NEGOCIO = Object.keys(MODULO_ICON)
 
@@ -150,7 +151,13 @@ export default function GestionUsuarios() {
           )}
 
           {usuariosFiltrados === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando usuarios…</p>
+            <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              {Array.from({ length: 5 }, (_, i) => (
+                <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
               {usuariosFiltrados.map((u) => (
@@ -229,7 +236,11 @@ export default function GestionUsuarios() {
           </div>
 
           {rolesFiltrados === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando roles…</p>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+            </div>
           ) : (
             <div className="flex flex-col gap-2 lg:max-h-[calc(100svh-14rem)] lg:overflow-y-auto lg:pr-1">
               {rolesFiltrados.map((r) => (

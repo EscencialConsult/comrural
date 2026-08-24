@@ -7,6 +7,8 @@ import Button from '../Button.jsx'
 import FormSelect from '../FormSelect.jsx'
 import FormInput from '../FormInput.jsx'
 import SearchInput from '../SearchInput.jsx'
+import Skeleton from '../Skeleton.jsx'
+import EmptyState from '../EmptyState.jsx'
 
 // Pestaña "Actividad" de Laboratorio — bitácora de solicitudes de análisis
 // (GET /analysis-requests, ya existe y ya soporta los filtros de acá:
@@ -148,11 +150,18 @@ export default function SeccionActividad() {
       {errorCarga ? (
         <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
       ) : solicitudes === null ? (
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+        <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
       ) : solicitudes.length === 0 ? (
-        <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
-          {hayFiltrosActivos ? 'Ninguna solicitud coincide con el filtro.' : 'Todavía no hay ninguna solicitud de análisis.'}
-        </p>
+        <EmptyState
+          Icon={Activity}
+          titulo={hayFiltrosActivos ? 'Ninguna solicitud coincide con el filtro' : 'Todavía no hay ninguna solicitud de análisis'}
+        />
       ) : (
         <>
           <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">

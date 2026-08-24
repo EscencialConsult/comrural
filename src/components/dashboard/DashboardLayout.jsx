@@ -5,6 +5,7 @@ import { climaService } from '../../services/climaService'
 import DashboardSidebar from './DashboardSidebar'
 import DashboardHeader from './DashboardHeader'
 import GrupoTabs from './GrupoTabs'
+import Toaster from '../Toaster.jsx'
 
 // Armazón único de sidebar + header para toda la zona autenticada
 // (/panel y sus subpáginas). Antes cada página (Panel.jsx, PanelModulo.jsx)
@@ -56,6 +57,7 @@ export default function DashboardLayout() {
     // debajo de la altura de su propio contenido, así que ignoraría el
     // overflow y volvería a estirar el contenedor padre.
     <div className="flex h-svh overflow-hidden bg-crema-quinua">
+      <Toaster />
       <DashboardSidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto print:overflow-visible">

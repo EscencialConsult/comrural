@@ -5,6 +5,7 @@ import { lotsService } from '../services/lotsService'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 // Almacén — Inicio del área: solo analytics, sin tabla ni acciones. La
 // tabla de trabajo del día a día (lotes pendientes/en curso + el
@@ -106,7 +107,12 @@ export default function PanelAlmacen() {
       )}
 
       {!lotes ? (
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-4">

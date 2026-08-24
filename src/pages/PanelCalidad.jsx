@@ -9,6 +9,9 @@ import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import EmptyState from '../components/EmptyState.jsx'
+import SearchInput from '../components/SearchInput.jsx'
 
 // Calidad — Inicio del área: solo analytics, sin tabla ni acciones. La
 // tabla de trabajo del día a día (lotes + su formulario de inspección) es
@@ -118,7 +121,14 @@ function InicioCalidad() {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
   }
   if (!lotes || !stats) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+      </div>
+    )
   }
 
   return (
@@ -144,6 +154,7 @@ function ColaPendientesVistoBueno() {
   const navigate = useNavigate()
   const [resoluciones, setResoluciones] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
+  const [busqueda, setBusqueda] = useState('')
 
   useEffect(() => {
     let cancelado = false
@@ -160,8 +171,29 @@ function ColaPendientesVistoBueno() {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
   }
   if (!resoluciones) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-6 w-52" />
+        <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
+
+  // Sin endpoint de búsqueda por texto (GET /quality-resolutions no lo
+  // tiene) — se filtra en el cliente sobre los 50 ya cargados, mismo
+  // criterio que BuscadorPersona/BuscadorOrganizacion en PanelProveedores.jsx.
+  const q = busqueda.trim().toLowerCase()
+  const filtradas = q
+    ? resoluciones.filter((r) =>
+        `${r.lot.code} ${r.product.name} ${r.supplier?.name ?? ''}`.toLowerCase().includes(q),
+      )
+    : resoluciones
 
   return (
     <section className="flex flex-col gap-3">
@@ -170,29 +202,43 @@ function ColaPendientesVistoBueno() {
         Tu rol no tiene acceso al listado completo de lotes — esta cola sale de tus resoluciones de Calidad
         pendientes de aprobación.
       </p>
-      <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-        {resoluciones.map((r) => (
-          <div
-            key={r.id}
-            className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
-          >
-            <span className="font-mono text-xs font-semibold text-marron-cafe/70">{r.lot.code}</span>
-            <span className="text-sm text-marron-cafe">{r.product.name}</span>
-            <span className="text-sm text-marron-cafe/60">{r.supplier?.name ?? '—'}</span>
-            <Badge tono={r.decision === 'APROBADA' ? 'positivo' : 'negativo'}>{r.decision}</Badge>
-            <Button
-              variant="secondary"
-              className="ml-auto px-3 py-1.5 text-xs"
-              onClick={() => navigate(`/panel/calidad/lotes/${r.lot.id}/aprobacion`)}
+
+      {resoluciones.length > 0 && (
+        <SearchInput
+          label="Buscar"
+          placeholder="Lote, producto o proveedor…"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+      )}
+
+      {resoluciones.length === 0 ? (
+        <EmptyState Icon={ShieldCheck} titulo="No hay resoluciones pendientes de tu visto bueno" />
+      ) : (
+        <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+          {filtradas.map((r) => (
+            <div
+              key={r.id}
+              className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
             >
-              Revisar
-            </Button>
-          </div>
-        ))}
-        {resoluciones.length === 0 && (
-          <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">No hay resoluciones pendientes de tu visto bueno.</p>
-        )}
-      </div>
+              <span className="font-mono text-xs font-semibold text-marron-cafe/70">{r.lot.code}</span>
+              <span className="text-sm text-marron-cafe">{r.product.name}</span>
+              <span className="text-sm text-marron-cafe/60">{r.supplier?.name ?? '—'}</span>
+              <Badge tono={r.decision === 'APROBADA' ? 'positivo' : 'negativo'}>{r.decision}</Badge>
+              <Button
+                variant="secondary"
+                className="ml-auto px-3 py-1.5 text-xs"
+                onClick={() => navigate(`/panel/calidad/lotes/${r.lot.id}/aprobacion`)}
+              >
+                Revisar
+              </Button>
+            </div>
+          ))}
+          {filtradas.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">Ninguna coincide con la búsqueda.</p>
+          )}
+        </div>
+      )}
     </section>
   )
 }

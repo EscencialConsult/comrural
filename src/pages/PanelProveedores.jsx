@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Handshake, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { Handshake, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -12,6 +12,8 @@ import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 // FE·M4 · Gestionar Proveedor (ver comrural_erp_backend/docs/suppliers.md +
 // suppliers.dto.ts/suppliers.service.ts, leídos completos antes de armar
@@ -48,7 +50,6 @@ export default function PanelProveedores() {
     setDetalle: setProveedorDetalle,
     errorDetalle,
     abrirDetalle: abrirDetalleHook,
-    confirmacion,
     setConfirmacion,
   } = useCatalogoMaestro(suppliersService, { puedeVer })
 
@@ -73,13 +74,6 @@ export default function PanelProveedores() {
         </div>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -102,35 +96,54 @@ export default function PanelProveedores() {
               </Button>
             </div>
           ) : proveedores === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-2xl bg-marron-tierra/5 p-4">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : proveedores.length === 0 ? (
+            <EmptyState
+              Icon={Handshake}
+              titulo="Todavía no hay proveedores cargados"
+              descripcion={puedeCrear ? 'Agregá el primero para empezar.' : undefined}
+              accion={
+                puedeCrear && (
+                  <Button className="px-4 py-2 text-sm" onClick={() => setVista({ modo: 'crear', supplierId: null })}>
+                    + Agregar proveedor
+                  </Button>
+                )
+              }
+            />
           ) : (
             <>
-              <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              {/* Grilla responsiva (1/2/3 columnas) en vez de una lista de
+                  una sola fila — en mobile se ve como tarjetas apiladas, en
+                  desktop aprovecha el ancho en vez de una columna larga. */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {proveedores.map((s) => (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => abrirDetalle(s.id)}
-                    className="flex w-full items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
+                    className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4 text-left transition-colors duration-150 hover:bg-marron-tierra/10"
                   >
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${
+                      className={`w-fit shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${
                         s.isActive ? 'bg-verde-lima/15 text-verde-bosque' : 'bg-marron-tierra/10 text-marron-cafe/40'
                       }`}
                     >
                       {s.isActive ? 'Activo' : 'Inactivo'}
                     </span>
-                    <div>
-                      <p className="font-semibold text-marron-cafe">{nombreProveedor(s)}</p>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-marron-cafe">{nombreProveedor(s)}</p>
                       <p className="text-xs text-marron-cafe/50">{TIPO_LABEL[s.type] ?? s.type}</p>
                     </div>
                   </button>
                 ))}
-                {proveedores.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
-                    No hay proveedores cargados todavía.
-                  </p>
-                )}
               </div>
 
               {errorCargarMas && (
@@ -173,7 +186,17 @@ export default function PanelProveedores() {
               </Button>
             </div>
           ) : proveedorDetalle === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-16" />
+                <Skeleton className="h-6 w-24" />
+              </div>
+              <Skeleton className="h-7 w-52" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+              </div>
+            </div>
           ) : (
             <>
               <div className="flex items-center gap-2">
@@ -578,7 +601,12 @@ function BuscadorPersona({ seleccionadoId, onSeleccionar }) {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar el listado de personas: {error}</p>
   }
   if (personas === null) {
-    return <p className="text-sm text-marron-cafe/50">Cargando personas…</p>
+    return (
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-10" />
+        <Skeleton className="h-32" />
+      </div>
+    )
   }
 
   const filtradas = personas.filter((p) =>
@@ -646,7 +674,12 @@ function BuscadorOrganizacion({ seleccionadoId, onSeleccionar }) {
     )
   }
   if (organizaciones === null) {
-    return <p className="text-sm text-marron-cafe/50">Cargando organizaciones…</p>
+    return (
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-10" />
+        <Skeleton className="h-32" />
+      </div>
+    )
   }
 
   const filtradas = organizaciones.filter((o) =>

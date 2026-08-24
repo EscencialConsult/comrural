@@ -9,6 +9,7 @@ import StatCard from '../components/dashboard/StatCard.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 const nombreProveedor = (p) =>
   p.person ? `${p.person.firstNames} ${p.person.lastNames}` : p.organization?.tradeName || p.organization?.legalName || '—'
@@ -259,7 +260,7 @@ export default function PanelCompras() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold text-marron-cafe">Programas emitidos</h2>
         {lotesMateriaPrima === null ? (
-          <p className="text-sm text-marron-cafe/50">Cargando…</p>
+          <Skeleton className="h-40" />
         ) : (
           <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
             <table className="w-full min-w-[560px] text-left text-sm">

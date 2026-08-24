@@ -25,7 +25,7 @@ export default function Button({
   const rippleId = useRef(0)
 
   const base =
-    'relative overflow-hidden inline-flex items-center justify-center rounded-full px-6 py-3 font-medium ' +
+    'relative overflow-hidden inline-flex items-center justify-center rounded-full px-6 py-3 font-medium whitespace-nowrap ' +
     'transition-all duration-300 active:scale-95 active:duration-100 select-none'
 
   const variants = {

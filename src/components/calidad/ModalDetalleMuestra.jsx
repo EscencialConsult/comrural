@@ -17,6 +17,7 @@ import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import PillTabs from '../dashboard/PillTabs.jsx'
 import ScrollHorizontal from '../ScrollHorizontal.jsx'
+import Skeleton from '../Skeleton.jsx'
 import SeccionInformeMuestra from './SeccionInformeMuestra.jsx'
 import SeccionTrazabilidadMuestra from './SeccionTrazabilidadMuestra.jsx'
 
@@ -200,7 +201,15 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
           declaran a propósito (ScrollHorizontal.jsx: pestañas de arriba y
           el stepper de "Estado del proceso"). */}
       {!detalle ? (
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+        <div className="flex flex-col gap-6">
+          <Skeleton className="h-20" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+          </div>
+          <Skeleton className="h-24" />
+        </div>
       ) : (
         <div className="flex flex-col gap-6 overflow-x-hidden">
           <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl bg-verde-hoja/5 p-4">
@@ -450,7 +459,7 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-marron-cafe/50">Cargando…</p>
+                <Skeleton className="h-16" />
               )}
             </div>
           )}

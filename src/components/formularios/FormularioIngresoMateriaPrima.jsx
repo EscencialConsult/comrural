@@ -7,6 +7,7 @@ import { warehouseReceiptsService } from '../../services/warehouseReceiptsServic
 import { lotsService } from '../../services/lotsService'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
 import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
@@ -246,7 +247,13 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   }
 
   if (!recepcion) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+      </div>
+    )
   }
 
   const { lot, summary, warehouseReceipt } = recepcion

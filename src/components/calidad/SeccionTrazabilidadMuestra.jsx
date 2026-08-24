@@ -3,6 +3,7 @@ import { ShieldAlert } from 'lucide-react'
 import { auditLogService } from '../../services/auditLogService'
 import { ORDEN_CATEGORIAS, CATEGORIA_LABEL } from '../../config/analisisCategorias'
 import Badge from '../Badge.jsx'
+import Skeleton from '../Skeleton.jsx'
 
 const formatearFecha = (iso) => new Date(iso).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -120,7 +121,16 @@ export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, 
   }, [detalle.id, solicitudDetalle])
 
   if (entradasAudit === null) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="flex gap-3">
+            <Skeleton className="size-3 shrink-0 rounded-full" />
+            <Skeleton className="h-4 flex-1" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
   // Con audit_log disponible, esas entradas ya cubren "muestra creada"/

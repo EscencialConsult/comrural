@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ClipboardList, CheckCircle2, ChevronLeft, Plus, Trash2, Pencil, Save, TriangleAlert } from 'lucide-react'
+import { ClipboardList, ChevronLeft, Plus, Trash2, Pencil, Save, TriangleAlert } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -11,6 +11,7 @@ import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 import { DocumentSheet, DocumentFooter } from '../components/documento/DocumentSheet.jsx'
 import { DocumentHeader } from '../components/documento/DocumentHeader.jsx'
 import { EditableTitleInput, EditableSelect, EditableCheckbox, EditableTextarea } from '../components/documento/EditableFields.jsx'
@@ -70,7 +71,6 @@ export default function PanelFormularios() {
     setDetalle: setFormularioDetalle,
     errorDetalle,
     abrirDetalle: abrirDetalleHook,
-    confirmacion,
     setConfirmacion,
   } = useCatalogoMaestro(formsService, { puedeVer })
 
@@ -116,13 +116,6 @@ export default function PanelFormularios() {
         </div>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -145,7 +138,13 @@ export default function PanelFormularios() {
               </Button>
             </div>
           ) : formularios === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
@@ -216,7 +215,10 @@ export default function PanelFormularios() {
               </Button>
             </div>
           ) : formularioDetalle === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-7 w-52" />
+              <Skeleton className="h-40" />
+            </div>
           ) : (
             <FormularioDocumento
               form={formularioDetalle}
@@ -594,7 +596,11 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
               </Button>
             </div>
           ) : items === null ? (
-            <p className="mt-4 text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="mt-4 flex flex-col gap-2">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+            </div>
           ) : itemsActivos.length === 0 && agregandoEnSeccion !== '__nueva__' ? (
             <p className="mt-4 text-sm text-marron-cafe/50">Este formulario todavía no tiene campos.</p>
           ) : (

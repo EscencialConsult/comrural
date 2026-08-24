@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Building2, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { Building2, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -10,6 +10,8 @@ import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 // FE·M3 · Gestionar Organización (ver comrural_erp_backend/docs/organizations.md).
 // A diferencia de Países: catálogo grande con paginación keyset real (usa
@@ -47,7 +49,6 @@ export default function PanelOrganizaciones() {
     setDetalle: setOrgDetalle,
     errorDetalle,
     abrirDetalle: abrirDetalleHook,
-    confirmacion,
     setConfirmacion,
   } = useCatalogoMaestro(organizationsService, { puedeVer })
 
@@ -101,13 +102,6 @@ export default function PanelOrganizaciones() {
         </div>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -135,31 +129,47 @@ export default function PanelOrganizaciones() {
               </Button>
             </div>
           ) : organizaciones === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-2xl bg-marron-tierra/5 p-4">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : organizaciones.length === 0 ? (
+            <EmptyState
+              Icon={Building2}
+              titulo="Todavía no hay organizaciones cargadas"
+              descripcion={puedeCrear ? 'Agregá la primera para empezar.' : undefined}
+              accion={
+                puedeCrear && (
+                  <Button
+                    className="px-4 py-2 text-sm"
+                    onClick={() => setVista({ modo: 'crear', organizationId: null })}
+                  >
+                    + Agregar organización
+                  </Button>
+                )
+              }
+            />
           ) : (
             <>
-              <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {organizaciones.map((o) => (
                   <button
                     key={o.id}
                     type="button"
                     onClick={() => abrirDetalle(o.id)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
+                    className="flex flex-col gap-1 rounded-2xl bg-marron-tierra/5 p-4 text-left transition-colors duration-150 hover:bg-marron-tierra/10"
                   >
-                    <div>
-                      <p className="font-semibold text-marron-cafe">{o.legalName}</p>
-                      <p className="text-xs text-marron-cafe/50">
-                        {o.tradeName ? `${o.tradeName} · ` : ''}
-                        {nombrePais(o.countryId)}
-                      </p>
-                    </div>
+                    <p className="truncate font-semibold text-marron-cafe">{o.legalName}</p>
+                    <p className="truncate text-xs text-marron-cafe/50">
+                      {o.tradeName ? `${o.tradeName} · ` : ''}
+                      {nombrePais(o.countryId)}
+                    </p>
                   </button>
                 ))}
-                {organizaciones.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
-                    No hay organizaciones cargadas todavía.
-                  </p>
-                )}
               </div>
 
               {errorCargarMas && (
@@ -206,7 +216,15 @@ export default function PanelOrganizaciones() {
               </Button>
             </div>
           ) : orgDetalle === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <Skeleton className="h-7 w-52" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+              </div>
+            </div>
           ) : (
             <>
               <div>

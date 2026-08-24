@@ -9,6 +9,7 @@ import { suppliersService } from '../../services/suppliersService'
 import { lotsService } from '../../services/lotsService'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
 import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
 import Switch from '../Switch.jsx'
@@ -445,7 +446,13 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   }
 
   if (!recepcion) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+      </div>
+    )
   }
 
   if (!detalle) {
@@ -493,7 +500,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       )
     }
 
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-40" />
+      </div>
+    )
   }
 
   const { form, inspection } = detalle

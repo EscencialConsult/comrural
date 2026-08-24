@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { IdCard, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { IdCard, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
@@ -8,6 +8,8 @@ import { telefonoValido, ciValido, normalizarCi } from '../config/validaciones'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 // FE·M2 · Gestionar Persona (ver comrural_erp_backend/docs/people.md). El
 // listado paginado + detalle con fetch propio + guarda contra condición de
@@ -36,7 +38,6 @@ export default function PanelPersonas() {
     setDetalle: setPersonaDetalle,
     errorDetalle,
     abrirDetalle: abrirDetalleHook,
-    confirmacion,
     setConfirmacion,
   } = useCatalogoMaestro(peopleService, { puedeVer })
 
@@ -63,13 +64,6 @@ export default function PanelPersonas() {
         </div>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {vista.modo === 'lista' && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -92,32 +86,45 @@ export default function PanelPersonas() {
               </Button>
             </div>
           ) : personas === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-2xl bg-marron-tierra/5 p-4">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-5 w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : personas.length === 0 ? (
+            <EmptyState
+              Icon={IdCard}
+              titulo="Todavía no hay personas cargadas"
+              descripcion={puedeCrear ? 'Agregá la primera para empezar.' : undefined}
+              accion={
+                puedeCrear && (
+                  <Button className="px-4 py-2 text-sm" onClick={() => setVista({ modo: 'crear', personId: null })}>
+                    + Agregar persona
+                  </Button>
+                )
+              }
+            />
           ) : (
             <>
-              <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {personas.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => abrirDetalle(p.id)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
+                    className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4 text-left transition-colors duration-150 hover:bg-marron-tierra/10"
                   >
-                    <div className="flex items-center gap-3">
-                      {p.identityDocument && (
-                        <span className="rounded-full bg-marron-tierra/10 px-2.5 py-1 font-mono text-xs font-semibold text-marron-cafe/70">
-                          {p.identityDocument}
-                        </span>
-                      )}
-                      <p className="font-semibold text-marron-cafe">{nombreCompleto(p)}</p>
-                    </div>
+                    {p.identityDocument && (
+                      <span className="w-fit rounded-full bg-marron-tierra/10 px-2.5 py-1 font-mono text-xs font-semibold text-marron-cafe/70">
+                        {p.identityDocument}
+                      </span>
+                    )}
+                    <p className="truncate font-semibold text-marron-cafe">{nombreCompleto(p)}</p>
                   </button>
                 ))}
-                {personas.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
-                    No hay personas cargadas todavía.
-                  </p>
-                )}
               </div>
 
               {errorCargarMas && (
@@ -160,7 +167,14 @@ export default function PanelPersonas() {
               </Button>
             </div>
           ) : personaDetalle === null ? (
-            <p className="text-sm text-marron-cafe/50">Cargando…</p>
+            <div className="flex flex-col gap-4">
+              <Skeleton className="h-7 w-52" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+              </div>
+            </div>
           ) : (
             <>
               <h2 className="text-xl font-bold text-marron-cafe">{nombreCompleto(personaDetalle)}</h2>

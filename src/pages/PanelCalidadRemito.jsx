@@ -13,6 +13,7 @@ import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import NotaRecepcionMateriaPrima from '../components/formularios/NotaRecepcionMateriaPrima.jsx'
 import Paginacion from '../components/Paginacion.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 // Formulario 3 (Nota de Recepción, P-ADM-03/R-11) — a propósito FUERA del
 // molde de Inspección/Recepción (sin desplegable en el sidebar, ver
@@ -165,7 +166,10 @@ export default function PanelCalidadRemito() {
       {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
 
       {!lotes ? (
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-64" />
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-3 lg:grid-cols-6">

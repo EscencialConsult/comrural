@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, MoreVertical } from 'lucide-react'
+import { Plus, MoreVertical, FlaskConical } from 'lucide-react'
 import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
 import { samplesService } from '../../services/samplesService'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
+import EmptyState from '../EmptyState.jsx'
 import ModalCrearMuestra from './ModalCrearMuestra.jsx'
 import ModalSolicitarAnalisis from './ModalSolicitarAnalisis.jsx'
 import ModalDetalleMuestra from './ModalDetalleMuestra.jsx'
@@ -157,11 +159,12 @@ export default function SeccionMuestras() {
       </div>
 
       {lotes === null ? (
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+        <div className="flex flex-col gap-2 rounded-3xl bg-marron-tierra/5 p-4">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-16" />
+        </div>
       ) : lotesConMuestras.length === 0 ? (
-        <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
-          Todavía no se creó ninguna muestra.
-        </p>
+        <EmptyState Icon={FlaskConical} titulo="Todavía no se creó ninguna muestra" />
       ) : (
         lotesConMuestras.map(({ lote, muestras }) => (
           <div key={lote.id} className="flex flex-col gap-2 rounded-3xl bg-marron-tierra/5 p-4">

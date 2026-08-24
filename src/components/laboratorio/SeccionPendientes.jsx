@@ -6,6 +6,8 @@ import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import ModalRecibirMuestra from '../calidad/ModalRecibirMuestra.jsx'
 import FormularioIniciarAnalisis from './FormularioIniciarAnalisis.jsx'
+import Skeleton from '../Skeleton.jsx'
+import EmptyState from '../EmptyState.jsx'
 
 // Pestaña "Pendientes" de Laboratorio — Calidad solicita el análisis
 // (SeccionMuestras.jsx, en el sub-item Muestras de Calidad), la solicitud
@@ -110,7 +112,15 @@ export default function SeccionPendientes() {
   }
 
   if (solicitudes === null) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -128,9 +138,7 @@ export default function SeccionPendientes() {
       )}
 
       {solicitudes.length === 0 ? (
-        <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
-          Todavía no hay ninguna solicitud de análisis.
-        </p>
+        <EmptyState Icon={FlaskConical} titulo="Todavía no hay ninguna solicitud de análisis" />
       ) : (
         <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
           {solicitudes.map((s) => (
