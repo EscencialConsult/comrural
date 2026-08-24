@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ClipboardList, X, Circle, Pencil, CheckCircle2, XCircle, Play, Signature, Receipt } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ClipboardList, X, Circle, Pencil, CheckCircle2, XCircle, Play, Signature, Receipt, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
@@ -154,7 +155,9 @@ function etapasFormularioDe(resumen, detalleInsp) {
 
 export default function PanelCalidadRecepcion() {
   const { permisos } = useAuth()
+  const navigate = useNavigate()
   const puedeVer = permisos.has('lots:read')
+  const puedeAprobar = permisos.has('quality-resolutions:approve')
 
   const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
@@ -447,19 +450,27 @@ export default function PanelCalidadRecepcion() {
           </div>
 
           <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
-            <table className="w-full min-w-[960px] table-fixed text-left text-sm">
+            <table className="w-full min-w-[1050px] table-fixed text-left text-sm">
               {/* Anchos fijos a propósito. Fecha de recepción subió un poco
                   para que el encabezado no parta en dos líneas; Estado
                   bajó otro poco para compensar, ahora que el símbolo de
-                  arriba es solo un ícono (sin texto) le alcanza con menos. */}
+                  arriba es solo un ícono (sin texto) le alcanza con menos.
+                  Formulario subió de 20% a 27% (y el resto bajó un poco)
+                  porque ahora puede llevar hasta 3 botones (Iniciar/Continuar/
+                  Ver ~128px + Nota de recepción 36px + Aprobar 36px + 2 gaps
+                  de 8px = 216px de contenido). Con 24% + min-w 1000px el
+                  ancho de CONTENIDO real de la celda (descontando el padding
+                  px-4 de cada lado, 32px) quedaba en 208px — 8px corto,
+                  todavía se superponía con "Estado". Con 27% + min-w 1050px
+                  quedan ~251px de contenido, con margen de sobra. */}
               <colgroup>
                 <col className="w-[7%]" />
-                <col className="w-[20%]" />
-                <col className="w-[16%]" />
+                <col className="w-[17%]" />
+                <col className="w-[13%]" />
                 <col className="w-[9%]" />
-                <col className="w-[9%]" />
+                <col className="w-[8%]" />
                 <col className="w-[19%]" />
-                <col className="w-[20%]" />
+                <col className="w-[27%]" />
               </colgroup>
               <thead>
                 {/* Encabezado con más peso — pedido explícito: "pasa muy
@@ -597,7 +608,15 @@ export default function PanelCalidadRecepcion() {
                             directo, inline — sin variant primary/secondary
                             acá: el color YA dice el estado, no hace falta
                             además rellenar el fondo. */}
-                        <div className="flex items-center justify-center gap-2">
+                        {/* flex-nowrap a propósito: los 3 botones siempre
+                            quedan en una sola línea, a la misma altura — la
+                            tabla entera ya scrollea horizontal
+                            (overflow-x-auto en el contenedor) para pantallas
+                            angostas, así que no hace falta que esta celda
+                            parta en dos renglones. La columna se ensanchó
+                            (24% + min-w 1000px) para que entren sin
+                            superponerse. */}
+                        <div className="flex flex-nowrap items-center justify-center gap-2">
                           <Button
                             variant="secondary"
                             className={`w-32 justify-center gap-1.5 border-2 px-3 py-1.5 text-xs whitespace-nowrap ${
@@ -633,6 +652,28 @@ export default function PanelCalidadRecepcion() {
                           >
                             <Receipt className="size-4" strokeWidth={2} />
                           </button>
+                          {/* Visto bueno gerencial (POST /quality-resolutions/:id/approve)
+                              — hasta ahora no había ningún clic que llevara a
+                              PanelAprobacionResolucion.jsx desde una pantalla
+                              con lots:read (la cola vieja de PanelCalidad.jsx
+                              es solo para el camino sin lots:read). Solo
+                              aparece cuando de verdad hay algo que aprobar
+                              (`qualityReviewStatus === 'PENDIENTE'`, o sea ya
+                              existe una resolución) y el actor tiene el
+                              permiso técnico — si no puede aprobar por ser
+                              quien resolvió, la pantalla de destino ya lo
+                              explica, no hace falta duplicar esa lógica acá. */}
+                          {resumen && resumen !== 'error' && resumen.summary.qualityReviewStatus === 'PENDIENTE' && puedeAprobar && (
+                            <button
+                              type="button"
+                              title="Dar el visto bueno (visto bueno gerencial)"
+                              aria-label="Dar el visto bueno"
+                              onClick={() => navigate(`/panel/calidad/lotes/${l.id}/aprobacion`)}
+                              className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-oro-quinua text-oro-quinua transition-colors duration-150 hover:bg-oro-quinua/10"
+                            >
+                              <ShieldCheck className="size-4" strokeWidth={2} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
