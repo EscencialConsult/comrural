@@ -9,17 +9,18 @@ import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
 import Skeleton from '../components/Skeleton.jsx'
+import FormularioEmitirResolucion from '../components/formularios/FormularioEmitirResolucion.jsx'
 import { toast } from '../lib/toast'
 
-// FE·F2·M7 · Gestionar el visto bueno gerencial — ver comrural_erp_backend/
-// docs/quality-resolutions.md §5/§8, leído completo. Pantalla propia y
-// deliberadamente angosta: a diferencia de PanelRecepcionLote.jsx (que
-// también muestra la resolución, pero mezclado con las acciones de la
-// analista — emitir, corregir), acá el gerente SOLO ve lo que necesita para
-// decidir y el botón de aprobar. No hay edición de decisión ni de notas acá
-// — eso es tarea de la analista, en la otra pantalla. El ticket lo pide
-// explícito: "La pantalla es de solo lectura: no edita la decisión ni
-// registra observaciones."
+// FE·F2·M7 · Gestionar la Resolución de Calidad y su visto bueno gerencial —
+// ver comrural_erp_backend/docs/quality-resolutions.md §5/§8, leído
+// completo. Pantalla propia: a diferencia de PanelRecepcionLote.jsx (que
+// también muestra esto, pero mezclado con recepción/inspección de Almacén),
+// acá Calidad tiene los dos pasos del ciclo — emitir la resolución (paso 1,
+// si todavía no existe) y dar el visto bueno gerencial (paso 2) — sin
+// depender de pasar por Compras → Lotes. La corrección de una resolución ya
+// emitida (PATCH) sigue siendo tarea de PanelRecepcionLote.jsx, no se
+// duplica acá.
 const TONO_DECISION = { APROBADA: 'positivo', RECHAZADA: 'negativo' }
 const TONO_REVIEW = { PENDIENTE: 'alerta', APROBADO: 'positivo' }
 
@@ -29,6 +30,7 @@ export default function PanelAprobacionResolucion() {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('raw-material-receptions:read')
   const puedeAprobar = permisos.has('quality-resolutions:approve')
+  const puedeEmitir = permisos.has('quality-resolutions:create')
 
   const [datos, setDatos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -99,7 +101,7 @@ export default function PanelAprobacionResolucion() {
     )
   }
 
-  const { lot, summary, qualityResolution } = datos
+  const { lot, summary, inspection, qualityResolution } = datos
 
   const aprobar = async () => {
     try {
@@ -135,9 +137,26 @@ export default function PanelAprobacionResolucion() {
       </header>
 
       {!qualityResolution ? (
-        <p className="rounded-3xl bg-marron-tierra/5 p-6 text-sm text-marron-cafe/50">
-          Este lote todavía no tiene una resolución de Calidad emitida.
-        </p>
+        inspection?.status !== 'FINALIZADA' ? (
+          <p className="rounded-3xl bg-marron-tierra/5 p-6 text-sm text-marron-cafe/50">
+            Se habilita cuando la inspección esté finalizada.
+          </p>
+        ) : puedeEmitir ? (
+          <section className="flex flex-col gap-4 rounded-3xl bg-marron-tierra/5 p-6">
+            <h2 className="text-lg font-bold text-marron-cafe">Emitir resolución de Calidad</h2>
+            <FormularioEmitirResolucion
+              inspectionId={inspection.id}
+              onEmitida={() => {
+                toast.success('Resolución emitida.')
+                recargar()
+              }}
+            />
+          </section>
+        ) : (
+          <p className="rounded-3xl bg-marron-tierra/5 p-6 text-sm text-marron-cafe/50">
+            Este lote todavía no tiene una resolución de Calidad emitida.
+          </p>
+        )
       ) : (
         <section className="flex flex-col gap-4 rounded-3xl bg-marron-tierra/5 p-6">
           <div className="flex items-center gap-2">

@@ -18,6 +18,7 @@ import Paginacion from '../components/Paginacion.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 import FormularioInspeccionMateriaPrima from '../components/formularios/FormularioInspeccionMateriaPrima.jsx'
 import NotaRecepcionMateriaPrima from '../components/formularios/NotaRecepcionMateriaPrima.jsx'
+import { compararPorFechaRecepcion } from '../utils/fecha'
 
 // Sub-item de "Calidad y Laboratorio" en el sidebar (config/gruposMaestros.js,
 // mismo mecanismo que Compras→Personas/Organizaciones/...). Antes esta tabla
@@ -72,6 +73,22 @@ function etapaDe(resumen) {
   return qualityDecision === 'RECHAZADA'
     ? { texto: 'Rechazado', tono: 'negativo', Icon: XCircle }
     : { texto: 'Aprobado', tono: 'positivo', Icon: CheckCircle2 }
+}
+
+// Estado del ícono de "visto bueno" en la columna Formulario — las mismas
+// dos etapas que ya vive el ciclo de Resolución de Calidad
+// (PanelAprobacionResolucion.jsx/PanelRecepcionLote.jsx), resumidas para un
+// solo símbolo: gris = inspección finalizada pero sin resolución emitida
+// todavía, dorado = resolución emitida y pendiente del visto bueno
+// gerencial, verde = visto bueno ya dado. Antes de que la inspección esté
+// FINALIZADA no hay nada que mostrar acá — sigue devolviendo null.
+function estadoVistoBuenoDe(resumen) {
+  if (!resumen || resumen === 'error') return null
+  const { inspectionStatus, qualityReviewStatus } = resumen.summary
+  if (inspectionStatus !== 'FINALIZADA') return null
+  if (qualityReviewStatus === 'APROBADO') return 'aprobado'
+  if (qualityReviewStatus === 'PENDIENTE') return 'pendiente'
+  return 'sin_resolucion'
 }
 
 // Las 6 casillas de "en qué está el formulario" — pedido explícito de
@@ -159,6 +176,7 @@ export default function PanelCalidadRecepcion() {
   const navigate = useNavigate()
   const puedeVer = permisos.has('lots:read')
   const puedeAprobar = permisos.has('quality-resolutions:approve')
+  const puedeEmitir = permisos.has('quality-resolutions:create')
 
   const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
@@ -228,16 +246,18 @@ export default function PanelCalidadRecepcion() {
   const filtrados = useMemo(() => {
     if (!lotes) return []
     const q = busqueda.trim().toLowerCase()
-    return lotes.filter((l) => {
-      if (estado && l.currentStatus !== estado) return false
-      if (productoId && l.productId !== productoId) return false
-      if (proveedorId && l.supplierId !== proveedorId) return false
-      // scheduledReceptionAt es el único dato de fecha que trae un lote —
-      // se compara solo la parte de fecha (no la hora), en hora local.
-      if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
-      if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
-      return true
-    })
+    return lotes
+      .filter((l) => {
+        if (estado && l.currentStatus !== estado) return false
+        if (productoId && l.productId !== productoId) return false
+        if (proveedorId && l.supplierId !== proveedorId) return false
+        // scheduledReceptionAt es el único dato de fecha que trae un lote —
+        // se compara solo la parte de fecha (no la hora), en hora local.
+        if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
+        if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
+        return true
+      })
+      .sort(compararPorFechaRecepcion)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotes, busqueda, estado, productoId, proveedorId, fecha, productos])
 
@@ -333,12 +353,7 @@ export default function PanelCalidadRecepcion() {
   if (lotAbierto) {
     return (
       <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-        <FormularioInspeccionMateriaPrima
-          lotId={lotAbierto}
-          onCambiarLote={(id) => setLotAbierto(id)}
-          onVolver={volverALista}
-          tituloVolver="Volver al listado"
-        />
+        <FormularioInspeccionMateriaPrima lotId={lotAbierto} onVolver={volverALista} tituloVolver="Volver al listado" />
       </main>
     )
   }
@@ -656,28 +671,45 @@ export default function PanelCalidadRecepcion() {
                           >
                             <Receipt className="size-4" strokeWidth={2} />
                           </button>
-                          {/* Visto bueno gerencial (POST /quality-resolutions/:id/approve)
-                              — hasta ahora no había ningún clic que llevara a
-                              PanelAprobacionResolucion.jsx desde una pantalla
-                              con lots:read (la cola vieja de PanelCalidad.jsx
-                              es solo para el camino sin lots:read). Solo
-                              aparece cuando de verdad hay algo que aprobar
-                              (`qualityReviewStatus === 'PENDIENTE'`, o sea ya
-                              existe una resolución) y el actor tiene el
-                              permiso técnico — si no puede aprobar por ser
-                              quien resolvió, la pantalla de destino ya lo
+                          {/* Ciclo de Resolución de Calidad (PanelAprobacionResolucion.jsx)
+                              — antes esto solo se podía hacer desde Compras →
+                              Lotes → PanelRecepcionLote.jsx; ahora el mismo
+                              ícono lleva a las dos etapas sin salir de
+                              Calidad. Un solo símbolo, tres estados por
+                              color: gris (sin resolución emitida todavía) →
+                              dorado (emitida, falta el visto bueno gerencial)
+                              → verde (visto bueno ya dado). Solo se muestra a
+                              quien podría hacer algo en algún momento del
+                              ciclo (`puedeEmitir`/`puedeAprobar`) — si en el
+                              momento puntual no le toca a esta persona (ej.
+                              quien emitió no puede después aprobar su propia
+                              resolución), la pantalla de destino ya lo
                               explica, no hace falta duplicar esa lógica acá. */}
-                          {resumen && resumen !== 'error' && resumen.summary.qualityReviewStatus === 'PENDIENTE' && puedeAprobar && (
-                            <button
-                              type="button"
-                              title="Dar el visto bueno (visto bueno gerencial)"
-                              aria-label="Dar el visto bueno"
-                              onClick={() => navigate(`/panel/calidad/lotes/${l.id}/aprobacion`)}
-                              className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-oro-quinua text-oro-quinua transition-colors duration-150 hover:bg-oro-quinua/10"
-                            >
-                              <ShieldCheck className="size-4" strokeWidth={2} />
-                            </button>
-                          )}
+                          {(() => {
+                            const estado = estadoVistoBuenoDe(resumen)
+                            if (!estado || !(puedeEmitir || puedeAprobar)) return null
+                            const ESTILO = {
+                              sin_resolucion: 'border-marron-tierra/30 text-marron-cafe/50 hover:bg-marron-tierra/10',
+                              pendiente: 'border-oro-quinua text-oro-quinua hover:bg-oro-quinua/10',
+                              aprobado: 'border-verde-bosque text-verde-bosque hover:bg-verde-bosque/10',
+                            }
+                            const TITULO = {
+                              sin_resolucion: 'Emitir resolución de Calidad',
+                              pendiente: 'Dar el visto bueno (visto bueno gerencial)',
+                              aprobado: 'Visto bueno ya registrado',
+                            }
+                            return (
+                              <button
+                                type="button"
+                                title={TITULO[estado]}
+                                aria-label={TITULO[estado]}
+                                onClick={() => navigate(`/panel/calidad/lotes/${l.id}/aprobacion`)}
+                                className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-150 ${ESTILO[estado]}`}
+                              >
+                                <ShieldCheck className="size-4" strokeWidth={2.75} />
+                              </button>
+                            )
+                          })()}
                         </div>
                       </td>
                     </tr>

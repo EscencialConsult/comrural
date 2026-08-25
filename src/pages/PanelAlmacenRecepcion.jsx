@@ -15,6 +15,7 @@ import Paginacion from '../components/Paginacion.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 import FormularioIngresoMateriaPrima from '../components/formularios/FormularioIngresoMateriaPrima.jsx'
 import { SECCIONES_INGRESO_MATERIA_PRIMA } from '../components/formularios/seccionesIngresoMateriaPrima.js'
+import { compararPorFechaRecepcion } from '../utils/fecha'
 
 // Segundo formulario de la maqueta ya con el molde confirmado en
 // Calidad y Laboratorio → Inspección (PanelCalidadRecepcion.jsx): misma
@@ -23,7 +24,7 @@ import { SECCIONES_INGRESO_MATERIA_PRIMA } from '../components/formularios/secci
 // directo" — sin pantalla intermedia, sin lógica de creación acá (la
 // tiene FormularioIngresoMateriaPrima.jsx, que además ya no la necesita:
 // a diferencia de Inspección, acá TODAS las secciones se ven siempre,
-// "Iniciar recepción" es un botón más adentro del propio formulario, no
+// "Finalizar recepción" es un botón más adentro del propio formulario, no
 // un estado especial que haya que resolver antes de mostrar nada).
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
@@ -83,18 +84,16 @@ function estadoDeSeccion(numero, resumen) {
   if (numero === 2) return 'completo' // datos de referencia, ya vienen del lote
 
   if (numero === 3) {
-    // Mismos 9 campos que exige FormularioIngresoMateriaPrima.jsx para
-    // considerar el transporte completo — todo o nada, pero acá se
-    // permite un estado intermedio (algunos cargados) para la casilla.
+    // Mismos 5 campos que exige FormularioIngresoMateriaPrima.jsx para
+    // considerar el transporte completo (identityDocument/licenseCategory/
+    // brand/model ya no existen, ver DatosTransporte.jsx) — todo o nada,
+    // pero acá se permite un estado intermedio (algunos cargados) para la
+    // casilla.
     const campos = [
       wr.transportInfo?.driver?.fullName,
-      wr.transportInfo?.driver?.identityDocument,
       wr.transportInfo?.driver?.licenseNumber,
-      wr.transportInfo?.driver?.licenseCategory,
       wr.transportInfo?.vehicle?.plate,
       wr.transportInfo?.vehicle?.type,
-      wr.transportInfo?.vehicle?.brand,
-      wr.transportInfo?.vehicle?.model,
       wr.transportInfo?.vehicle?.color,
     ]
     const llenos = campos.filter((v) => (v ?? '').trim() !== '').length
@@ -185,14 +184,16 @@ export default function PanelAlmacenRecepcion() {
   const filtrados = useMemo(() => {
     if (!lotes) return []
     const q = busqueda.trim().toLowerCase()
-    return lotes.filter((l) => {
-      if (estado && l.currentStatus !== estado) return false
-      if (productoId && l.productId !== productoId) return false
-      if (proveedorId && l.supplierId !== proveedorId) return false
-      if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
-      if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
-      return true
-    })
+    return lotes
+      .filter((l) => {
+        if (estado && l.currentStatus !== estado) return false
+        if (productoId && l.productId !== productoId) return false
+        if (proveedorId && l.supplierId !== proveedorId) return false
+        if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
+        if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
+        return true
+      })
+      .sort(compararPorFechaRecepcion)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotes, busqueda, estado, productoId, proveedorId, fecha, productos])
 
@@ -232,12 +233,7 @@ export default function PanelAlmacenRecepcion() {
   if (lotAbierto) {
     return (
       <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-        <FormularioIngresoMateriaPrima
-          lotId={lotAbierto}
-          onCambiarLote={(id) => setLotAbierto(id)}
-          onVolver={volverALista}
-          tituloVolver="Volver al listado"
-        />
+        <FormularioIngresoMateriaPrima lotId={lotAbierto} onVolver={volverALista} tituloVolver="Volver al listado" />
       </main>
     )
   }

@@ -1,11 +1,11 @@
 // Select con label consistente — hermano de FormInput.jsx, mismo estilo.
 export default function FormSelect({ label, hint, children, className = '', ...props }) {
   return (
-    <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
+    <label className="flex min-w-0 flex-col gap-1.5 text-sm text-marron-cafe">
       {label}
       <select
         {...props}
-        className={`rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima ${className}`}
+        className={`min-w-0 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima ${className}`}
       >
         {children}
       </select>

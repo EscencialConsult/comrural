@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
 import { warehouseReceiptsService } from '../../services/warehouseReceiptsService'
-import { lotsService } from '../../services/lotsService'
+import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -25,8 +25,8 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // Registro P-ADM-03/R-02 — "Ingreso de Materia Prima", segundo formulario
 // de la maqueta (ver docs/formulario-ingreso-materia-prima.md). Cuerpo del
 // formulario extraído como componente propio, sin ruta ni router adentro
-// — por eso `lotId` y `onCambiarLote`/`onVolver` llegan por props en vez de
-// leerse de `useParams()`/`useNavigate()`.
+// — por eso `lotId`/`onVolver` llegan por props en vez de leerse de
+// `useParams()`/`useNavigate()`.
 //
 // Por qué se sacó de la pantalla: la reunión con Milenka (ver
 // video1788040555.txt) es explícita en que este formulario vive DENTRO de
@@ -48,8 +48,12 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // `warehouse-receipts` exige crear primero (POST, con lo mínimo: envase +
 // cantidad) y recién después completar el resto por PATCH — no hay forma
 // de mandar la hoja entera de una. El botón de abajo cambia según el estado
-// real: "Iniciar recepción" (todavía no existe) → "Guardar cambios" (existe,
-// INICIADA) → nada (FINALIZADA, todo de solo lectura).
+// real: "Finalizar recepción" (todavía no existe — este POST es el que de
+// verdad arranca la recepción: crea el warehouseReceipt en INICIADA y pasa
+// el lote a EN_RECEPCION, con `startedAt` sellado en ese instante) →
+// "Guardar cambios" (existe, INICIADA) → nada (FINALIZADA, todo de solo
+// lectura). Al completar "Finalizar recepción" se vuelve al listado
+// (`onVolver`) con un toast, en vez de quedarse en el asistente.
 //
 // Se ve UNA sección a la vez (AsistenteDeEtapas.jsx) — corrección
 // post-revisión: antes las secciones se mostraban todas juntas ("como el
@@ -59,14 +63,18 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
 
 const DOCUMENTOS_VACIOS = { productores: { verificado: null, notas: '' }, guia: { verificado: null, notas: '' } }
-const CONDUCTOR_VACIO = { fullName: '', identityDocument: '', licenseNumber: '', licenseCategory: '' }
-const VEHICULO_VACIO = { plate: '', type: '', brand: '', model: '', color: '' }
+// Solo los campos que pide negocio (ver DatosTransporte.jsx) — el backend
+// ya no exige identityDocument/licenseCategory/brand/model (se sacaron de
+// driverSchema/vehicleSchema en warehouse-receipt.dto.ts, ya no hace falta
+// rellenarlos con 'N/A').
+const CONDUCTOR_VACIO = { fullName: '', licenseNumber: '' }
+const VEHICULO_VACIO = { plate: '', type: '', color: '' }
 
 const soloFecha = (iso) => (iso ? new Date(iso).toLocaleDateString('en-CA') : '')
 const soloHora = (iso) =>
   iso ? new Date(iso).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false }) : null
 
-export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, onVolver, tituloVolver = 'Volver' }) {
+export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloVolver = 'Volver' }) {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('raw-material-receptions:read')
   const puedeCrear = permisos.has('warehouse-receipts:create')
@@ -84,8 +92,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   const [notes, setNotes] = useState('')
   const [pesoBruto, setPesoBruto] = useState('')
   const [pesoNeto, setPesoNeto] = useState('')
-  const [lotesOpciones, setLotesOpciones] = useState([])
-  const [cargandoLotes, setCargandoLotes] = useState(true)
   const [pasoActual, setPasoActual] = useState(0)
 
   const { enviando, error, ejecutar } = useSolicitud()
@@ -136,12 +142,22 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     }
   }
 
-  // El asistente arranca desde el paso 1 cada vez que se entra a OTRO
-  // lote — sin esto, cambiar de lote por el selector dejaría a alguien
-  // parado en el paso 4 del lote anterior, viendo los datos del nuevo.
+  // El asistente arranca desde el paso 1 cada vez que cambia `lotId` — sin
+  // esto, entrar a otro lote (por ejemplo desde un link directo) dejaría a
+  // alguien parado en el paso 4 del lote anterior, viendo los datos del nuevo.
   useEffect(() => {
     setPasoActual(0)
   }, [lotId])
+
+  // Salta a la sección que tiene el dato faltante/con error y la trae a la
+  // vista — los avisos viven junto al botón, al final del todo, lejos de la
+  // sección real cuando el asistente está en otro paso (cada etapa se
+  // desmonta al no ser la actual, ver AsistenteDeEtapas.jsx, así que no
+  // alcanza con un scroll sin cambiar `pasoActual` primero).
+  const irAPaso = (paso) => {
+    setPasoActual(paso)
+    areaImprimibleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const recargar = useCallback(() => {
     if (!puedeVer) return
@@ -152,32 +168,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   useEffect(() => {
     recargar()
   }, [recargar])
-
-  // Opciones para el selector "Lote" — mismo filtro que el formulario de
-  // Calidad (solo materia prima, `nature === 'PM'`). Solo se piden si hay
-  // a dónde navegar al elegir otro lote (`onCambiarLote`) — montado dentro
-  // de Almacén, cambiar de lote significa cambiar la vista local, no
-  // navegar, así que el propio contenedor decide si ofrece el selector.
-  useEffect(() => {
-    if (!puedeVer || !onCambiarLote) return
-    let cancelado = false
-    setCargandoLotes(true)
-    lotsService
-      .listar({ limit: 100 })
-      .then((r) => {
-        if (cancelado) return
-        setLotesOpciones(
-          (r.data ?? [])
-            .filter((l) => l.nature === 'PM')
-            .map((l) => ({ id: l.id, nombre: l.code, detalle: l.currentStatus?.replace(/_/g, ' ') })),
-        )
-        setCargandoLotes(false)
-      })
-      .catch(() => setCargandoLotes(false))
-    return () => {
-      cancelado = true
-    }
-  }, [puedeVer, onCambiarLote])
 
   useEffect(() => {
     if (!confirmacion) return
@@ -275,25 +265,17 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   // el botón quedaba deshabilitado sin decir por qué, así que alguien con
   // el formulario a medio llenar no tenía forma de saber qué le faltaba
   // sin ir campo por campo. Se arma la lista una sola vez para reusarla en
-  // el aviso visible y en el `title` del botón.
+  // el aviso visible y en el `title` del botón. `paso` es el índice en
+  // `etapas` (abajo) — permite saltar directo a la sección que tiene el
+  // problema en vez de solo nombrarla.
   const motivosFaltantes = []
-  if (receivedPackageCount == null || receivedPackageCount <= 0) motivosFaltantes.push('N. de bolsas')
+  if (receivedPackageCount == null || receivedPackageCount <= 0) motivosFaltantes.push({ texto: 'N. de bolsas', paso: 3 })
   if (!documentos.productores.verificado && documentos.productores.notas.trim() === '')
-    motivosFaltantes.push('Observaciones de lista de productores (no cumple)')
+    motivosFaltantes.push({ texto: 'Observaciones de lista de productores (no cumple)', paso: 0 })
   if (!documentos.guia.verificado && documentos.guia.notas.trim() === '')
-    motivosFaltantes.push('Observaciones de guía de remisión (no cumple)')
+    motivosFaltantes.push({ texto: 'Observaciones de guía de remisión (no cumple)', paso: 0 })
 
-  const camposTransporte = [
-    conductor.fullName,
-    conductor.identityDocument,
-    conductor.licenseNumber,
-    conductor.licenseCategory,
-    vehiculo.plate,
-    vehiculo.type,
-    vehiculo.brand,
-    vehiculo.model,
-    vehiculo.color,
-  ]
+  const camposTransporte = [conductor.fullName, conductor.licenseNumber, vehiculo.plate, vehiculo.type, vehiculo.color]
   const transporteCompleto = camposTransporte.every((v) => v.trim() !== '')
 
   const dtoDocumentosYTransporte = () => ({
@@ -304,15 +286,19 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     shippingGuideVerified: documentos.guia.verificado,
     shippingGuideNotes: documentos.guia.verificado ? undefined : documentos.guia.notas,
     notes: notes || undefined,
+    // `transportInfo` sigue siendo todo-o-nada en el backend, pero ahora
+    // driverSchema/vehicleSchema (warehouse-receipt.dto.ts) solo piden los
+    // mismos 5 campos que muestra DatosTransporte.jsx — ya no hace falta
+    // rellenar nada con 'N/A'.
     ...(transporteCompleto ? { transportInfo: { driver: conductor, vehicle: vehiculo } } : {}),
   })
 
-  const iniciar = async () => {
+  const finalizar = async () => {
     if (!validoParaGuardar) return
     try {
       await ejecutar(() => warehouseReceiptsService.iniciar(lotId, dtoDocumentosYTransporte()))
-      setConfirmacion('Recepción iniciada.')
-      recargar()
+      toast.success('Recepción registrada.')
+      onVolver?.()
     } catch {
       // mensaje ya en `error`
     }
@@ -394,9 +380,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
               horaFin: soloHora(warehouseReceipt?.completedAt),
               lote: { id: lot.id, nombre: lot.code },
             }}
-            onCambiarLote={(op) => op?.id && op.id !== lotId && onCambiarLote?.(op.id)}
-            opcionesLotes={lotesOpciones}
-            cargandoLotes={cargandoLotes}
           />
         </SeccionFormulario>
       ),
@@ -558,22 +541,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
           acciones={<AvisoFaltante onEnviar={solicitarAlta} />}
         />
 
-        {confirmacion && !generandoPdf && (
-          <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-medium text-verde-bosque print:hidden">
-            {confirmacion}
-          </p>
-        )}
-        {error && !generandoPdf && (
-          <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla print:hidden">
-            {error}
-          </p>
-        )}
-        {!existe && !puedeCrear && !generandoPdf && (
-          <p className="rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-medium text-marron-arcilla print:hidden">
-            Tu rol no tiene permiso para iniciar una recepción (`warehouse-receipts:create`).
-          </p>
-        )}
-
         <AsistenteDeEtapas
           etapas={etapas}
           pasoActual={pasoActual}
@@ -583,32 +550,30 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
         />
       </div>
       {/* Cierra `areaImprimibleRef` — de acá para abajo (Iniciar/Guardar/
-          Cerrar/Volver) no es parte del papel, nunca entra al PDF. Gateado
-          al último paso del asistente: los botones de guardar/cerrar
-          recién tienen sentido una vez que se pasó por todas las etapas —
-          antes de eso ya está el botón "Siguiente" de cada una. */}
+          Cerrar/Volver, y sus avisos) no es parte del papel, nunca entra al
+          PDF. Gateado al último paso del asistente: los botones de guardar/
+          cerrar recién tienen sentido una vez que se pasó por todas las
+          etapas — antes de eso ya está el botón "Siguiente" de cada una.
+          Los avisos van DESPUÉS de los botones, no antes — arriba del todo
+          (junto a la cabecera) quedaban fuera de la vista de quien está
+          parado acá abajo, mirando el botón. */}
 
       {!soloLectura && pasoActual === etapas.length - 1 && (
         <div className="flex flex-col gap-2 print:hidden">
-          {motivosFaltantes.length > 0 && (
-            <p className="text-xs font-medium text-marron-arcilla">
-              Falta completar: {motivosFaltantes.join(' · ')}.
-            </p>
-          )}
           <div className="flex flex-wrap items-center gap-3">
             {!existe ? (
               <Button
                 disabled={enviando || !validoParaGuardar || !puedeCrear}
-                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.join(', ')}` : undefined}
-                onClick={iniciar}
+                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.map((m) => m.texto).join(', ')}` : undefined}
+                onClick={finalizar}
               >
-                {enviando ? 'Iniciando…' : 'Iniciar recepción'}
+                {enviando ? 'Finalizando…' : 'Finalizar recepción'}
               </Button>
             ) : (
               <>
                 <Button
                   disabled={enviando || !validoParaGuardar}
-                  title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.join(', ')}` : undefined}
+                  title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.map((m) => m.texto).join(', ')}` : undefined}
                   onClick={guardar}
                 >
                   {enviando ? 'Guardando…' : 'Guardar cambios'}
@@ -631,6 +596,36 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
               </Button>
             )}
           </div>
+
+          {confirmacion && (
+            <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-medium text-verde-bosque">{confirmacion}</p>
+          )}
+          {error && (
+            <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla">{error}</p>
+          )}
+          {!existe && !puedeCrear && (
+            <p className="rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-medium text-marron-arcilla">
+              Tu rol no tiene permiso para iniciar una recepción (`warehouse-receipts:create`).
+            </p>
+          )}
+          {motivosFaltantes.length > 0 && (
+            <div className="flex flex-col gap-1 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm">
+              <p className="font-semibold text-marron-arcilla">Falta completar:</p>
+              <ul className="flex flex-col gap-0.5">
+                {motivosFaltantes.map((m, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      onClick={() => irAPaso(m.paso)}
+                      className="text-left text-xs font-medium text-marron-arcilla underline decoration-marron-arcilla/40 underline-offset-2 hover:text-marron-cafe"
+                    >
+                      {m.texto}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

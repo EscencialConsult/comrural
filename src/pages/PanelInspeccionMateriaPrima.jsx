@@ -14,12 +14,7 @@ export default function PanelInspeccionMateriaPrima() {
 
   return (
     <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-      <FormularioInspeccionMateriaPrima
-        lotId={lotId}
-        onCambiarLote={(id) => navigate(`/panel/calidad/lotes/${id}/inspeccion`)}
-        onVolver={() => navigate(-1)}
-        tituloVolver="Volver"
-      />
+      <FormularioInspeccionMateriaPrima lotId={lotId} onVolver={() => navigate(-1)} tituloVolver="Volver" />
     </main>
   )
 }

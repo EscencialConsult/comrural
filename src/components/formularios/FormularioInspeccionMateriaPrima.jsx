@@ -6,7 +6,7 @@ import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptio
 import { inspectionsService } from '../../services/inspectionsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
-import { lotsService } from '../../services/lotsService'
+import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -29,8 +29,8 @@ import { ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS, COLUMNAS_RECHAZO } from
 // Registro I-CAL-29/R-01 — "Inspección de Materia Prima", maquetado según el
 // papel real. Cuerpo del formulario extraído como componente propio, sin
 // ruta ni router adentro — mismo criterio que
-// FormularioIngresoMateriaPrima.jsx: `lotId`/`onVolver`/`onCambiarLote`
-// llegan por props, no de `useParams()`/`useNavigate()`.
+// FormularioIngresoMateriaPrima.jsx: `lotId`/`onVolver` llegan por props, no
+// de `useParams()`/`useNavigate()`.
 //
 // Por qué se sacó de la pantalla: Facundo pidió una subpestaña
 // "Recepción/Inspección" DENTRO de Calidad y Laboratorio — al tocar un
@@ -144,7 +144,7 @@ const campoValor = (item, valor) => {
 
 const GENERALES_VACIOS = { producto: null, proveedor: null, lote: null, fecha: '', horaInicio: null, horaFin: null }
 
-export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote, onVolver, tituloVolver = 'Volver' }) {
+export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, tituloVolver = 'Volver' }) {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('raw-material-receptions:read')
 
@@ -155,10 +155,10 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   const [tocados, setTocados] = useState(new Set())
   const [observaciones, setObservaciones] = useState('')
   const [generales, setGenerales] = useState(GENERALES_VACIOS)
-  const [listados, setListados] = useState({ productos: [], proveedores: [], lotes: [] })
-  const [cargandoListados, setCargandoListados] = useState(true)
+  const [listados, setListados] = useState({ productos: [], proveedores: [] })
   const [confirmacion, setConfirmacion] = useState(null)
   const [confirmandoFinal, setConfirmandoFinal] = useState(false)
+  const [avisoGuardarPrimero, setAvisoGuardarPrimero] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
   const { enviando, error, ejecutar } = useSolicitud()
 
@@ -277,10 +277,9 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   }, [lotId, recargar])
 
   // `lotIdIntentado` guarda el ÚLTIMO lote para el que ya se intentó, no
-  // un booleano simple — sin eso, cambiar de lote por el selector de la
-  // sección 1 (que reusa este mismo componente vía `onCambiarLote`, sin
-  // desmontarlo) dejaría el auto-inicio bloqueado para siempre después
-  // del primer intento.
+  // un booleano simple — sin eso, cambiar de `lotId` sin desmontar el
+  // componente dejaría el auto-inicio bloqueado para siempre después del
+  // primer intento.
   const lotIdIntentado = useRef(null)
   useEffect(() => {
     if (!recepcion || detalle) return
@@ -290,43 +289,37 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     intentarIniciar()
   }, [recepcion, detalle, permisos, lotId, intentarIniciar])
 
-  // Maestros para los selectores de la sección 1 (producto / proveedor /
-  // lote). Cada opción viaja como { id, nombre, detalle }: el `id` es lo que
-  // de verdad identifica la fila, `nombre` lo que se busca y se muestra, y
+  // Maestros para los selectores de la sección 1 (producto / proveedor).
+  // Cada opción viaja como { id, nombre, detalle }: el `id` es lo que de
+  // verdad identifica la fila, `nombre` lo que se busca y se muestra, y
   // `detalle` el dato de desempate — hay proveedores homónimos cargados dos
   // veces con distinto tipo (PRODUCER y OTHER), y sin el tipo al lado son dos
-  // renglones idénticos imposibles de distinguir.
+  // renglones idénticos imposibles de distinguir. "Lote" quedó fijo (no
+  // editable, ver DatosGeneralesLote.jsx), no necesita su propio maestro acá.
   //
   // allSettled y no all: el rol `calidad` NO tiene `lots:read` (ver
-  // 0019_business_modules_permissions.sql), así que ese pedido le va a fallar
-  // siempre. Con Promise.all, esa falla dejaría también sin opciones a
-  // producto y proveedor, que sí puede leer.
+  // 0019_business_modules_permissions.sql) — si algún día se necesitara ese
+  // pedido, no debería tirar abajo también producto y proveedor, que sí
+  // puede leer.
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    setCargandoListados(true)
-    Promise.allSettled([
-      productsService.listar({ limit: 100 }),
-      suppliersService.listar({ limit: 100 }),
-      lotsService.listar({ limit: 100 }),
-    ]).then(([productos, proveedores, lotes]) => {
-      if (cancelado) return
-      const datos = (r) => (r.status === 'fulfilled' ? (r.value.data ?? []) : [])
-      setListados({
-        productos: datos(productos).map((p) => ({ id: p.id, nombre: p.name, detalle: p.code })),
-        proveedores: datos(proveedores).map((s) => ({
-          id: s.id,
-          nombre: s.person
-            ? `${s.person.firstNames} ${s.person.lastNames}`
-            : (s.organization?.tradeName ?? s.organization?.legalName ?? 'Sin nombre'),
-          detalle: s.type,
-        })),
-        lotes: datos(lotes)
-          .filter((l) => l.nature === 'PM')
-          .map((l) => ({ id: l.id, nombre: l.code, detalle: l.currentStatus?.replace(/_/g, ' ') })),
-      })
-      setCargandoListados(false)
-    })
+    Promise.allSettled([productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })]).then(
+      ([productos, proveedores]) => {
+        if (cancelado) return
+        const datos = (r) => (r.status === 'fulfilled' ? (r.value.data ?? []) : [])
+        setListados({
+          productos: datos(productos).map((p) => ({ id: p.id, nombre: p.name, detalle: p.code })),
+          proveedores: datos(proveedores).map((s) => ({
+            id: s.id,
+            nombre: s.person
+              ? `${s.person.firstNames} ${s.person.lastNames}`
+              : (s.organization?.tradeName ?? s.organization?.legalName ?? 'Sin nombre'),
+            detalle: s.type,
+          })),
+        })
+      },
+    )
     return () => {
       cancelado = true
     }
@@ -370,6 +363,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     return () => clearTimeout(id)
   }, [confirmacion])
 
+  useEffect(() => {
+    if (!avisoGuardarPrimero) return
+    const id = setTimeout(() => setAvisoGuardarPrimero(false), 4000)
+    return () => clearTimeout(id)
+  }, [avisoGuardarPrimero])
+
   const porSeccion = useMemo(() => {
     const mapa = new Map()
     for (const item of detalle?.form?.items ?? []) {
@@ -401,14 +400,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     },
     [valores],
   )
-
-  // Único campo que de verdad se puede "cambiar" en Datos generales — el
-  // resto (producto/proveedor/fecha/hora) quedó de solo lectura, ver
-  // DatosGeneralesLote.jsx. Elegir otro lote no edita esta inspección, abre
-  // LA SUYA.
-  const cambiarLoteGeneral = (valor) => {
-    if (valor?.id && valor.id !== lotId) onCambiarLote?.(valor.id)
-  }
 
   // Pedido de alta de un maestro que falta. Hoy es un stub local de la
   // maqueta (ver components/formularios/solicitudesDeAlta.js): el aviso no le
@@ -571,6 +562,14 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     // mostrándose en el aviso de error de más abajo, igual que cualquier
     // otro caso que este cálculo no llegue a cubrir.
     if (CODIGOS_PRUEBA_CONOCIDOS.has(item.code)) return false
+    // Rechazo (sección 3) nunca bloquea: cada contador ya se MUESTRA en "0"
+    // por defecto (ver TablaRechazo.jsx, "sin valor cargado = no apareció,
+    // que es lo mismo que 0") — pedirle al analista que "llene" un renglón
+    // que ya vale 0 no tiene sentido. `guardar()` de abajo manda ese 0 real
+    // al backend para lo que nunca se tocó, así el paso avanza y
+    // `assertAllRequiredAnswered` del lado del servidor igual queda
+    // conforme.
+    if (item.section === SECCION.RECHAZO) return false
     if (!item.isRequired) return false
     const ocurrenciasEsperadas = item.occurrences != null && item.occurrences > 1 ? item.occurrences : 1
     for (let occ = 1; occ <= ocurrenciasEsperadas; occ++) {
@@ -589,10 +588,30 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       if (valor === null || valor === '') cambios.push({ itemId, occurrence: Number(occ), clear: true })
       else cambios.push({ itemId, occurrence: Number(occ), ...campoValor(item, valor) })
     }
+    // Completa con 0 real los contadores de Rechazo que nunca se tocaron —
+    // sin `rechazoTotal` (el lote no se rechazó entero, esa sección sigue
+    // aplicando). Es la contraparte de sacarlos de `faltantes` arriba: acá
+    // se persiste de verdad lo que ahí se dejó de exigir.
+    if (!rechazoTotal) {
+      for (const item of form.items) {
+        if (item.section !== SECCION.RECHAZO || !item.isRequired) continue
+        const ocurrenciasEsperadas = item.occurrences != null && item.occurrences > 1 ? item.occurrences : 1
+        for (let occ = 1; occ <= ocurrenciasEsperadas; occ++) {
+          if (tocados.has(clave(item.id, occ)) || leer(item, occ) !== null) continue
+          cambios.push({ itemId: item.id, occurrence: occ, ...campoValor(item, 0) })
+        }
+      }
+    }
     if (cambios.length === 0) return
     try {
       await ejecutar(() => inspectionsService.guardarRespuestas(inspection.id, cambios))
       setConfirmacion('Respuestas guardadas.')
+      setAvisoGuardarPrimero(false)
+      // `recargar()` no reseeda `tocados` (el `useEffect` que lo hace está
+      // atado a `formId`, que no cambia al guardar) — sin esto, "Finalizar"
+      // seguía viendo cambios "sin guardar" para siempre después del primer
+      // guardado.
+      setTocados(new Set())
       recargar()
     } catch {
       // el mensaje legible ya quedó en `error`
@@ -607,12 +626,26 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     try {
       await ejecutar(() => inspectionsService.completar(inspection.id, {}))
       setConfirmandoFinal(false)
-      setConfirmacion('Inspección finalizada.')
-      recargar()
+      toast.success('Inspección finalizada.')
+      onVolver?.()
     } catch {
       // se deja `confirmandoFinal` abierto para reintentar sin perder el
       // contexto de qué se estaba por confirmar
     }
+  }
+
+  // Antes, "Finalizar inspección" completaba directo aunque hubiera
+  // respuestas tipeadas y nunca guardadas (`tocados` sin vaciar) — esos
+  // cambios se perdían en silencio, porque el backend valida contra lo que
+  // ya está en `form_responses`, no contra el estado local. Ahora ese clic
+  // se corta acá si `tocados` no está vacío, con un aviso en vez de abrir
+  // la confirmación.
+  const pedirFinalizar = () => {
+    if (tocados.size > 0) {
+      setAvisoGuardarPrimero(true)
+      return
+    }
+    setConfirmandoFinal(true)
   }
 
   // Completitud por etapa — reusa `faltantes` (ya calculado arriba, la
@@ -643,12 +676,7 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
         // son justo los de esta sección, así que la salida tiene que estar
         // donde aparece el problema, no a media pantalla de distancia.
         <SeccionFormulario numero={1} titulo="Datos generales" acciones={<AvisoFaltante onEnviar={solicitarAlta} />}>
-          <DatosGeneralesLote
-            valores={generales}
-            onCambiarLote={cambiarLoteGeneral}
-            opciones={listados}
-            cargandoOpciones={cargandoListados}
-          />
+          <DatosGeneralesLote valores={generales} opciones={listados} />
         </SeccionFormulario>
       ),
     },
@@ -866,17 +894,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
           </p>
         )}
 
-        {!soloLectura && faltantes.length > 0 && !generandoPdf && (
-          <div className="flex flex-col gap-1.5 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm print:hidden">
-            <p className="flex items-center gap-2 font-semibold text-marron-arcilla">
-              <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
-              Faltan {faltantes.length} {faltantes.length === 1 ? 'campo obligatorio' : 'campos obligatorios'} por
-              responder — todavía no se puede finalizar.
-            </p>
-            <p className="text-xs text-marron-cafe/70">{faltantes.map((i) => i.label).join(' · ')}</p>
-          </div>
-        )}
-
         <AsistenteDeEtapas
           etapas={etapas}
           pasoActual={pasoActual}
@@ -885,45 +902,59 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
           modoImpresion={generandoPdf || soloLectura}
         />
       </div>
-      {/* Cierra `areaImprimibleRef` — de acá para abajo (Guardar/Finalizar/
-          Volver) no es parte del papel, nunca entra al PDF. Gateado al
+      {/* Cierra `areaImprimibleRef` — de acá para abajo (Guardar/Finalizar y
+          sus avisos) no es parte del papel, nunca entra al PDF. Gateado al
           último paso del asistente — mismo criterio que
-          FormularioIngresoMateriaPrima.jsx. */}
+          FormularioIngresoMateriaPrima.jsx. "Volver" ya vive arriba, como
+          link junto al encabezado — no hace falta repetirlo acá abajo. */}
 
       {!soloLectura && pasoActual === etapas.length - 1 && (
-        <div className="flex flex-wrap items-center gap-3 print:hidden">
-          <Button disabled={enviando} onClick={guardar}>
-            {enviando ? 'Guardando…' : 'Guardar inspección'}
-          </Button>
-
-          {confirmandoFinal ? (
-            <>
-              <span className="text-sm font-medium text-marron-cafe">
-                ¿Confirmar finalización? Guardá las respuestas antes — una vez finalizada, la inspección queda en solo
-                lectura.
-              </span>
-              <Button disabled={enviando} onClick={finalizar}>
-                {enviando ? 'Finalizando…' : 'Sí, finalizar'}
-              </Button>
-              <Button variant="secondary" disabled={enviando} onClick={() => setConfirmandoFinal(false)}>
-                Seguir revisando
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={enviando || faltantes.length > 0}
-              title={faltantes.length > 0 ? `Faltan ${faltantes.length} campos obligatorios por responder` : undefined}
-              onClick={() => setConfirmandoFinal(true)}
-            >
-              Finalizar inspección
+        <div className="flex flex-col gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={enviando} onClick={guardar}>
+              {enviando ? 'Guardando…' : 'Guardar inspección'}
             </Button>
+
+            {confirmandoFinal ? (
+              <>
+                <span className="text-sm font-medium text-marron-cafe">
+                  ¿Confirmar finalización? Una vez finalizada, la inspección queda en solo lectura.
+                </span>
+                <Button disabled={enviando} onClick={finalizar}>
+                  {enviando ? 'Finalizando…' : 'Sí, finalizar'}
+                </Button>
+                <Button variant="secondary" disabled={enviando} onClick={() => setConfirmandoFinal(false)}>
+                  Seguir revisando
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={enviando || faltantes.length > 0}
+                title={faltantes.length > 0 ? `Faltan ${faltantes.length} campos obligatorios por responder` : undefined}
+                onClick={pedirFinalizar}
+              >
+                Finalizar inspección
+              </Button>
+            )}
+          </div>
+
+          {faltantes.length > 0 && (
+            <div className="flex flex-col gap-1.5 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm">
+              <p className="flex items-center gap-2 font-semibold text-marron-arcilla">
+                <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
+                Faltan {faltantes.length} {faltantes.length === 1 ? 'campo obligatorio' : 'campos obligatorios'} por
+                responder — todavía no se puede finalizar.
+              </p>
+              <p className="text-xs text-marron-cafe/70">{faltantes.map((i) => i.label).join(' · ')}</p>
+            </div>
           )}
 
-          {onVolver && (
-            <Button variant="secondary" disabled={enviando} onClick={onVolver}>
-              {tituloVolver}
-            </Button>
+          {avisoGuardarPrimero && (
+            <p className="flex items-center gap-2 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-semibold text-marron-arcilla">
+              <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
+              Guardá las respuestas primero.
+            </p>
           )}
         </div>
       )}

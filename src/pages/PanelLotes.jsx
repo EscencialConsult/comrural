@@ -9,11 +9,13 @@ import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormSelect from '../components/FormSelect.jsx'
+import FormDateTimeInput from '../components/FormDateTimeInput.jsx'
 import SearchInput from '../components/SearchInput.jsx'
 import Button from '../components/Button.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Badge from '../components/Badge.jsx'
 import Skeleton from '../components/Skeleton.jsx'
+import { aInputLocal, compararPorFechaRecepcion } from '../utils/fecha'
 
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
@@ -42,16 +44,6 @@ const nombreProveedor = (s) => (s.person ? nombrePersona(s.person) : s.organizat
 
 const formatearFechaHora = (iso) =>
   new Date(iso).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })
-
-// datetime-local necesita "YYYY-MM-DDTHH:mm" en hora LOCAL del navegador —
-// distinto de toISOString() (que da UTC). Los getters (getFullYear, etc.)
-// de Date ya devuelven en local, por eso alcanza con formatearlos a mano.
-const aInputLocal = (isoUtc) => {
-  if (!isoUtc) return ''
-  const d = new Date(isoUtc)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 export default function PanelLotes() {
   const { permisos } = useAuth()
@@ -136,16 +128,18 @@ export default function PanelLotes() {
   const lotesFiltrados = useMemo(() => {
     if (!lotes) return null
     const q = busqueda.trim().toLowerCase()
-    return lotes.filter((l) => {
-      if (estadoFiltro && l.currentStatus !== estadoFiltro) return false
-      if (productoFiltro && l.productId !== productoFiltro) return false
-      if (proveedorFiltro && l.supplierId !== proveedorFiltro) return false
-      if (q) {
-        const nombreProd = productos?.find((p) => p.id === l.productId)?.name?.toLowerCase() ?? ''
-        if (!l.code.toLowerCase().includes(q) && !nombreProd.includes(q)) return false
-      }
-      return true
-    })
+    return lotes
+      .filter((l) => {
+        if (estadoFiltro && l.currentStatus !== estadoFiltro) return false
+        if (productoFiltro && l.productId !== productoFiltro) return false
+        if (proveedorFiltro && l.supplierId !== proveedorFiltro) return false
+        if (q) {
+          const nombreProd = productos?.find((p) => p.id === l.productId)?.name?.toLowerCase() ?? ''
+          if (!l.code.toLowerCase().includes(q) && !nombreProd.includes(q)) return false
+        }
+        return true
+      })
+      .sort(compararPorFechaRecepcion)
   }, [lotes, busqueda, estadoFiltro, productoFiltro, proveedorFiltro, productos])
 
   if (!puedeVer) {
@@ -444,14 +438,12 @@ export default function PanelLotes() {
   )
 }
 
-// Alta: nature (PM/PT, excluyente vía pastillas) + producto siempre +
-// proveedor/fecha SOLO si PM — createLotSchema rechaza con 400 si un PT
-// manda supplierId/scheduledReceptionAt, o si un PM no los manda (ver
-// lot.dto.ts, superRefine). Mostrar/ocultar los campos según nature hace
-// que ese 400 sea estructuralmente imposible desde acá (subtarea "aplicar
-// las reglas de UI según nature").
+// Alta: solo materia prima (PM) — la opción de producto terminado se
+// sacó de esta pantalla a pedido de negocio, así que `nature` queda fijo
+// y proveedor/fecha son siempre obligatorios (createLotSchema los exige
+// para todo PM, ver lot.dto.ts, superRefine).
 function FormularioAltaLote({ productos, productosError, proveedores, proveedoresError, onCancelar, onGuardado }) {
-  const [nature, setNature] = useState('PM')
+  const nature = 'PM'
   const [productId, setProductId] = useState('')
   const [productIdTocado, setProductIdTocado] = useState(false)
   const [supplierId, setSupplierId] = useState('')
@@ -459,19 +451,8 @@ function FormularioAltaLote({ productos, productosError, proveedores, proveedore
   const [fechaHora, setFechaHora] = useState('')
   const { enviando: guardando, error, ejecutar } = useSolicitud()
 
-  // Al volver a PT se limpia lo que ya no aplica — evita arrastrar un
-  // proveedor/fecha elegidos durante un paso por PM.
-  useEffect(() => {
-    if (nature === 'PT') {
-      setSupplierId('')
-      setSupplierIdTocado(false)
-      setFechaHora('')
-    }
-  }, [nature])
-
   const productIdValido = productId !== ''
-  const pmCompleto = nature !== 'PM' || (supplierId !== '' && fechaHora !== '')
-  const puedeGuardar = productIdValido && pmCompleto
+  const puedeGuardar = productIdValido && supplierId !== '' && fechaHora !== ''
 
   const submit = async (e) => {
     e.preventDefault()
@@ -481,12 +462,12 @@ function FormularioAltaLote({ productos, productosError, proveedores, proveedore
         lotsService.crear({
           nature,
           productId,
-          supplierId: nature === 'PM' ? supplierId : undefined,
+          supplierId,
           // Regla de proyecto: instantes van en UTC ISO 8601 terminado en
           // Z. new Date(valorLocal) interpreta el string de datetime-local
           // (sin offset) como hora LOCAL del navegador; toISOString() lo
           // pasa a UTC — es la conversión que pide la subtarea.
-          scheduledReceptionAt: nature === 'PM' ? new Date(fechaHora).toISOString() : undefined,
+          scheduledReceptionAt: new Date(fechaHora).toISOString(),
         }),
       )
       onGuardado(guardado)
@@ -504,29 +485,8 @@ function FormularioAltaLote({ productos, productosError, proveedores, proveedore
         <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm text-marron-cafe">Naturaleza</span>
-        <div className="flex gap-2">
-          {Object.entries(NATURE_LABEL).map(([valor, label]) => (
-            <button
-              key={valor}
-              type="button"
-              onClick={() => setNature(valor)}
-              aria-pressed={nature === valor}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
-                nature === valor
-                  ? 'bg-verde-lima text-marron-cafe'
-                  : 'bg-marron-tierra/10 text-marron-cafe/60 hover:bg-marron-tierra/15'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="min-w-0">
           <FormSelect
             label="Producto"
             value={productId}
@@ -558,54 +518,47 @@ function FormularioAltaLote({ productos, productosError, proveedores, proveedore
           )}
         </div>
 
-        {nature === 'PM' && (
-          <>
-            <div>
-              <FormSelect
-                label="Proveedor"
-                value={supplierId}
-                onChange={(e) => {
-                  setSupplierId(e.target.value)
-                  setSupplierIdTocado(true)
-                }}
-                onBlur={() => setSupplierIdTocado(true)}
-                hint={
-                  proveedoresError
-                    ? 'No se pudo cargar el catálogo de proveedores.'
-                    : proveedores === null
-                      ? 'Cargando proveedores…'
-                      : proveedores.length === 0
-                        ? 'No hay proveedores cargados todavía.'
-                        : undefined
-                }
-                required
-              >
-                <option value="">Seleccioná un proveedor…</option>
-                {proveedores?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {nombreProveedor(s)}
-                  </option>
-                ))}
-              </FormSelect>
-              {supplierIdTocado && supplierId === '' && (
-                <p className="mt-1 text-xs font-medium text-rojo-pasankalla">
-                  Todo lote de materia prima necesita un proveedor.
-                </p>
-              )}
-            </div>
+        <div className="min-w-0">
+          <FormSelect
+            label="Proveedor"
+            value={supplierId}
+            onChange={(e) => {
+              setSupplierId(e.target.value)
+              setSupplierIdTocado(true)
+            }}
+            onBlur={() => setSupplierIdTocado(true)}
+            hint={
+              proveedoresError
+                ? 'No se pudo cargar el catálogo de proveedores.'
+                : proveedores === null
+                  ? 'Cargando proveedores…'
+                  : proveedores.length === 0
+                    ? 'No hay proveedores cargados todavía.'
+                    : undefined
+            }
+            required
+          >
+            <option value="">Seleccioná un proveedor…</option>
+            {proveedores?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {nombreProveedor(s)}
+              </option>
+            ))}
+          </FormSelect>
+          {supplierIdTocado && supplierId === '' && (
+            <p className="mt-1 text-xs font-medium text-rojo-pasankalla">
+              Todo lote de materia prima necesita un proveedor.
+            </p>
+          )}
+        </div>
 
-            <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
-              Fecha y hora de llegada
-              <input
-                type="datetime-local"
-                value={fechaHora}
-                onChange={(e) => setFechaHora(e.target.value)}
-                required
-                className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima"
-              />
-            </label>
-          </>
-        )}
+        <FormDateTimeInput
+          label="Fecha y hora de llegada"
+          value={fechaHora}
+          onChange={setFechaHora}
+          minAhora
+          required
+        />
       </div>
 
       <div className="flex gap-3">
@@ -682,16 +635,7 @@ function FormularioReprogramarLote({ lote, proveedores, proveedoresError, onCanc
         ))}
       </FormSelect>
 
-      <label className="flex flex-col gap-1.5 text-sm text-marron-cafe">
-        Fecha y hora de llegada
-        <input
-          type="datetime-local"
-          value={fechaHora}
-          onChange={(e) => setFechaHora(e.target.value)}
-          required
-          className="rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima"
-        />
-      </label>
+      <FormDateTimeInput label="Fecha y hora de llegada" value={fechaHora} onChange={setFechaHora} minAhora required />
 
       <div className="flex gap-3">
         <Button type="submit" disabled={guardando || !puedeGuardar}>

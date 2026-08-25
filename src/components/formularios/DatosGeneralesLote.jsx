@@ -10,10 +10,9 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // editable con `disabled={soloLectura}`, como si el inspector pudiera
 // "cambiar" el producto de una inspección ya abierta — nunca tuvo sentido:
 // el lote llega fijo desde `recepcion.lot`, y esos campos nunca se mandan al
-// backend en `guardar()`. Quedan `disabled` siempre, la única forma real de
-// "cambiar de lote" es el selector "Lote", que navega a OTRA inspección
-// (ver `onCambiarLote` en FormularioInspeccionMateriaPrima.jsx) — ese sí
-// sigue activo.
+// backend en `guardar()`. Los tres quedan `disabled` siempre — pedido
+// explícito: "Lote" dejó de permitir navegar a otra inspección, el lote
+// designado queda fijo también acá.
 //
 // Fecha y horas son del acto de inspeccionar (`startedAt` / `completedAt`),
 // selladas por el propio backend al crear/completar la inspección — no
@@ -21,12 +20,7 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // siempre por el mismo motivo que producto/proveedor: eran editables con el
 // botón "hoy" de CampoFechaHora, pero era un callejón sin salida — se podía
 // tocar, nunca se guardaba nada.
-export default function DatosGeneralesLote({
-  valores,
-  onCambiarLote,
-  opciones = {},
-  cargandoOpciones = false,
-}) {
+export default function DatosGeneralesLote({ valores, opciones = {} }) {
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
       <SelectorDeBase
@@ -56,10 +50,10 @@ export default function DatosGeneralesLote({
       <SelectorDeBase
         label="Lote"
         valor={valores.lote}
-        opciones={opciones.lotes ?? []}
-        onSeleccionar={onCambiarLote}
-        cargando={cargandoOpciones}
-        placeholder="Buscá el lote…"
+        opciones={valores.lote ? [valores.lote] : []}
+        onSeleccionar={() => {}}
+        disabled
+        placeholder="—"
         className="sm:col-span-2"
       />
 

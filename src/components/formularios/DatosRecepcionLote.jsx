@@ -4,11 +4,11 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // Sección 1 del papel P-ADM-03/R-02: DATOS DE RECEPCIÓN.
 //
 // Mismo control y el mismo criterio que la sección equivalente del
-// formulario de Calidad (ver DatosGeneralesLote.jsx): producto y proveedor
-// son atributos DEL LOTE, no algo que Almacén elige acá — por eso van
-// siempre deshabilitados, sin importar `soloLectura`. El único que de
-// verdad navega es "Lote": elegir otro lote lleva a SU recepción, porque
-// cada lote tiene la suya.
+// formulario de Calidad (ver DatosGeneralesLote.jsx): producto y lote son
+// atributos DEL LOTE, no algo que Almacén elige acá — por eso van siempre
+// deshabilitados, sin importar `soloLectura`. Antes "Lote" permitía
+// navegar a la recepción de otro lote; pedido explícito: el lote
+// designado queda fijo, no editable desde acá.
 //
 // Fecha y horas vuelven a `disabled` fijo — corrección post-revisión: se
 // habían hecho editables con el botón "hoy" de CampoFechaHora para igualar
@@ -17,7 +17,7 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // warehouse-receipts.md) — era un callejón sin salida, se podía tocar,
 // nunca se guardaba. Mismo criterio ahora en los dos formularios: se
 // muestran, no se editan.
-export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLotes = [], cargandoLotes = false }) {
+export default function DatosRecepcionLote({ valores }) {
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
       <SelectorDeBase
@@ -45,10 +45,10 @@ export default function DatosRecepcionLote({ valores, onCambiarLote, opcionesLot
       <SelectorDeBase
         label="Lote designado"
         valor={valores.lote}
-        opciones={opcionesLotes}
-        onSeleccionar={onCambiarLote}
-        cargando={cargandoLotes}
-        placeholder="Buscá el lote…"
+        opciones={valores.lote ? [valores.lote] : []}
+        onSeleccionar={() => {}}
+        disabled
+        placeholder="—"
         className="sm:col-span-2"
       />
 
