@@ -6,6 +6,7 @@ import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptio
 import { inspectionsService } from '../../services/inspectionsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
+import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
@@ -172,56 +173,9 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
   // explícito: el botón "Imprimir" abría el diálogo nativo del navegador,
   // y ahí lo que se ve/genera depende de cada navegador (algunos rasterizan
   // mal, otros ignoran el print-color-adjust) — "se ve todo mal, todo
-  // feo". Ahora se captura el mismo bloque ya aislado (área imprimible,
-  // ver el div con `ref={areaImprimibleRef}` más abajo) a un canvas de
-  // buena resolución y se arma un PDF de verdad con jsPDF, paginado a A4 —
-  // el botón abre ESE archivo, nunca el diálogo de impresión del sistema.
-  const areaImprimibleRef = useRef(null)
-  const [generandoPdf, setGenerandoPdf] = useState(false)
-  const [errorPdf, setErrorPdf] = useState(null)
-
-  const generarPdf = async () => {
-    // Se abre la pestaña ANTES de esperar nada async — si se abre recién
-    // después del await, la mayoría de los navegadores lo trata como
-    // popup no disparado por el usuario y lo bloquea en silencio.
-    const ventana = window.open('', '_blank')
-    setGenerandoPdf(true)
-    setErrorPdf(null)
-    try {
-      // Deja que React termine de ocultar los avisos (confirmación/error/
-      // rechazo total/faltantes) antes de capturar — sin este respiro el
-      // canvas se toma con el DOM todavía en el estado de un frame atrás.
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const nodo = areaImprimibleRef.current
-      if (!nodo) throw new Error('No se encontró el contenido del formulario.')
-      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor: '#faf4e8', useCORS: true })
-      const imagen = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-      const anchoPagina = pdf.internal.pageSize.getWidth()
-      const altoPagina = pdf.internal.pageSize.getHeight()
-      const altoImagen = (canvas.height * anchoPagina) / canvas.width
-      let alturaRestante = altoImagen
-      let posicionY = 0
-      pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-      alturaRestante -= altoPagina
-      while (alturaRestante > 0) {
-        posicionY = alturaRestante - altoImagen
-        pdf.addPage()
-        pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-        alturaRestante -= altoPagina
-      }
-      const url = URL.createObjectURL(pdf.output('blob'))
-      if (ventana) ventana.location.href = url
-      else window.open(url, '_blank') // el navegador no bloqueó el popup — fallback igual, por las dudas
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch (err) {
-      ventana?.close()
-      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
-    } finally {
-      setGenerandoPdf(false)
-    }
-  }
+  // feo". Ver useGenerarPdf.js para el mecanismo completo (canvas + jsPDF,
+  // cortando hoja solo entre secciones, nunca en medio de una).
+  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
 
   const recargar = useCallback(() => {
     if (!puedeVer) return

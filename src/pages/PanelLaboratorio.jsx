@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { TestTubes, ClipboardList, Activity } from 'lucide-react'
+import { TestTubes, ClipboardList, ListChecks, Activity } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import PillTabs from '../components/dashboard/PillTabs.jsx'
 import SeccionPendientes from '../components/laboratorio/SeccionPendientes.jsx'
+import SeccionSolicitudes from '../components/laboratorio/SeccionSolicitudes.jsx'
 import SeccionActividad from '../components/laboratorio/SeccionActividad.jsx'
 
 // Laboratorio — módulo aparte de Calidad en el sidebar (pedido explícito).
@@ -14,8 +15,15 @@ import SeccionActividad from '../components/laboratorio/SeccionActividad.jsx'
 // con el botón "Recibir" para las que están en PENDIENTE_MUESTRA — a
 // diferencia de "crear/solicitar" (que es cosa de Calidad), "recibir" es
 // acción de Laboratorio (pedido explícito, ver SeccionPendientes.jsx).
+// "Solicitudes" separa lo YA recibido por laboratorio destino real, según
+// lo que se asignó ensayo por ensayo en "Asignar laboratorio" (ver
+// FormularioSubdividirMuestra.jsx/SeccionSolicitudes.jsx) — 100% mock, sin
+// backend real todavía. También es donde vive "Iniciar/Continuar análisis"
+// para lo asignado a Laboratorio interno (pedido explícito, ya no en
+// Pendientes).
 const PESTAÑAS_LABORATORIO = [
   { id: 'pendientes', nombre: 'Pendientes', Icon: ClipboardList },
+  { id: 'solicitudes', nombre: 'Solicitudes', Icon: ListChecks },
   { id: 'actividad', nombre: 'Actividad', Icon: Activity },
 ]
 
@@ -47,6 +55,8 @@ export default function PanelLaboratorio() {
       <PillTabs pestañas={PESTAÑAS_LABORATORIO} activa={pestaña} onCambiar={setPestaña} />
 
       {pestaña === 'pendientes' && <SeccionPendientes />}
+
+      {pestaña === 'solicitudes' && <SeccionSolicitudes />}
 
       {pestaña === 'actividad' && <SeccionActividad />}
     </main>

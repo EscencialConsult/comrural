@@ -50,12 +50,12 @@ export default function ScrollHorizontal({ children, className = '' }) {
         {children}
       </div>
       {scroll.desbordado && !scroll.enInicio && (
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center bg-gradient-to-r from-white via-white/85 to-transparent">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center bg-gradient-to-r from-crema-quinua via-crema-quinua/85 to-transparent">
           <ChevronLeft className="size-4 shrink-0 text-marron-cafe/50" strokeWidth={2.5} />
         </div>
       )}
       {scroll.desbordado && !scroll.enFin && (
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-end bg-gradient-to-l from-white via-white/85 to-transparent">
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-end bg-gradient-to-l from-crema-quinua via-crema-quinua/85 to-transparent">
           <ChevronRight className="size-4 shrink-0 text-marron-cafe/50" strokeWidth={2.5} />
         </div>
       )}

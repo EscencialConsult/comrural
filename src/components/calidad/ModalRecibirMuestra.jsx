@@ -12,6 +12,12 @@ import Button from '../Button.jsx'
 // mueve la muestra a RECIBIDA (o RECHAZADA) — crear la solicitud NO lo hace
 // (ver ModalSolicitarAnalisis.jsx / SamplesService.assignDeliveryResponsible,
 // que solo asigna el responsable de entrega).
+//
+// Qué ensayos van a laboratorio interno o externo (y con qué peso de
+// submuestra) YA NO se decide acá — se movió a un paso posterior y más
+// completo, "Subdividir muestra" sobre la solicitud ya RECIBIDA (ver
+// SeccionPendientes.jsx / FormularioSubdividirMuestra.jsx), que reemplaza
+// el mock simple interno/externo que existió acá.
 const hoy = () => new Date().toLocaleDateString('en-CA')
 
 export default function ModalRecibirMuestra({ abierto, muestraCodigo, solicitudId, onCerrar, onRecibida }) {
@@ -43,8 +49,8 @@ export default function ModalRecibirMuestra({ abierto, muestraCodigo, solicitudI
         }
       : { acceptanceCriteriaMet: false, rejectionReason: motivoRechazo.trim() }
     try {
-      const detalle = await ejecutar(() => analysisRequestsService.recibirMuestra(solicitudId, dto))
-      onRecibida(detalle)
+      const detalleRecibido = await ejecutar(() => analysisRequestsService.recibirMuestra(solicitudId, dto))
+      onRecibida(detalleRecibido)
       cerrar()
     } catch {
       // el mensaje legible ya quedó en `error`
@@ -52,7 +58,7 @@ export default function ModalRecibirMuestra({ abierto, muestraCodigo, solicitudI
   }
 
   return (
-    <Modal abierto={abierto} titulo="Recibir muestra" onCerrar={cerrar}>
+    <Modal abierto={abierto} titulo="Recibir muestra" onCerrar={cerrar} maxWidth="max-w-2xl">
       <form onSubmit={enviar} noValidate className="flex flex-col gap-5">
         <div className="flex items-center gap-3 rounded-2xl bg-verde-hoja/5 p-4">
           <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-verde-hoja/15 text-verde-bosque">

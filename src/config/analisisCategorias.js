@@ -35,6 +35,14 @@ export const CATEGORIA_ESTILO = {
 
 export const ORDEN_CATEGORIAS = ['PHYSICOCHEMICAL', 'MICROBIOLOGICAL', 'TOXICOLOGICAL', 'SENSORY', 'OTHER']
 
+// Categorías tratadas como "análisis externo" — pedido explícito: por ahora
+// es pura convención de frontend, sin tocar el backend (el modelo real ya
+// tiene `laboratory_tests.execution_mode` INTERNAL/EXTERNAL por ensayo, ver
+// docs/laboratory.md, pero ese dato todavía no está confiable/expuesto para
+// esto). El día que se use ese campo real, esto debería reemplazarse por
+// `item.executionMode === 'EXTERNAL'` en vez de una categoría fija.
+export const CATEGORIAS_EXTERNAS = new Set(['TOXICOLOGICAL'])
+
 // Campos del formulario de resultados por categoría — usado por
 // FormularioResultadosCategoria.jsx (Laboratorio) — formulario genérico
 // para las categorías que todavía no tienen un documento oficial propio.

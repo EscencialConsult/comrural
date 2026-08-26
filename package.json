@@ -13,7 +13,7 @@
     "@paper-design/shaders": "^0.0.78",
     "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "^4.3.3",
-    "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^2.4.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.28.0",
     "react": "^19.2.7",

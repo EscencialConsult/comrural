@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft, Printer } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
 import { warehouseReceiptsService } from '../../services/warehouseReceiptsService'
+import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
@@ -96,51 +97,12 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
 
   const { enviando, error, ejecutar } = useSolicitud()
 
-  // PDF real, mismo mecanismo que FormularioInspeccionMateriaPrima.jsx
-  // (ver ese archivo para el porqué completo): captura el bloque ya
-  // aislado (cabecera → firmas) a un canvas de buena resolución y arma un
-  // PDF paginado a A4 con jsPDF — el botón "Imprimir" abre ESE archivo,
-  // nunca el diálogo de impresión del navegador.
-  const areaImprimibleRef = useRef(null)
-  const [generandoPdf, setGenerandoPdf] = useState(false)
-  const [errorPdf, setErrorPdf] = useState(null)
-
-  const generarPdf = async () => {
-    const ventana = window.open('', '_blank')
-    setGenerandoPdf(true)
-    setErrorPdf(null)
-    try {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const nodo = areaImprimibleRef.current
-      if (!nodo) throw new Error('No se encontró el contenido del formulario.')
-      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor: '#faf4e8', useCORS: true })
-      const imagen = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-      const anchoPagina = pdf.internal.pageSize.getWidth()
-      const altoPagina = pdf.internal.pageSize.getHeight()
-      const altoImagen = (canvas.height * anchoPagina) / canvas.width
-      let alturaRestante = altoImagen
-      let posicionY = 0
-      pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-      alturaRestante -= altoPagina
-      while (alturaRestante > 0) {
-        posicionY = alturaRestante - altoImagen
-        pdf.addPage()
-        pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-        alturaRestante -= altoPagina
-      }
-      const url = URL.createObjectURL(pdf.output('blob'))
-      if (ventana) ventana.location.href = url
-      else window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch (err) {
-      ventana?.close()
-      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
-    } finally {
-      setGenerandoPdf(false)
-    }
-  }
+  // PDF real, mismo mecanismo que FormularioInspeccionMateriaPrima.jsx —
+  // ver useGenerarPdf.js para el porqué completo (no window.print(),
+  // captura el bloque aislado a un canvas y arma un PDF paginado a A4 con
+  // jsPDF, cortando hoja solo entre secciones, nunca en medio de una) — el
+  // botón "Imprimir" abre ESE archivo, nunca el diálogo del navegador.
+  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
 
   // El asistente arranca desde el paso 1 cada vez que cambia `lotId` — sin
   // esto, entrar a otro lote (por ejemplo desde un link directo) dejaría a

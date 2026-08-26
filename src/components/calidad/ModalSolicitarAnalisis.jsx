@@ -197,10 +197,6 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
           </div>
         </div>
 
-        {error && (
-          <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-        )}
-
         <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
           <TituloSeccion Icon={ClipboardList}>Datos generales</TituloSeccion>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -291,7 +287,7 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
               {testOtro && (
                 <div className="rounded-xl border-l-4 border-dashed border-marron-cafe/25 bg-marron-tierra/5 p-3.5">
                   <p className="mb-2 text-xs font-bold uppercase tracking-wide text-marron-cafe/50">
-                    Otros <span className="font-normal normal-case text-marron-cafe/40">(fuera de las 4 categorías)</span>
+                    Otros <span className="font-normal normal-case text-marron-cafe/40">(fuera del catálogo de arriba)</span>
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <FormInput
@@ -372,13 +368,18 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-marron-tierra/10 pt-4">
-          <p className="text-xs text-marron-cafe/50">
-            {totalEnsayos} ensayo{totalEnsayos === 1 ? '' : 's'} seleccionado{totalEnsayos === 1 ? '' : 's'}
-          </p>
-          <Button type="submit" disabled={enviando || !puedeEnviar} className="px-5 py-2.5">
-            {enviando ? 'Enviando…' : 'Enviar solicitud'}
-          </Button>
+        <div className="flex flex-col gap-2 border-t border-marron-tierra/10 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-marron-cafe/50">
+              {totalEnsayos} ensayo{totalEnsayos === 1 ? '' : 's'} seleccionado{totalEnsayos === 1 ? '' : 's'}
+            </p>
+            <Button type="submit" disabled={enviando || !puedeEnviar} className="px-5 py-2.5">
+              {enviando ? 'Enviando…' : 'Enviar solicitud'}
+            </Button>
+          </div>
+          {error && (
+            <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
+          )}
         </div>
       </form>
     </Modal>

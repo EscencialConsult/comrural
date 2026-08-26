@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { FlaskConical } from 'lucide-react'
-import { ORDEN_CATEGORIAS } from '../../config/analisisCategorias'
+import { ORDEN_CATEGORIAS, CATEGORIAS_EXTERNAS } from '../../config/analisisCategorias'
 import { useAnalisisDraft } from '../../hooks/useAnalisisDraft'
 import Badge from '../Badge.jsx'
 import BotonVolver from '../BotonVolver.jsx'
@@ -8,6 +8,7 @@ import TarjetaCategoria from './TarjetaCategoria.jsx'
 import InformeAnalisisFisicoquimico from './InformeAnalisisFisicoquimico.jsx'
 import InformeAnalisisMicrobiologico from './InformeAnalisisMicrobiologico.jsx'
 import FormularioResultadosCategoria from './FormularioResultadosCategoria.jsx'
+import FormularioAutorizarEnvio from './FormularioAutorizarEnvio.jsx'
 
 // Categorías con su propio documento oficial ya maquetado — cada una
 // recibe `solicitud` completa además de las props comunes (estado/
@@ -38,7 +39,19 @@ const INFORME_POR_CATEGORIA = {
 export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
   const { categoria, cambiarValor, guardarCategoria, finalizarCategoria } = useAnalisisDraft(solicitud.id)
   const [categoriaAbierta, setCategoriaAbierta] = useState(null)
+  // Categoría externa (ver CATEGORIAS_EXTERNAS) cuya tarjeta se clicó — un
+  // booleano alcanza porque hoy solo existe UNA categoría externa
+  // (Toxicológico) y FormularioAutorizarEnvio.jsx ya agrupa TODOS los
+  // ítems externos de la solicitud en un solo registro, sin importar de
+  // qué tarjeta puntual vino el clic.
+  const [envioAbierto, setEnvioAbierto] = useState(false)
 
+  // Todas las categorías que trae la solicitud, interno y externo por
+  // igual — el interno/externo real es un dato del catálogo de cada
+  // ensayo (ver docs/analysis-reception-programming.md del backend, aún
+  // no implementado), no algo que se decide en esta pantalla. Acá solo se
+  // refleja: la tarjeta de una categoría externa lleva a "Autorizar
+  // envío" en vez de al formulario de resultados.
   const porCategoria = useMemo(() => {
     const mapa = new Map()
     for (const item of solicitud.items) {
@@ -47,6 +60,10 @@ export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
     }
     return ORDEN_CATEGORIAS.filter((c) => mapa.has(c)).map((c) => [c, mapa.get(c)])
   }, [solicitud.items])
+
+  if (envioAbierto) {
+    return <FormularioAutorizarEnvio solicitud={solicitud} onVolver={() => setEnvioAbierto(false)} />
+  }
 
   if (categoriaAbierta) {
     const draft = categoria(categoriaAbierta)
@@ -60,7 +77,11 @@ export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
     }
     const Informe = INFORME_POR_CATEGORIA[categoriaAbierta]
     if (Informe) {
-      return <Informe solicitud={solicitud} {...props} />
+      // La tarjeta ya finalizada dice "Imprimir", no "Iniciar" (ver
+      // TarjetaCategoria.jsx) — `autoImprimir` hace que ESE clic ya
+      // dispare el PDF apenas se monta la planilla de solo lectura, en vez
+      // de obligar a un segundo clic sobre el botón "Imprimir" de adentro.
+      return <Informe solicitud={solicitud} autoImprimir={draft.estado === 'FINALIZADO'} {...props} />
     }
     const items = porCategoria.find(([c]) => c === categoriaAbierta)?.[1] ?? []
     return <FormularioResultadosCategoria categoria={categoriaAbierta} items={items} {...props} />
@@ -110,7 +131,8 @@ export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
               categoria={cat}
               cantidadEnsayos={items.length}
               estado={categoria(cat).estado}
-              onClick={() => setCategoriaAbierta(cat)}
+              esExterno={CATEGORIAS_EXTERNAS.has(cat)}
+              onClick={() => (CATEGORIAS_EXTERNAS.has(cat) ? setEnvioAbierto(true) : setCategoriaAbierta(cat))}
             />
           ))}
         </div>

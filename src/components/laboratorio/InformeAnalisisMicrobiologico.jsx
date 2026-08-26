@@ -29,7 +29,16 @@ const fechaDeHoy = () => new Date().toLocaleDateString('en-CA')
 // todavía para guardarlos (ver docs/laboratory.md §1) — "Guardar
 // cambios"/"Finalizar categoría" solo persisten en este navegador
 // (useAnalisisDraft.js).
-export default function InformeAnalisisMicrobiologico({ solicitud, estado, valores, onCambiarValor, onVolver, onGuardar, onFinalizar }) {
+export default function InformeAnalisisMicrobiologico({
+  solicitud,
+  estado,
+  valores,
+  onCambiarValor,
+  onVolver,
+  onGuardar,
+  onFinalizar,
+  autoImprimir = false,
+}) {
   const finalizada = estado === 'FINALIZADO'
   const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#ffffff' })
 
@@ -40,6 +49,14 @@ export default function InformeAnalisisMicrobiologico({ solicitud, estado, valor
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo debe
     // correr una vez al montar (o si cambia de solicitud/categoría, que
     // remonta el componente entero) — no en cada cambio de `valores`.
+  }, [])
+
+  // Mismo criterio que InformeAnalisisFisicoquimico.jsx: la tarjeta ya
+  // finalizada dice "Imprimir" (ver TarjetaCategoria.jsx), ese clic ya
+  // dispara el PDF apenas se monta esta planilla de solo lectura.
+  useEffect(() => {
+    if (autoImprimir) generarPdf()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

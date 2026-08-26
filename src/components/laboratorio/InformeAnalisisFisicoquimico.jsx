@@ -35,9 +35,29 @@ const fechaDeHoy = () => new Date().toLocaleDateString('en-CA')
 // 100% mock: no hay endpoint todavía para guardar resultados de ensayos
 // (ver docs/laboratory.md §1) — "Guardar cambios"/"Finalizar categoría"
 // solo persisten en este navegador (useAnalisisDraft.js).
-export default function InformeAnalisisFisicoquimico({ solicitud, estado, valores, onCambiarValor, onVolver, onGuardar, onFinalizar }) {
+export default function InformeAnalisisFisicoquimico({
+  solicitud,
+  estado,
+  valores,
+  onCambiarValor,
+  onVolver,
+  onGuardar,
+  onFinalizar,
+  autoImprimir = false,
+}) {
   const finalizada = estado === 'FINALIZADO'
   const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#ffffff' })
+
+  // Se llegó acá con la tarjeta ya en "Imprimir" (ver TarjetaCategoria.jsx)
+  // — ese clic ya cuenta como la intención de imprimir, no hace falta un
+  // segundo clic sobre el botón de acá adentro. Solo una vez por montaje
+  // (no en cada re-render): `generarPdf` es estable entre renders (viene
+  // de un hook con su propia ref), pero igual se guarda explícito para no
+  // depender de esa garantía.
+  useEffect(() => {
+    if (autoImprimir) generarPdf()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Autocompleta "Fecha inicio de ensayo" con la fecha de la máquina al
   // abrir el informe, a pedido explícito — sigue editable (el backend no
