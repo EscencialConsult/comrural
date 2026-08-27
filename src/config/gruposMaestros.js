@@ -13,6 +13,7 @@ import {
   Warehouse,
   Receipt,
   TestTubes,
+  Factory,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -119,6 +120,33 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/calidad/muestras',
         permiso: 'samples:read',
         Icon: TestTubes,
+      },
+    ],
+  },
+  {
+    id: 'produccion',
+    // Mismo criterio que Calidad/Almacén: "Producción" (el padre) es el
+    // Inicio del área — solo dashboard/analytics — y las dos hermanas son
+    // las áreas FÍSICAS reales de la planta, no pantallas por tipo de
+    // dato. Adentro de cada una vive su propia fila de subpestañas locales
+    // (PillTabs, ver SeccionAreaA.jsx/SeccionAreaB.jsx) con los formularios
+    // de esa área — esas subpestañas NO son rutas, viven en un solo nivel
+    // más abajo que esto.
+    padre: { nombre: 'Producción', ruta: '/panel/produccion', permiso: 'produccion:read', Icon: Factory },
+    items: [
+      {
+        id: 'area-a',
+        nombre: 'Área A',
+        ruta: '/panel/produccion/area-a',
+        permiso: 'produccion:read',
+        Icon: Warehouse,
+      },
+      {
+        id: 'area-b',
+        nombre: 'Área B',
+        ruta: '/panel/produccion/area-b',
+        permiso: 'produccion:read',
+        Icon: Factory,
       },
     ],
   },

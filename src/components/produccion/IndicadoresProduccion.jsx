@@ -20,7 +20,11 @@ const INDICADORES_POR_AREA = {
   ],
 }
 
-export default function IndicadoresProduccion() {
+// `area`: 'A' | 'B' | undefined. Sin `area`, muestra las dos tarjetas lado a
+// lado (uso original, dashboard general); con `area`, solo la tarjeta de esa
+// área — así la misma pantalla sirve de subpestaña "Indicadores" dentro de
+// SeccionAreaA.jsx/SeccionAreaB.jsx sin mostrar la del área ajena.
+export default function IndicadoresProduccion({ area }) {
   const [indicadores, setIndicadores] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
 
@@ -41,27 +45,29 @@ export default function IndicadoresProduccion() {
 
   if (!indicadores) {
     return (
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={`grid gap-4 ${area ? '' : 'md:grid-cols-2'}`}>
         <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
+        {!area && <Skeleton className="h-48" />}
       </div>
     )
   }
 
+  const areas = area ? [area] : ['A', 'B']
+
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {['A', 'B'].map((area) => {
-        const valores = indicadores.find((i) => i.area === area) ?? {}
+    <div className={`grid gap-4 ${area ? '' : 'md:grid-cols-2'}`}>
+      {areas.map((a) => {
+        const valores = indicadores.find((i) => i.area === a) ?? {}
         return (
-          <div key={area} className="flex flex-col gap-4 rounded-3xl bg-marron-tierra/5 p-6">
+          <div key={a} className="flex flex-col gap-4 rounded-3xl bg-marron-tierra/5 p-6">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-full bg-verde-hoja/10 text-verde-bosque">
                 <Gauge className="size-5" strokeWidth={1.75} />
               </div>
-              <h3 className="font-extrabold text-marron-cafe">Área {area}</h3>
+              <h3 className="font-extrabold text-marron-cafe">Área {a}</h3>
             </div>
             <div className="flex flex-col gap-3">
-              {INDICADORES_POR_AREA[area].map(({ key, etiqueta, meta, cumple }) => {
+              {INDICADORES_POR_AREA[a].map(({ key, etiqueta, meta, cumple }) => {
                 const valor = valores[key]
                 const ok = valor != null && cumple(valor)
                 return (

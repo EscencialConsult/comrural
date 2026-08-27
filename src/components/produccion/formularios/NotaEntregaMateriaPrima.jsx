@@ -4,7 +4,6 @@ import { produccionService } from '../../../services/produccionService'
 import { useGenerarPdf } from '../../../hooks/useGenerarPdf'
 import { useSolicitud } from '../../../hooks/useSolicitud'
 import { toast } from '../../../lib/toast'
-import BotonVolver from '../../BotonVolver.jsx'
 import Button from '../../Button.jsx'
 import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
@@ -44,9 +43,11 @@ const VACIO = {
 // completa: cabecera + sección de datos + firmas + export a PDF, todo con
 // componentes ya hechos para Calidad/Laboratorio — nada nuevo que diseñar
 // visualmente acá.
-export default function NotaEntregaMateriaPrima({ onVolver }) {
+export default function NotaEntregaMateriaPrima({ loteInicialId }) {
   const [lotesMp, setLotesMp] = useState(null)
-  const [form, setForm] = useState(VACIO)
+  // Si se abre desde "Lotes" de Producción (SeccionLotesProduccion.jsx) con
+  // un lote ya elegido, arranca con ese lote precargado en vez de vacío.
+  const [form, setForm] = useState(() => (loteInicialId ? { ...VACIO, loteMpId: loteInicialId } : VACIO))
   const { areaImprimibleRef, generandoPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
   const { enviando, ejecutar } = useSolicitud()
 
@@ -74,11 +75,6 @@ export default function NotaEntregaMateriaPrima({ onVolver }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <BotonVolver onClick={onVolver} ariaLabel="Volver al catálogo de formularios" />
-        <p className="text-sm text-marron-cafe/60">Formularios · Producción</p>
-      </div>
-
       <div ref={areaImprimibleRef} className="flex flex-col gap-6">
         <CabeceraFormulario
           antetitulo="Registro"

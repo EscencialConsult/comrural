@@ -5,7 +5,6 @@ import { PRESENTACIONES_COMERCIALES } from '../../../config/presentacionesComerc
 import { useGenerarPdf } from '../../../hooks/useGenerarPdf'
 import { useSolicitud } from '../../../hooks/useSolicitud'
 import { toast } from '../../../lib/toast'
-import BotonVolver from '../../BotonVolver.jsx'
 import Button from '../../Button.jsx'
 import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
@@ -54,7 +53,7 @@ const suma = (obj) => Object.values(obj).reduce((acc, v) => acc + (v ?? 0), 0)
 // DISTINTO del lote de MP (lo asigna Compras, no tiene relación con
 // producto ni cliente) — por eso son dos campos separados en "Control de
 // envases", nunca el mismo selector.
-export default function EnvasadoProductoTerminado({ onVolver }) {
+export default function EnvasadoProductoTerminado() {
   const [lotesMp, setLotesMp] = useState(null)
   const [cabecera, setCabecera] = useState(CABECERA_VACIA)
   const [controlEnvases, setControlEnvases] = useState(CONTROL_ENVASES_VACIO)
@@ -109,11 +108,6 @@ export default function EnvasadoProductoTerminado({ onVolver }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <BotonVolver onClick={onVolver} ariaLabel="Volver al catálogo de formularios" />
-        <p className="text-sm text-marron-cafe/60">Formularios · Producción</p>
-      </div>
-
       <div ref={areaImprimibleRef} className="flex flex-col gap-6">
         <CabeceraFormulario
           antetitulo="Registro"

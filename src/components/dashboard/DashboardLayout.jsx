@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useSitioBase } from '../../hooks/useSitioBase'
 import { climaService } from '../../services/climaService'
@@ -23,23 +23,6 @@ export default function DashboardLayout() {
   // (en DashboardHeader) lo necesitan.
   const [sidebarAbierto, setSidebarAbierto] = useState(false)
   const { pathname } = useLocation()
-
-  // GrupoTabs (pastillas debajo del header) solo se ve arriba del todo —
-  // a pedido explícito, al scrollear el navbar "se la come" y recién
-  // vuelve a aparecer cuando se vuelve al tope (no con cualquier scroll
-  // hacia arriba, para no taparla/destaparla en cada pixel de scroll
-  // intermedio). `scrollRef` apunta al contenedor real que scrollea
-  // (overflow-y-auto más abajo), no a window.
-  const [enTope, setEnTope] = useState(true)
-  const scrollRef = useRef(null)
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const alScrollear = () => setEnTope(el.scrollTop <= 4)
-    el.addEventListener('scroll', alScrollear, { passive: true })
-    return () => el.removeEventListener('scroll', alScrollear)
-  }, [])
 
   // Al navegar a otro módulo se cierra solo — sin esto, el drawer se
   // quedaba abierto tapando la pantalla después de elegir un ítem del menú.
@@ -77,11 +60,17 @@ export default function DashboardLayout() {
       <Toaster />
       <DashboardSidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
-      <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto print:overflow-visible">
-        {/* sticky (no el <header> por separado) para que el header Y las
-            pestañas de GrupoTabs queden fijos como una sola franja al
-            scrollear — antes solo el <header> era sticky, así que
-            GrupoTabs se subía con el contenido. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto print:overflow-visible">
+        {/* Solo el <header> es sticky — GrupoTabs queda en flujo normal,
+            SIN animación ni JS de scroll (versión probada antes: colapsar
+            GrupoTabs con max-height/opacity funcionaba pero traía sus
+            propios problemas — bucles de scroll anchoring, "indecisión" en
+            posiciones intermedias). Con esto, al bajar el scroll GrupoTabs
+            pasa por DEBAJO del header (que al ser sticky+posicionado pinta
+            por encima de contenido no posicionado, sin necesitar z-index
+            explícito) y al volver arriba del todo simplemente reaparece en
+            su lugar — mismo efecto visual de "se lo come el header", sin
+            ningún estado ni listener. */}
         <div className="sticky top-0 z-20 bg-crema-quinua print:static print:hidden">
           <DashboardHeader
             clima={clima}
@@ -89,19 +78,9 @@ export default function DashboardLayout() {
             usuario={usuario}
             onAbrirMenu={() => setSidebarAbierto(true)}
           />
-          {/* Truco grid-rows (1fr/0fr) para colapsar con transición suave
-              sin necesitar la altura real de GrupoTabs (que además puede
-              no renderizar nada — ver "if (!grupo) return null" ahí). El
-              overflow-hidden de adentro es el que realmente esconde el
-              contenido mientras el grid se encoge. */}
-          <div
-            className="grid transition-[grid-template-rows] duration-300 ease-out"
-            style={{ gridTemplateRows: enTope ? '1fr' : '0fr' }}
-          >
-            <div className="overflow-hidden">
-              <GrupoTabs />
-            </div>
-          </div>
+        </div>
+        <div className="print:hidden">
+          <GrupoTabs />
         </div>
         <Outlet />
       </div>

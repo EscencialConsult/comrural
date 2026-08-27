@@ -117,6 +117,18 @@ const INDICADORES = [
   { area: 'B', rendimiento: 88.7, quinuaSegunda: 2.1, quinuaTercera: 1.9 },
 ]
 
+// Planilla de pedidos de Logística/Compras — "Consulta externa" del
+// relevamiento: Producción solo la MIRA (no la genera ni la edita acá,
+// por eso no hay `registrar*` para esto), para saber qué compras están en
+// camino y planificar según eso. Todavía no hay módulo de órdenes de
+// compra en el sistema (ni real ni el resto mock), así que esto es
+// enteramente ilustrativo.
+const ORDENES_COMPRA = [
+  { id: 'oc-1', codigo: 'OC-2026-0088', proveedor: 'Agropecuaria Los Andes', producto: 'Quinua Real Perlada', cantidadQq: 120, fechaEstimada: '2026-08-29', estado: 'EN_TRANSITO' },
+  { id: 'oc-2', codigo: 'OC-2026-0087', proveedor: 'Cooperativa Altiplano', producto: 'Quinua Roja', cantidadQq: 80, fechaEstimada: '2026-08-30', estado: 'CONFIRMADA' },
+  { id: 'oc-3', codigo: 'OC-2026-0085', proveedor: 'Productores Salinas', producto: 'Quinua Negra', cantidadQq: 60, fechaEstimada: '2026-09-02', estado: 'PENDIENTE' },
+]
+
 // Lotes de MATERIA PRIMA disponibles para entrega a Producción — distintos
 // de LOTES de arriba (esos son de producto en proceso/PT). Formato de código
 // real C-NNNNN-MP (lo genera Compras, ver RP-04 del relevamiento), se
@@ -154,6 +166,11 @@ export const produccionService = {
   async listarLotesMp() {
     await delay()
     return [...LOTES_MP]
+  },
+
+  async listarOrdenesCompra() {
+    await delay()
+    return [...ORDENES_COMPRA]
   },
 
   async registrarNotaEntregaMp(dto) {

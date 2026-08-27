@@ -16,6 +16,8 @@ import PanelAlmacen from './pages/PanelAlmacen.jsx'
 import PanelAlmacenRecepcion from './pages/PanelAlmacenRecepcion.jsx'
 import PanelCalidad from './pages/PanelCalidad.jsx'
 import PanelProduccion from './pages/PanelProduccion.jsx'
+import PanelProduccionAreaA from './pages/PanelProduccionAreaA.jsx'
+import PanelProduccionAreaB from './pages/PanelProduccionAreaB.jsx'
 import PanelLaboratorio from './pages/PanelLaboratorio.jsx'
 import PanelCalidadRecepcion from './pages/PanelCalidadRecepcion.jsx'
 import PanelCalidadRemito from './pages/PanelCalidadRemito.jsx'
@@ -96,6 +98,8 @@ function App() {
         <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
         <Route path="/panel/calidad" element={<PanelCalidad />} />
         <Route path="/panel/produccion" element={<PanelProduccion />} />
+        <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
+        <Route path="/panel/produccion/area-b" element={<PanelProduccionAreaB />} />
         <Route path="/panel/laboratorio" element={<PanelLaboratorio />} />
         <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
         <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />
