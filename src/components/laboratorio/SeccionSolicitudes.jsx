@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { FlaskConical, ShieldCheck, PackageSearch } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { FlaskConical, ShieldCheck, PackageSearch, Send, Info } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
-import { leerSubdivisionMuestra } from '../../hooks/useSubdivisionMuestra'
-import { claveDestino } from '../../config/laboratoriosDestino'
+import { analysisExecutionsService } from '../../services/analysisExecutionsService'
+import { externalShipmentsService } from '../../services/externalShipmentsService'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -14,67 +14,100 @@ import FormularioIniciarAnalisis from './FormularioIniciarAnalisis.jsx'
 const TONO_ESTADO_SOLICITUD = {
   RECIBIDA: 'positivo',
   EN_PROCESO: 'alerta',
+  PENDIENTE_EXTERNOS: 'alerta',
   ANALIZADA: 'positivo',
 }
 
-// Subpestaña "Solicitudes" de Laboratorio — separa lo ya recibido por
-// LABORATORIO DESTINO real (interno, Mérieux, AGQ...), según cómo se
-// asignó la muestra en "Asignar laboratorio" (FormularioSubdividirMuestra.jsx,
-// ver useSubdivisionMuestra.js). Antes solo distinguía interno/externo —
-// ahora que esa asignación guarda el laboratorio puntual y el peso de cada
-// submuestra, se agrupa dinámicamente por ese destino en vez de dos tablas
-// fijas. 100% mock: esa asignación vive solo en localStorage — el backend
-// real para esto (laboratorios externos, splits de muestra) todavía no
-// existe, ver docs/analysis-reception-programming.md del backend, spec sin
-// implementar.
+// Cómo se ve cada estado de un envío externo en la fila.
+const ESTADO_ENVIO = {
+  BORRADOR: { label: 'Borrador', tono: 'neutro' },
+  PENDIENTE_GAC: { label: 'Espera GAC', tono: 'alerta' },
+  PENDIENTE_GG: { label: 'Espera Gerencia', tono: 'alerta' },
+  AUTORIZADO: { label: 'Autorizado', tono: 'positivo' },
+  ENVIADO: { label: 'Enviado', tono: 'positivo' },
+  RESULTADO_RECIBIDO: { label: 'Resultado recibido', tono: 'positivo' },
+  CERRADO: { label: 'Cerrado', tono: 'positivo' },
+  ANULADO: { label: 'Anulado', tono: 'negativo' },
+}
+
+// Subpestaña "Solicitudes" de Laboratorio — lo ya recibido, separado por
+// dónde se procesa cada cosa. Todo sale del backend real:
+// `items[].assignedExecutionMode` (asignado en "Asignar laboratorio") y la
+// lista de envíos externos.
 //
-// "Iniciar/Continuar análisis" vive ACÁ (pedido explícito, ya no en
-// Pendientes) — solo tiene sentido una vez que la solicitud quedó asignada
-// a "Laboratorio interno": es el propio Laboratorio quien procesa esos
-// ensayos, a diferencia de los externos, que van por "Solicitar análisis"
-// (registro I-LAB-16/R-01, ver FormularioAutorizarEnvio.jsx).
-//
-// "Pendientes" (la otra subpestaña) sigue siendo la cola de trabajo de
-// recepción/asignación — acá solo se lee lo YA recibido, para ver cómo
-// quedó repartido y trabajarlo.
+// Tres bloques:
+//   * Laboratorio interno — los ensayos que procesa el propio laboratorio.
+//     Acá vive "Iniciar/Continuar análisis".
+//   * Por despachar — ensayos externos que todavía no viajan en ningún
+//     envío. Acá se arma el envío (que es donde se elige el laboratorio).
+//   * Un bloque por envío ya armado, con su estado del circuito GAC/GG.
 export default function SeccionSolicitudes() {
   const { permisos } = useAuth()
-  const puedeIniciarAnalisis = permisos.has('analysis-requests:update')
+  // "Analizar" crea/edita informes internos — el permiso real es
+  // laboratory-reports:manage, no analysis-requests:update (que es para
+  // editar la solicitud en sí).
+  const puedeIniciarAnalisis = permisos.has('laboratory-reports:manage')
+  const puedeGestionarEnvios = permisos.has('external-shipments:manage')
 
   const [solicitudes, setSolicitudes] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  // Detalle completo de la solicitud cuyo "Solicitar análisis" se clicó en
-  // un grupo externo — abre el registro I-LAB-16/R-01 (mock, ver
-  // FormularioAutorizarEnvio.jsx). Ya se tiene el detalle cargado acá
-  // (detallePorSolicitud, más abajo), no hace falta volver a pedirlo.
+  // { solicitud, ensayos, envio } — el envío externo que se está armando o
+  // gestionando. `envio` null = todavía no existe, se está creando.
   const [envioAbierto, setEnvioAbierto] = useState(null)
-  const [analisisEnCurso, setAnalisisEnCurso] = useState(null) // detalle completo | null
-  const [cargandoAnalisisId, setCargandoAnalisisId] = useState(null)
-  const [errorIniciarAnalisis, setErrorIniciarAnalisis] = useState(null)
+  const [analisisEnCurso, setAnalisisEnCurso] = useState(null)
+  const [errorAccion, setErrorAccion] = useState(null)
 
-  useEffect(() => {
-    let cancelado = false
-    analysisRequestsService
-      .listar({ limit: 100 })
-      .then((resp) => !cancelado && setSolicitudes(resp.data.filter((s) => s.status !== 'PENDIENTE_MUESTRA' && s.status !== 'RECHAZADA')))
-      .catch((err) => !cancelado && setErrorCarga(err.message))
-    return () => {
-      cancelado = true
+  const [detallePorSolicitud, setDetallePorSolicitud] = useState({})
+  const [enviosPorSolicitud, setEnviosPorSolicitud] = useState({})
+  const pedidosId = useRef(new Set())
+
+  // Ejecuciones internas ya abiertas (con su submuestra) por solicitud —
+  // hace falta para no dejar "Analizar" disponible si el ensayo interno
+  // todavía no tiene la submuestra preparada (ver FormularioAsignarLaboratorio.jsx,
+  // paso "Preparación"). El backend deja crear el borrador de la planilla
+  // igual sin ejecución, pero eso perdería de qué cantidad partió el
+  // análisis, así que se bloquea acá.
+  const [ejecucionesPorSolicitud, setEjecucionesPorSolicitud] = useState({})
+  const pedidosEjecucionesId = useRef(new Set())
+
+  const cargar = useCallback(async () => {
+    try {
+      const resp = await analysisRequestsService.listar({ limit: 100 })
+      // Al recargar la lista, limpiar el caché de detalles y envíos para que
+      // el useEffect siguiente vuelva a pedirlos todos. Sin esto, si el
+      // componente se desmonta y remonta (p.ej. al cambiar de pestaña),
+      // pedidosId conserva los IDs ya vistos y el efecto no pide nada →
+      // detallePorSolicitud queda vacío → la vista sale en blanco.
+      pedidosId.current = new Set()
+      pedidosEjecucionesId.current = new Set()
+      setDetallePorSolicitud({})
+      setEnviosPorSolicitud({})
+      setEjecucionesPorSolicitud({})
+      setSolicitudes(resp.data.filter((s) => s.status !== 'PENDIENTE_MUESTRA' && s.status !== 'RECHAZADA'))
+    } catch (err) {
+      setErrorCarga(err.message)
     }
   }, [])
 
-  // Detalle (items[]) por solicitud, para saber qué ensayo puntual quedó en
-  // cada paquete — el listado no trae `items[]`, hace falta pedirlo aparte
-  // (mismo criterio de enriquecimiento que SeccionPendientes.jsx).
-  const [detallePorSolicitud, setDetallePorSolicitud] = useState({})
-  const pedidosId = useRef(new Set())
+  useEffect(() => {
+    cargar()
+    // Al desmontar (cambio de pestaña), limpiar el registro de IDs ya pedidos
+    // para que la próxima vez que el componente monte vuelva a cargar todo.
+    return () => {
+      pedidosId.current = new Set()
+      pedidosEjecucionesId.current = new Set()
+    }
+  }, [cargar])
 
+  // Detalle (items[] con su modalidad asignada) + envíos, por solicitud. El
+  // listado no trae ninguna de las dos cosas, hace falta pedirlas aparte.
   useEffect(() => {
     if (!solicitudes) return
     const aPedir = solicitudes.filter((s) => !pedidosId.current.has(s.id))
     if (aPedir.length === 0) return
     aPedir.forEach((s) => pedidosId.current.add(s.id))
     let cancelado = false
+
     Promise.allSettled(aPedir.map((s) => analysisRequestsService.obtener(s.id))).then((resultados) => {
       if (cancelado) return
       setDetallePorSolicitud((prev) => {
@@ -85,45 +118,107 @@ export default function SeccionSolicitudes() {
         return siguiente
       })
     })
+
+    Promise.allSettled(aPedir.map((s) => externalShipmentsService.listarPorSolicitud(s.id))).then((resultados) => {
+      if (cancelado) return
+      setEnviosPorSolicitud((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[aPedir[i].id] = r.status === 'fulfilled' ? r.value : []
+        })
+        return siguiente
+      })
+    })
+
     return () => {
       cancelado = true
     }
   }, [solicitudes])
 
-  // "Iniciar análisis" — POST .../start-analysis, transición real
-  // RECIBIDA -> EN_PROCESO. Actualiza el status en memoria (acá y en el
-  // detalle ya pedido) para que la fila y el badge reflejen el cambio sin
-  // recargar la lista completa.
-  const alClicarIniciarAnalisis = async (solicitudId) => {
-    setErrorIniciarAnalisis(null)
-    setCargandoAnalisisId(solicitudId)
-    try {
-      const detalle = await analysisRequestsService.iniciarAnalisis(solicitudId)
-      setSolicitudes((prev) => prev.map((s) => (s.id === solicitudId ? { ...s, status: detalle.status } : s)))
-      setDetallePorSolicitud((prev) => ({ ...prev, [solicitudId]: detalle }))
-      setAnalisisEnCurso(detalle)
-    } catch (err) {
-      setErrorIniciarAnalisis(err.message)
-    } finally {
-      setCargandoAnalisisId(null)
-    }
-  }
+  // Ejecuciones internas, solo para las solicitudes con algún ensayo
+  // INTERNAL — es lo único que dice si ya se preparó la submuestra.
+  useEffect(() => {
+    const candidatos = Object.entries(detallePorSolicitud)
+      .filter(([id, detalle]) => {
+        if (!detalle || detalle === 'error' || pedidosEjecucionesId.current.has(id)) return false
+        return detalle.items.some((i) => i.status !== 'REMOVED' && i.assignedExecutionMode === 'INTERNAL')
+      })
+      .map(([id]) => id)
+    if (candidatos.length === 0) return
+    candidatos.forEach((id) => pedidosEjecucionesId.current.add(id))
+    let cancelado = false
 
-  // "Continuar análisis" — para una solicitud que ya está EN_PROCESO, solo
-  // reabre la vista de categorías con el detalle ya cargado, sin transición
-  // que disparar (mismo criterio que tenía SeccionPendientes.jsx).
-  const alClicarContinuarAnalisis = (solicitudId) => {
-    setErrorIniciarAnalisis(null)
+    Promise.allSettled(candidatos.map((id) => analysisExecutionsService.listarPorSolicitud(id))).then((resultados) => {
+      if (cancelado) return
+      setEjecucionesPorSolicitud((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[candidatos[i]] = r.status === 'fulfilled' ? r.value : []
+        })
+        return siguiente
+      })
+    })
+
+    return () => {
+      cancelado = true
+    }
+  }, [detallePorSolicitud])
+
+  // Vuelve a pedir detalle + envíos de UNA solicitud, después de una acción
+  // que los pudo cambiar (armar un envío, firmar, iniciar análisis).
+  const refrescarSolicitud = useCallback(async (requestId) => {
+    const [detalle, envios] = await Promise.allSettled([
+      analysisRequestsService.obtener(requestId),
+      externalShipmentsService.listarPorSolicitud(requestId),
+    ])
+    if (detalle.status === 'fulfilled') {
+      setDetallePorSolicitud((prev) => ({ ...prev, [requestId]: detalle.value }))
+      setSolicitudes((prev) => prev?.map((s) => (s.id === requestId ? { ...s, status: detalle.value.status } : s)))
+    }
+    if (envios.status === 'fulfilled') {
+      setEnviosPorSolicitud((prev) => ({ ...prev, [requestId]: envios.value }))
+    }
+  }, [])
+
+  // Abre la vista de planillas (FormularioIniciarAnalisis.jsx). Ya NO llama
+  // a POST .../start-analysis — esa transición RECIBIDA -> EN_PROCESO la
+  // hace `analysisExecutionsService.crear` al abrir el trabajo interno
+  // (ver FormularioAsignarLaboratorio.jsx, paso "Preparación"). El backend
+  // deja crear el borrador de una planilla (laboratoryReportsService.crearInterno)
+  // sin que exista ejecución todavía, pero acá se bloquea el botón hasta
+  // que la submuestra esté preparada — a pedido explícito, para no perder
+  // de qué cantidad partió el análisis (ver bloque "Laboratorio interno"
+  // más abajo, con ejecucionesPorSolicitud).
+  const alClicarAnalizar = (solicitudId) => {
+    setErrorAccion(null)
     const detalle = detallePorSolicitud[solicitudId]
     if (detalle && detalle !== 'error') setAnalisisEnCurso(detalle)
   }
 
   if (analisisEnCurso) {
-    return <FormularioIniciarAnalisis solicitud={analisisEnCurso} onVolver={() => setAnalisisEnCurso(null)} />
+    return (
+      <FormularioIniciarAnalisis
+        solicitud={analisisEnCurso}
+        onVolver={() => {
+          refrescarSolicitud(analisisEnCurso.id)
+          setAnalisisEnCurso(null)
+        }}
+      />
+    )
   }
 
   if (envioAbierto) {
-    return <FormularioAutorizarEnvio solicitud={envioAbierto} onVolver={() => setEnvioAbierto(null)} />
+    return (
+      <FormularioAutorizarEnvio
+        solicitud={envioAbierto.solicitud}
+        ensayos={envioAbierto.ensayos}
+        envio={envioAbierto.envio}
+        onVolver={() => {
+          refrescarSolicitud(envioAbierto.solicitud.id)
+          setEnvioAbierto(null)
+        }}
+      />
+    )
   }
 
   if (errorCarga) {
@@ -139,75 +234,171 @@ export default function SeccionSolicitudes() {
     )
   }
 
-  // Cada fila lleva { s, items, subdivision } — `subdivision` es `null` si
-  // esta solicitud todavía no pasó por "Asignar laboratorio" (o si falló el
-  // pedido de detalle): queda en "Sin laboratorio asignado", no se inventa
-  // un destino que nadie asignó.
+  // Cada fila lleva { s, detalle, envios }. Sin detalle todavía cargado, la
+  // solicitud queda en "Sin clasificar" en vez de desaparecer.
   const filas = solicitudes.map((s) => {
     const detalle = detallePorSolicitud[s.id]
-    const subdivision = leerSubdivisionMuestra(s.id)
-    const items = detalle && detalle !== 'error' ? detalle.items : null
-    return { s, items, subdivision }
+    return {
+      s,
+      detalle: detalle && detalle !== 'error' ? detalle : null,
+      envios: enviosPorSolicitud[s.id] ?? [],
+    }
   })
 
-  const asignadas = filas.filter(({ items, subdivision }) => items && subdivision?.asignaciones && Object.keys(subdivision.asignaciones).length > 0)
-  const sinAsignar = filas.filter(({ items, subdivision }) => items && (!subdivision?.asignaciones || Object.keys(subdivision.asignaciones).length === 0))
+  const itemsActivos = (detalle) => detalle.items.filter((i) => i.status !== 'REMOVED')
 
-  // Agrupa TODOS los paquetes de TODAS las solicitudes asignadas por
-  // laboratorio destino (ver claveDestino) — una sección por destino
-  // encontrado, en vez de dos tablas fijas interno/externo.
-  const gruposPorDestino = new Map()
-  for (const { s, items, subdivision } of asignadas) {
-    const porClave = new Map()
-    for (const item of items) {
-      const asignacion = subdivision.asignaciones[item.id]
-      if (!asignacion) continue
-      const clave = claveDestino(asignacion)
-      if (!porClave.has(clave)) porClave.set(clave, { nombre: asignacion.nombre, esInterno: asignacion.labId === 'INTERNO', ensayos: [] })
-      porClave.get(clave).ensayos.push(item)
-    }
-    for (const [clave, { nombre, esInterno, ensayos }] of porClave) {
-      if (!gruposPorDestino.has(clave)) gruposPorDestino.set(clave, { nombre, esInterno, filas: [] })
-      const peso = subdivision.paquetes?.[clave]
-      gruposPorDestino.get(clave).filas.push({ s, ensayos, peso })
-    }
-  }
-  const destinos = Array.from(gruposPorDestino.entries()).sort(([, a], [, b]) => (a.esInterno === b.esInterno ? 0 : a.esInterno ? -1 : 1))
+  // Bloque 1 — lo que procesa el propio laboratorio. `ejecuciones` decide si
+  // ya se preparó la submuestra: undefined mientras se está pidiendo, []
+  // si la solicitud llegó a asignar modalidad pero se salió antes de
+  // "Preparación" (ver Pendientes) — en ese caso "Analizar" queda
+  // bloqueado más abajo.
+  const internos = filas
+    .filter(({ detalle }) => detalle && itemsActivos(detalle).some((i) => i.assignedExecutionMode === 'INTERNAL'))
+    .map(({ s, detalle }) => ({
+      s,
+      ensayos: itemsActivos(detalle).filter((i) => i.assignedExecutionMode === 'INTERNAL'),
+      ejecuciones: ejecucionesPorSolicitud[s.id],
+    }))
+
+  // Bloque 2 — externos que todavía no viajan en ningún envío vigente.
+  const porDespachar = filas
+    .map(({ s, detalle, envios }) => {
+      if (!detalle) return null
+      const yaEnviados = new Set(
+        envios.filter((e) => e.status !== 'ANULADO').flatMap((e) => e.items.map((i) => i.itemId)),
+      )
+      const pendientes = itemsActivos(detalle).filter(
+        (i) => i.assignedExecutionMode === 'EXTERNAL' && !yaEnviados.has(i.id),
+      )
+      return pendientes.length > 0 ? { s, detalle, ensayos: pendientes } : null
+    })
+    .filter(Boolean)
+
+  // Bloque 3 — un grupo por envío ya armado.
+  const enviosArmados = filas.flatMap(({ s, detalle, envios }) =>
+    envios.filter((e) => e.status !== 'ANULADO').map((envio) => ({ s, detalle, envio })),
+  )
+
+  const sinClasificar = filas.filter(
+    ({ detalle }) => detalle && itemsActivos(detalle).every((i) => !i.assignedExecutionMode),
+  )
+
+  const hayAlgo = internos.length > 0 || porDespachar.length > 0 || enviosArmados.length > 0
 
   return (
     <section className="flex flex-col gap-6">
       <div>
         <h2 className="text-lg font-bold text-marron-cafe">Solicitudes recibidas</h2>
         <p className="text-xs text-marron-cafe/40">
-          Agrupadas por laboratorio destino, según cómo se asignó cada muestra — el laboratorio interno procesa acá
-          mismo ("Iniciar análisis"), el resto se solicita por registro externo.
+          Separadas por dónde se procesa cada ensayo — el laboratorio interno trabaja acá mismo, lo externo se despacha
+          con su circuito de autorización.
         </p>
       </div>
 
-      {errorIniciarAnalisis && (
-        <p className="text-sm font-medium text-rojo-pasankalla">No se pudo abrir el análisis: {errorIniciarAnalisis}</p>
-      )}
+      {errorAccion && <p className="text-sm font-medium text-rojo-pasankalla">{errorAccion}</p>}
 
       {solicitudes.length === 0 ? (
         <EmptyState Icon={FlaskConical} titulo="Todavía no hay ninguna solicitud recibida" />
       ) : (
         <>
-          {destinos.map(([clave, { nombre, esInterno, filas: filasGrupo }]) => (
-            <TablaDestino
-              key={clave}
-              titulo={nombre}
-              Icon={esInterno ? FlaskConical : ShieldCheck}
-              esInterno={esInterno}
-              cantidadEnsayos={filasGrupo.reduce((total, f) => total + (f.ensayos?.length ?? 0), 0)}
-              filas={filasGrupo}
-              onSolicitarAnalisis={esInterno ? undefined : (s) => setEnvioAbierto(detallePorSolicitud[s.id])}
-              onIniciarAnalisis={esInterno && puedeIniciarAnalisis ? (s) => alClicarIniciarAnalisis(s.id) : undefined}
-              onContinuarAnalisis={esInterno && puedeIniciarAnalisis ? (s) => alClicarContinuarAnalisis(s.id) : undefined}
-              cargandoAnalisisId={cargandoAnalisisId}
-            />
+          {internos.length > 0 && (
+            <Bloque
+              titulo="Laboratorio interno"
+              Icon={FlaskConical}
+              esInterno
+              cantidadEnsayos={internos.reduce((t, f) => t + f.ensayos.length, 0)}
+            >
+              {internos.map(({ s, ensayos, ejecuciones }) => (
+                <FilaSolicitud
+                  key={s.id}
+                  s={s}
+                  ensayos={ensayos}
+                  acciones={
+                    puedeIniciarAnalisis &&
+                    (ejecuciones === undefined ? (
+                      <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" disabled>
+                        <FlaskConical className="size-3.5" strokeWidth={2} />…
+                      </Button>
+                    ) : ejecuciones.length === 0 ? (
+                      <span className="flex items-center gap-1.5 rounded-full bg-marron-arcilla/15 px-3 py-1.5 text-xs font-medium text-marron-arcilla">
+                        <Info className="size-3.5" strokeWidth={2} />
+                        Falta preparar muestra — hacelo desde Pendientes
+                      </span>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        className="gap-1.5 px-3 py-1.5 text-xs"
+                        onClick={() => alClicarAnalizar(s.id)}
+                      >
+                        <FlaskConical className="size-3.5" strokeWidth={2} />
+                        Analizar
+                      </Button>
+                    ))
+                  }
+                />
+              ))}
+            </Bloque>
+          )}
+
+          {porDespachar.length > 0 && (
+            <Bloque
+              titulo="Por despachar a laboratorio externo"
+              Icon={Send}
+              cantidadEnsayos={porDespachar.reduce((t, f) => t + f.ensayos.length, 0)}
+            >
+              {porDespachar.map(({ s, detalle, ensayos }) => (
+                <FilaSolicitud
+                  key={s.id}
+                  s={s}
+                  ensayos={ensayos}
+                  acciones={
+                    puedeGestionarEnvios && (
+                      <Button
+                        variant="secondary"
+                        className="gap-1.5 px-3 py-1.5 text-xs"
+                        onClick={() => setEnvioAbierto({ solicitud: detalle, ensayos, envio: null })}
+                      >
+                        <Send className="size-3.5" strokeWidth={2} />
+                        Armar envío
+                      </Button>
+                    )
+                  }
+                />
+              ))}
+            </Bloque>
+          )}
+
+          {enviosArmados.map(({ s, detalle, envio }) => (
+            <Bloque
+              key={envio.id}
+              titulo={envio.analyticalDestination}
+              subtitulo={`${envio.quantity} ${envio.unit} · ${envio.serviceType}`}
+              Icon={ShieldCheck}
+              cantidadEnsayos={envio.items.length}
+              badge={
+                <Badge tono={ESTADO_ENVIO[envio.status]?.tono ?? 'neutro'}>
+                  {ESTADO_ENVIO[envio.status]?.label ?? envio.status}
+                </Badge>
+              }
+            >
+              <FilaSolicitud
+                s={s}
+                ensayos={envio.items.map((i) => ({ id: i.itemId, name: i.testName, isCustom: false }))}
+                acciones={
+                  <Button
+                    variant="secondary"
+                    className="gap-1.5 px-3 py-1.5 text-xs"
+                    onClick={() => setEnvioAbierto({ solicitud: detalle, ensayos: null, envio })}
+                  >
+                    <ShieldCheck className="size-3.5" strokeWidth={2} />
+                    Ver envío
+                  </Button>
+                }
+              />
+            </Bloque>
           ))}
 
-          {sinAsignar.length > 0 && (
+          {sinClasificar.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-marron-tierra/10 text-marron-cafe/50">
@@ -216,14 +407,18 @@ export default function SeccionSolicitudes() {
                 <h3 className="text-sm font-bold text-marron-cafe/70">Sin laboratorio asignado</h3>
               </div>
               <p className="text-xs text-marron-cafe/40">
-                Todavía no pasaron por "Asignar laboratorio" (ver Pendientes), o no se pudo cargar su detalle.
+                Todavía no pasaron por "Asignar laboratorio" — se hace desde la pestaña Pendientes.
               </p>
               <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-                {sinAsignar.map(({ s }) => (
+                {sinClasificar.map(({ s }) => (
                   <FilaSolicitud key={s.id} s={s} />
                 ))}
               </div>
             </div>
+          )}
+
+          {!hayAlgo && sinClasificar.length === 0 && (
+            <EmptyState Icon={FlaskConical} titulo="Nada en curso todavía" descripcion="Asigná laboratorio desde Pendientes para empezar." />
           )}
         </>
       )}
@@ -231,37 +426,30 @@ export default function SeccionSolicitudes() {
   )
 }
 
-function TablaDestino({ titulo, Icon, esInterno, cantidadEnsayos, filas, onSolicitarAnalisis, onIniciarAnalisis, onContinuarAnalisis, cargandoAnalisisId }) {
+function Bloque({ titulo, subtitulo, Icon, esInterno = false, cantidadEnsayos, badge, children }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2.5">
-        <div className={`flex size-7 shrink-0 items-center justify-center rounded-full ${esInterno ? 'bg-verde-hoja/15 text-verde-bosque' : 'bg-oro-quinua/15 text-oro-quinua'}`}>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div
+          className={`flex size-7 shrink-0 items-center justify-center rounded-full ${
+            esInterno ? 'bg-verde-hoja/15 text-verde-bosque' : 'bg-oro-quinua/15 text-oro-quinua'
+          }`}
+        >
           <Icon className="size-3.5" strokeWidth={1.75} />
         </div>
         <h3 className="text-sm font-bold text-marron-cafe">{titulo}</h3>
+        {subtitulo && <span className="text-xs text-marron-cafe/50">{subtitulo}</span>}
         <span className="text-xs text-marron-cafe/40">
           {cantidadEnsayos} ensayo{cantidadEnsayos === 1 ? '' : 's'}
         </span>
+        {badge && <span className="ml-auto">{badge}</span>}
       </div>
-      <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-        {filas.map(({ s, ensayos, peso }, i) => (
-          <FilaSolicitud
-            key={`${s.id}-${i}`}
-            s={s}
-            ensayos={ensayos}
-            peso={peso}
-            onSolicitarAnalisis={onSolicitarAnalisis ? () => onSolicitarAnalisis(s) : undefined}
-            onIniciarAnalisis={onIniciarAnalisis ? () => onIniciarAnalisis(s) : undefined}
-            onContinuarAnalisis={onContinuarAnalisis ? () => onContinuarAnalisis(s) : undefined}
-            cargando={cargandoAnalisisId === s.id}
-          />
-        ))}
-      </div>
+      <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">{children}</div>
     </div>
   )
 }
 
-function FilaSolicitud({ s, ensayos, peso, onSolicitarAnalisis, onIniciarAnalisis, onContinuarAnalisis, cargando }) {
+function FilaSolicitud({ s, ensayos, acciones }) {
   return (
     <div className="flex flex-col gap-2 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
       <div className="flex flex-wrap items-center gap-3">
@@ -269,37 +457,10 @@ function FilaSolicitud({ s, ensayos, peso, onSolicitarAnalisis, onIniciarAnalisi
         <span className="text-sm text-marron-cafe">{s.product.name}</span>
         <span className="font-mono text-xs text-marron-cafe/50">{s.lot.code}</span>
         <Badge tono={s.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{s.effectiveType}</Badge>
-        {peso?.cantidad && (
-          <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-marron-cafe/70">
-            {peso.cantidad} {peso.unidad ?? 'G'}
-          </span>
-        )}
         <Badge tono={TONO_ESTADO_SOLICITUD[s.status] ?? 'neutro'} className="ml-auto">
           {s.status.replace(/_/g, ' ')}
         </Badge>
-        {/* Abre el registro I-LAB-16/R-01 (mock, ver FormularioAutorizarEnvio.jsx)
-            — solo tiene sentido en los grupos que no son laboratorio interno. */}
-        {onSolicitarAnalisis && (
-          <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={onSolicitarAnalisis}>
-            <ShieldCheck className="size-3.5" strokeWidth={2} />
-            Solicitar análisis
-          </Button>
-        )}
-        {/* "Iniciar"/"Continuar" — solo en el grupo de Laboratorio interno,
-            según en qué status esté la solicitud (ver FormularioIniciarAnalisis.jsx,
-            agrupa por categoría y muestra el formulario que corresponda). */}
-        {s.status === 'RECIBIDA' && onIniciarAnalisis && (
-          <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" disabled={cargando} onClick={onIniciarAnalisis}>
-            <FlaskConical className="size-3.5" strokeWidth={2} />
-            {cargando ? 'Abriendo…' : 'Iniciar análisis'}
-          </Button>
-        )}
-        {s.status === 'EN_PROCESO' && onContinuarAnalisis && (
-          <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" disabled={cargando} onClick={onContinuarAnalisis}>
-            <FlaskConical className="size-3.5" strokeWidth={2} />
-            {cargando ? 'Abriendo…' : 'Continuar análisis'}
-          </Button>
-        )}
+        {acciones}
       </div>
       {ensayos && ensayos.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

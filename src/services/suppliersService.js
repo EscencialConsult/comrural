@@ -8,10 +8,15 @@
 import { apiClient } from '../lib/apiClient'
 
 export const suppliersService = {
-  async listar({ cursor, limit } = {}) {
+  // `type` (PRODUCER | LABORATORY | OTHER) e `isActive` filtran del lado del
+  // servidor — los usa Laboratorio para ofrecer solo laboratorios activos al
+  // armar un envío externo, sin traerse todo el padrón de proveedores.
+  async listar({ cursor, limit, type, isActive } = {}) {
     const params = new URLSearchParams()
     if (cursor) params.set('cursor', cursor)
     if (limit) params.set('limit', String(limit))
+    if (type) params.set('type', type)
+    if (isActive !== undefined) params.set('isActive', String(isActive))
     const query = params.toString()
     return apiClient.get(`/suppliers${query ? `?${query}` : ''}`)
   },

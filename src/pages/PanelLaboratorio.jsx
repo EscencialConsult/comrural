@@ -15,12 +15,13 @@ import SeccionActividad from '../components/laboratorio/SeccionActividad.jsx'
 // con el botón "Recibir" para las que están en PENDIENTE_MUESTRA — a
 // diferencia de "crear/solicitar" (que es cosa de Calidad), "recibir" es
 // acción de Laboratorio (pedido explícito, ver SeccionPendientes.jsx).
-// "Solicitudes" separa lo YA recibido por laboratorio destino real, según
-// lo que se asignó ensayo por ensayo en "Asignar laboratorio" (ver
-// FormularioSubdividirMuestra.jsx/SeccionSolicitudes.jsx) — 100% mock, sin
-// backend real todavía. También es donde vive "Iniciar/Continuar análisis"
-// para lo asignado a Laboratorio interno (pedido explícito, ya no en
-// Pendientes).
+// "Solicitudes" separa lo YA recibido por dónde se procesa cada ensayo,
+// según la modalidad real asignada en "Asignar laboratorio" (ver
+// FormularioAsignarLaboratorio.jsx/SeccionSolicitudes.jsx) — backend real:
+// POST .../assign-modality, analysis-executions, external-shipments y
+// laboratory-reports (ver docs/laboratory-executions-shipments-reports.md
+// del backend). También es donde vive "Analizar" para lo asignado a
+// Laboratorio interno (pedido explícito, ya no en Pendientes).
 const PESTAÑAS_LABORATORIO = [
   { id: 'pendientes', nombre: 'Pendientes', Icon: ClipboardList },
   { id: 'solicitudes', nombre: 'Solicitudes', Icon: ListChecks },

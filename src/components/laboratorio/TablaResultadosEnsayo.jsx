@@ -49,8 +49,10 @@ function CeldaEncontrado({ valor, opciones, onChange, soloLectura, excedido }) {
 // otra categoría). La columna "Categoría" se fusiona en una sola celda con
 // rowSpan, igual que en el papel.
 //
-// `valores`/`onCambiarValor` llegan del borrador local (useAnalisisDraft) —
-// esta tabla no sabe nada de persistencia, solo lee/escribe por `fila.id`.
+// `valores`/`onCambiarValor` llegan del buffer local de FormularioIniciarAnalisis.jsx
+// (que persiste de verdad en `laboratory_reports.report_data` vía
+// laboratoryReportsService) — esta tabla no sabe nada de persistencia,
+// solo lee/escribe por `fila.id`.
 export default function TablaResultadosEnsayo({ categoria, filas, conUnidad = true, valores, onCambiarValor, soloLectura }) {
   return (
     <div className="overflow-x-auto rounded-2xl bg-white/70">

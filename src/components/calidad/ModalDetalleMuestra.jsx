@@ -2,16 +2,9 @@ import { useEffect, useState } from 'react'
 import { Check, FlaskConical, Layers, Scale, Package, Clock3, ClipboardCheck, Building2, Info, FileText, History } from 'lucide-react'
 import { samplesService } from '../../services/samplesService'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
+import { laboratoryReportsService } from '../../services/laboratoryReportsService'
 import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL } from '../../config/analisisLabels'
-import {
-  ORDEN_CATEGORIAS,
-  CATEGORIA_LABEL,
-  CATEGORIA_ICON,
-  CATEGORIA_ESTILO,
-  ESTADO_CATEGORIA_LABEL,
-  ESTADO_CATEGORIA_TONO,
-} from '../../config/analisisCategorias'
-import { useAnalisisDraft } from '../../hooks/useAnalisisDraft'
+import { informesVigentes, REPORT_STATUS_LABEL, REPORT_STATUS_TONO, etiquetaInforme } from './SeccionInformeMuestra.jsx'
 import Modal from '../Modal.jsx'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
@@ -48,15 +41,12 @@ const TONO_ESTADO_LOTE = {
 // cabecera, datos de la muestra, el estado del proceso en 4 pasos (no 5) y
 // el detalle de la solicitud más reciente si existe.
 //
-// "Informe" y "Trazabilidad" SÍ existen ahora (a pedido explícito), pero
-// ninguna tiene un backend real detrás: "Informe" no tiene ningún endpoint
-// de generación de informes (el backend no cubre esa fase todavía, ver
-// docs/laboratory.md §1) y "Trazabilidad" real viviría en audit_log, sin
-// endpoint que lo exponga — SeccionInformeMuestra.jsx/
-// SeccionTrazabilidadMuestra.jsx arman ambas vistas combinando los datos
-// reales que ya existen con el progreso mock de useAnalisisDraft.js
-// (localStorage, mismo borrador que escribe Laboratorio), dejando bien
-// marcado qué es real y qué es local/mock — no una tabla vacía disfrazada.
+// "Informe" y "Trazabilidad" leen los informes reales de Laboratorio
+// (GET /analysis-requests/:id/reports, ver laboratoryReportsService y
+// docs/laboratory-executions-shipments-reports.md §3) — ya no hay nada
+// mock acá: el JSONB de resultados y el PDF final que arma
+// FormularioIniciarAnalisis.jsx (Laboratorio) son la misma fuente que
+// consultan estas dos pestañas.
 //
 // "Recibir muestra" NO vive acá — es acción de Laboratorio, no de Calidad
 // (pedido explícito: Calidad solicita, Laboratorio recibe). Ver
@@ -136,18 +126,16 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
   const [solicitudDetalle, setSolicitudDetalle] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [pestaña, setPestaña] = useState('general')
-  // Progreso por categoría — MOCK, no viene del backend (ver
-  // docs/laboratory.md §1: ejecución/resultados de ensayos está fuera de
-  // alcance). Lee el mismo borrador local que Laboratorio escribe al
-  // "Iniciar análisis" (useAnalisisDraft.js, localStorage por solicitud) —
-  // si el analista ya guardó/finalizó una categoría en ESTE navegador, acá
-  // se refleja; en cualquier otro dispositivo/navegador se ve "Sin iniciar".
-  const { categoria: categoriaDraft } = useAnalisisDraft(solicitudDetalle?.id)
+  // Informes reales de Laboratorio (null = todavía cargando) — se piden
+  // recién cuando se conoce la solicitud, así que llegan un tick después
+  // de solicitudDetalle.
+  const [informes, setInformes] = useState(null)
 
   useEffect(() => {
     if (!abierto || !muestra) {
       setDetalle(null)
       setSolicitudDetalle(null)
+      setInformes(null)
       setPestaña('general')
       return
     }
@@ -164,6 +152,10 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
             .obtener(ultima.id)
             .then((sd) => !cancelado && setSolicitudDetalle(sd))
             .catch(() => {})
+          laboratoryReportsService
+            .listarPorSolicitud(ultima.id)
+            .then((lista) => !cancelado && setInformes(lista))
+            .catch(() => !cancelado && setInformes([]))
         }
       })
       .catch((err) => !cancelado && setErrorCarga(err.message))
@@ -241,11 +233,11 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
           <PillTabs pestañas={PESTAÑAS_DETALLE} activa={pestaña} onCambiar={setPestaña} />
 
           {pestaña === 'informe' && (
-            <SeccionInformeMuestra detalle={detalle} solicitudDetalle={solicitudDetalle} categoriaDraft={categoriaDraft} />
+            <SeccionInformeMuestra detalle={detalle} solicitudDetalle={solicitudDetalle} informes={informes} />
           )}
 
           {pestaña === 'trazabilidad' && (
-            <SeccionTrazabilidadMuestra detalle={detalle} solicitudDetalle={solicitudDetalle} categoriaDraft={categoriaDraft} />
+            <SeccionTrazabilidadMuestra detalle={detalle} solicitudDetalle={solicitudDetalle} informes={informes} />
           )}
 
           {pestaña === 'general' && (
@@ -377,41 +369,25 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                     </div>
                   )}
 
-                  {/* Categorías de análisis — agrupación real (item.category
-                      viene de GET /analysis-requests/:id), pero el badge de
-                      progreso de cada una es MOCK: lee el borrador local que
-                      arma Laboratorio en FormularioIniciarAnalisis.jsx
-                      (useAnalisisDraft.js, localStorage), no un dato del
-                      servidor. Aclarado en el propio texto para no
-                      confundirlo con algo persistido. */}
-                  {solicitudDetalle.items.length > 0 && (
+                  {/* Resumen de informes — real (GET .../reports), detalle
+                      completo con descarga de PDF en la pestaña "Informe". */}
+                  {informes !== null && informesVigentes(informes).length > 0 && (
                     <div>
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">
-                        Progreso por categoría{' '}
-                        <span className="font-normal normal-case text-marron-cafe/35">(solo en este navegador)</span>
-                      </p>
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Informes</p>
                       <div className="flex flex-col gap-1.5">
-                        {ORDEN_CATEGORIAS.filter((cat) => solicitudDetalle.items.some((i) => i.category === cat)).map((cat) => {
-                          const IconoCategoria = CATEGORIA_ICON[cat]
-                          const estilo = CATEGORIA_ESTILO[cat]
-                          const estadoCat = categoriaDraft(cat).estado
-                          return (
-                            <div
-                              key={cat}
-                              className={`flex flex-wrap items-center gap-2.5 rounded-xl border-l-4 bg-white/60 px-3 py-2 ${estilo.borde}`}
-                            >
-                              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                                <div className={`flex size-6 shrink-0 items-center justify-center rounded-full ${estilo.icono}`}>
-                                  <IconoCategoria className="size-3.5" strokeWidth={1.75} />
-                                </div>
-                                <span className="truncate text-xs font-semibold text-marron-cafe">{CATEGORIA_LABEL[cat]}</span>
-                              </div>
-                              <Badge tono={ESTADO_CATEGORIA_TONO[estadoCat]} className="shrink-0">
-                                {ESTADO_CATEGORIA_LABEL[estadoCat]}
-                              </Badge>
-                            </div>
-                          )
-                        })}
+                        {informesVigentes(informes).map((informe) => (
+                          <div
+                            key={informe.id}
+                            className="flex flex-wrap items-center gap-2.5 rounded-xl border-l-4 border-verde-bosque/30 bg-white/60 px-3 py-2"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-marron-cafe">
+                              {etiquetaInforme(informe)}
+                            </span>
+                            <Badge tono={REPORT_STATUS_TONO[informe.status] ?? 'neutro'} className="shrink-0">
+                              {REPORT_STATUS_LABEL[informe.status] ?? informe.status}
+                            </Badge>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}

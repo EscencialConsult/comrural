@@ -1,105 +1,184 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FlaskConical } from 'lucide-react'
-import { ORDEN_CATEGORIAS, CATEGORIAS_EXTERNAS } from '../../config/analisisCategorias'
-import { useAnalisisDraft } from '../../hooks/useAnalisisDraft'
+import { laboratoryReportsService } from '../../services/laboratoryReportsService'
 import Badge from '../Badge.jsx'
 import BotonVolver from '../BotonVolver.jsx'
 import TarjetaCategoria from './TarjetaCategoria.jsx'
+import PanelValidacionInforme from './PanelValidacionInforme.jsx'
 import InformeAnalisisFisicoquimico from './InformeAnalisisFisicoquimico.jsx'
 import InformeAnalisisMicrobiologico from './InformeAnalisisMicrobiologico.jsx'
-import FormularioResultadosCategoria from './FormularioResultadosCategoria.jsx'
-import FormularioAutorizarEnvio from './FormularioAutorizarEnvio.jsx'
 
-// Categorías con su propio documento oficial ya maquetado — cada una
-// recibe `solicitud` completa además de las props comunes (estado/
-// valores/onCambiarValor/onGuardar/onFinalizar/onVolver), porque arman
-// planillas FIJAS (P-LAB-10/R-04, P-LAB-06/R-07) que no dependen de qué
-// ensayos eligió Calidad. La categoría que no está acá cae al formulario
-// genérico por ensayo, FormularioResultadosCategoria.jsx.
-const INFORME_POR_CATEGORIA = {
-  PHYSICOCHEMICAL: InformeAnalisisFisicoquimico,
-  MICROBIOLOGICAL: InformeAnalisisMicrobiologico,
+// Snapshot version del contrato JSON de `reportData` — el backend no
+// interpreta el contenido, solo lo guarda con este número al lado
+// (informe_schema_version) para poder migrar el contrato el día que la
+// planilla cambie de forma sin romper informes viejos.
+const SCHEMA_VERSION = 1
+
+const INFORME_POR_TIPO = {
+  FISICO_QUIMICO: { Componente: InformeAnalisisFisicoquimico, label: 'Físico-Químico' },
+  MICROBIOLOGICO: { Componente: InformeAnalisisMicrobiologico, label: 'Microbiológico' },
 }
+const ORDEN_TIPOS = ['FISICO_QUIMICO', 'MICROBIOLOGICO']
 
-// Vista de "Iniciar análisis" — se abre al clicar el botón homónimo en
-// SeccionPendientes.jsx sobre una solicitud RECIBIDA. Agrupa por categoría
-// los ensayos ACTIVOS de la solicitud (GET /analysis-requests/:id, ya trae
-// `items[].category` — ver docs/laboratory.md §5.6) en tarjetas de
-// categoría; clicar una navega a pantalla completa a su propio formulario
-// de resultados — ver INFORME_POR_CATEGORIA para las que ya tienen
-// documento oficial, el resto cae a un formulario genérico
-// (FormularioResultadosCategoria.jsx).
+// Vista de "Iniciar análisis" — se abre desde SeccionSolicitudes.jsx sobre
+// una solicitud con ensayos asignados a Laboratorio interno (ver
+// FormularioAsignarLaboratorio.jsx). A diferencia de la versión vieja, ya NO
+// agrupa por las 5 categorías del catálogo (PHYSICOCHEMICAL/MICROBIOLOGICAL/
+// TOXICOLOGICAL/SENSORY/OTHER): agrupa por `internalReportType`
+// (FISICO_QUIMICO agrupa químico+físico+sensorial, MICROBIOLOGICO va aparte)
+// — es la granularidad real del backend (laboratory_reports.internal_report_type,
+// ver docs/laboratory-executions-shipments-reports.md). Un ensayo sin
+// planilla interna nunca llega acá: no puede asignarse a INTERNAL (lo
+// rechaza el backend en assign-modality).
 //
-// El backend todavía no tiene endpoint para registrar resultados de
-// ensayos (fuera de alcance del módulo laboratory actual, ver §1 de la
-// doc) — "Guardar cambios"/"Finalizar categoría" son 100% mock: persisten
-// solo en localStorage vía useAnalisisDraft.js, para poder cerrar esta
-// vista y reanudar después sin perder lo tipeado. Reemplazar por llamadas
-// reales en cuanto exista el endpoint.
+// Cada tipo tiene como mucho UN informe vigente por solicitud
+// (laboratory_reports_one_current_internal_idx) — se crea la primera vez
+// que se abre la tarjeta, y de ahí en más se reabre el mismo. El JSONB
+// (`reportData`) se guarda con bloqueo optimista (reportDataVersion) y solo
+// mientras el informe está en BORRADOR; al enviarlo a validación
+// (PanelValidacionInforme.jsx) queda de solo lectura.
 export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
-  const { categoria, cambiarValor, guardarCategoria, finalizarCategoria } = useAnalisisDraft(solicitud.id)
-  const [categoriaAbierta, setCategoriaAbierta] = useState(null)
-  // Categoría externa (ver CATEGORIAS_EXTERNAS) cuya tarjeta se clicó — un
-  // booleano alcanza porque hoy solo existe UNA categoría externa
-  // (Toxicológico) y FormularioAutorizarEnvio.jsx ya agrupa TODOS los
-  // ítems externos de la solicitud en un solo registro, sin importar de
-  // qué tarjeta puntual vino el clic.
-  const [envioAbierto, setEnvioAbierto] = useState(false)
+  const [informes, setInformes] = useState(null) // { FISICO_QUIMICO?: informe, MICROBIOLOGICO?: informe }
+  const [error, setError] = useState(null)
+  const [tipoAbierto, setTipoAbierto] = useState(null)
+  const [creando, setCreando] = useState(null)
+  const [validando, setValidando] = useState(false)
+  // Buffer editable local — tipear NO guarda en cada tecla (mismo criterio
+  // que FormularioInspeccion.jsx). Se sincroniza desde `informe.reportData`
+  // recién al ABRIR una planilla, y solo se manda al servidor con
+  // "Guardar"/"Enviar a validación".
+  const [valoresLocal, setValoresLocal] = useState({})
 
-  // Todas las categorías que trae la solicitud, interno y externo por
-  // igual — el interno/externo real es un dato del catálogo de cada
-  // ensayo (ver docs/analysis-reception-programming.md del backend, aún
-  // no implementado), no algo que se decide en esta pantalla. Acá solo se
-  // refleja: la tarjeta de una categoría externa lleva a "Autorizar
-  // envío" en vez de al formulario de resultados.
-  const porCategoria = useMemo(() => {
+  const itemsInternos = useMemo(
+    () => solicitud.items.filter((i) => i.status !== 'REMOVED' && i.assignedExecutionMode === 'INTERNAL'),
+    [solicitud.items],
+  )
+
+  const gruposPorTipo = useMemo(() => {
     const mapa = new Map()
-    for (const item of solicitud.items) {
-      if (!mapa.has(item.category)) mapa.set(item.category, [])
-      mapa.get(item.category).push(item)
+    for (const item of itemsInternos) {
+      if (!item.internalReportType) continue // no debería pasar (ver assign-modality), defensivo
+      if (!mapa.has(item.internalReportType)) mapa.set(item.internalReportType, [])
+      mapa.get(item.internalReportType).push(item)
     }
-    return ORDEN_CATEGORIAS.filter((c) => mapa.has(c)).map((c) => [c, mapa.get(c)])
-  }, [solicitud.items])
+    return ORDEN_TIPOS.filter((t) => mapa.has(t)).map((t) => [t, mapa.get(t)])
+  }, [itemsInternos])
 
-  if (envioAbierto) {
-    return <FormularioAutorizarEnvio solicitud={solicitud} onVolver={() => setEnvioAbierto(false)} />
+  const cargarInformes = () => {
+    laboratoryReportsService
+      .listarPorSolicitud(solicitud.id)
+      .then((lista) => {
+        const vigentes = {}
+        for (const informe of lista) {
+          if (informe.origin !== 'INTERNO') continue
+          if (informe.status === 'REEMPLAZADO' || informe.status === 'ANULADO') continue
+          vigentes[informe.internalReportType] = informe
+        }
+        setInformes(vigentes)
+      })
+      .catch((err) => setError(err.message))
   }
 
-  if (categoriaAbierta) {
-    const draft = categoria(categoriaAbierta)
-    const props = {
-      estado: draft.estado,
-      valores: draft.valores,
-      onCambiarValor: (clave, valor) => cambiarValor(categoriaAbierta, clave, valor),
-      onGuardar: () => guardarCategoria(categoriaAbierta),
-      onFinalizar: () => finalizarCategoria(categoriaAbierta),
-      onVolver: () => setCategoriaAbierta(null),
+  useEffect(cargarInformes, [solicitud.id])
+
+  const abrirTipo = async (tipo, items) => {
+    setError(null)
+    if (informes[tipo]) {
+      setValoresLocal(informes[tipo].reportData ?? {})
+      setTipoAbierto(tipo)
+      return
     }
-    const Informe = INFORME_POR_CATEGORIA[categoriaAbierta]
-    if (Informe) {
-      // La tarjeta ya finalizada dice "Imprimir", no "Iniciar" (ver
-      // TarjetaCategoria.jsx) — `autoImprimir` hace que ESE clic ya
-      // dispare el PDF apenas se monta la planilla de solo lectura, en vez
-      // de obligar a un segundo clic sobre el botón "Imprimir" de adentro.
-      return <Informe solicitud={solicitud} autoImprimir={draft.estado === 'FINALIZADO'} {...props} />
+    // Primera vez que se abre esta planilla: se crea el borrador vacío.
+    setCreando(tipo)
+    try {
+      const creado = await laboratoryReportsService.crearInterno(solicitud.id, {
+        internalReportType: tipo,
+        itemIds: items.map((i) => i.id),
+      })
+      setInformes((prev) => ({ ...prev, [tipo]: creado }))
+      setValoresLocal(creado.reportData ?? {})
+      setTipoAbierto(tipo)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCreando(null)
     }
-    const items = porCategoria.find(([c]) => c === categoriaAbierta)?.[1] ?? []
-    return <FormularioResultadosCategoria categoria={categoriaAbierta} items={items} {...props} />
+  }
+
+  const cambiarValor = (clave, valor) => setValoresLocal((prev) => ({ ...prev, [clave]: valor }))
+
+  if (error) {
+    return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {error}</p>
+  }
+
+  if (informes === null) {
+    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+  }
+
+  if (tipoAbierto) {
+    const informe = informes[tipoAbierto]
+    const { Componente } = INFORME_POR_TIPO[tipoAbierto]
+    const finalizada = informe.status !== 'BORRADOR'
+
+    const guardar = async () => {
+      const actualizado = await laboratoryReportsService.guardarDatos(informe.id, {
+        reportData: valoresLocal,
+        reportSchemaVersion: SCHEMA_VERSION,
+        expectedDataVersion: informe.reportDataVersion,
+      })
+      setInformes((prev) => ({ ...prev, [tipoAbierto]: actualizado }))
+      return actualizado
+    }
+
+    const enviarAValidacion = async () => {
+      await guardar()
+      const actualizado = await laboratoryReportsService.enviarAValidacion(informe.id)
+      setInformes((prev) => ({ ...prev, [tipoAbierto]: actualizado }))
+    }
+
+    const validar = async () => {
+      setValidando(true)
+      try {
+        const actualizado = await laboratoryReportsService.validar(informe.id)
+        setInformes((prev) => ({ ...prev, [tipoAbierto]: actualizado }))
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setValidando(false)
+      }
+    }
+
+    return (
+      <div className="flex flex-col gap-4">
+        <Componente
+          solicitud={solicitud}
+          estado={finalizada ? 'FINALIZADO' : 'GUARDADO'}
+          valores={valoresLocal}
+          onCambiarValor={cambiarValor}
+          onVolver={() => {
+            setTipoAbierto(null)
+            cargarInformes()
+          }}
+          onGuardar={guardar}
+          onFinalizar={enviarAValidacion}
+        />
+        <PanelValidacionInforme
+          informe={informe}
+          validando={validando}
+          onDocumentoAdjuntado={async (documento) => {
+            const actualizado = await laboratoryReportsService.adjuntarDocumento(informe.id, documento.id)
+            setInformes((prev) => ({ ...prev, [tipoAbierto]: actualizado }))
+          }}
+          onValidar={validar}
+        />
+      </div>
+    )
   }
 
   return (
     <section className="flex flex-col gap-4">
-      {/* Sin fondo en tarjeta a propósito — con el mismo tinte que
-          TarjetaCategoria.jsx (bg-marron-tierra/5) se leía como una
-          categoría más de la lista. Un borde inferior alcanza para
-          separarlo del contenido sin que compita visualmente con las
-          tarjetas de abajo.
-          `flex-wrap` + `basis` en el bloque de texto: si no entra volver +
-          título + badge en una fila, el badge (shrink-0, último ítem) cae
-          a su propia línea en vez de forzar el título a truncar — el
-          título nunca corta, solo hace salto de línea. */}
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2 border-b border-marron-tierra/10 pb-4">
-        <BotonVolver onClick={onVolver} ariaLabel="Volver a Pendientes" />
+        <BotonVolver onClick={onVolver} ariaLabel="Volver a Solicitudes" />
         <div className="flex min-w-0 flex-1 basis-[220px] items-center gap-3">
           <div className="hidden size-11 shrink-0 items-center justify-center rounded-full bg-verde-hoja/15 text-verde-bosque sm:flex">
             <FlaskConical className="size-5" strokeWidth={1.75} />
@@ -117,26 +196,30 @@ export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
         </Badge>
       </div>
 
-      <p className="text-xs text-marron-cafe/50">Elegí una categoría para ver o cargar sus resultados.</p>
+      <p className="text-xs text-marron-cafe/50">Elegí una planilla para ver o cargar sus resultados.</p>
 
-      {porCategoria.length === 0 ? (
+      {gruposPorTipo.length === 0 ? (
         <p className="rounded-3xl bg-marron-tierra/5 px-4 py-10 text-center text-sm text-marron-cafe/50">
-          Esta solicitud no tiene ensayos activos.
+          Esta solicitud no tiene ensayos internos activos.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {porCategoria.map(([cat, items]) => (
-            <TarjetaCategoria
-              key={cat}
-              categoria={cat}
-              cantidadEnsayos={items.length}
-              estado={categoria(cat).estado}
-              esExterno={CATEGORIAS_EXTERNAS.has(cat)}
-              onClick={() => (CATEGORIAS_EXTERNAS.has(cat) ? setEnvioAbierto(true) : setCategoriaAbierta(cat))}
-            />
-          ))}
+          {gruposPorTipo.map(([tipo, items]) => {
+            const informe = informes[tipo]
+            const estado = !informe ? 'SIN_INICIAR' : informe.status === 'BORRADOR' ? 'GUARDADO' : 'FINALIZADO'
+            return (
+              <TarjetaCategoria
+                key={tipo}
+                categoria={tipo === 'FISICO_QUIMICO' ? 'PHYSICOCHEMICAL' : 'MICROBIOLOGICAL'}
+                cantidadEnsayos={items.length}
+                estado={estado}
+                onClick={() => abrirTipo(tipo, items)}
+              />
+            )
+          })}
         </div>
       )}
+      {creando && <p className="text-xs text-marron-cafe/50">Abriendo planilla {INFORME_POR_TIPO[creando].label}…</p>}
     </section>
   )
 }

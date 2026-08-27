@@ -8,7 +8,6 @@ import {
   CloudOff,
   LogOut,
   CheckCheck,
-  Trash2,
   LayoutDashboard,
   SlidersHorizontal,
   Menu,
@@ -18,8 +17,11 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { puedeVerModulo } from '../../utils/permisos'
 import { rolesService } from '../../services/rolesService'
 import { notificacionesService } from '../../services/notificacionesService'
+import { siguienteCursor } from '../../services/paginacion'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
+
+const LIMITE_NOTIFICACIONES = 10
 
 function formatearFecha(iso) {
   const diffHoras = Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000)
@@ -36,19 +38,24 @@ function normalizar(texto) {
     .toLowerCase()
 }
 
-// Campana/mensajes son solo indicadores (no <button>) — todavía no hay
-// sistema de notificaciones real conectado, así que no fingen ser
-// clickeables. El buscador SÍ funciona: busca por nombre entre Resumen,
-// los 8 módulos y Configuración (los mismos ítems del sidebar) y navega
-// al elegido — no hay todavía un índice de contenido real para buscar
-// dentro de cada módulo. Cerrar sesión sí es real.
+// Campana: conectada al backend real (GET /notifications, POST
+// /notifications/:id/read — ver comrural_erp_backend/docs/notifications.md).
+// Se refresca al montar y cada vez que se abre el dropdown; no hay push en
+// vivo todavía (el trigger/policy de Supabase Realtime ya existen del lado
+// del backend pero están sin verificar contra un proyecto real, ver el
+// README de mocks). Mensajes sigue siendo solo un indicador (no <button>) —
+// no hay sistema de mensajería. El buscador SÍ funciona: busca por nombre
+// entre Resumen, los 8 módulos y Configuración (los mismos ítems del
+// sidebar) y navega al elegido — no hay todavía un índice de contenido real
+// para buscar dentro de cada módulo. Cerrar sesión sí es real.
 export default function DashboardHeader({ clima, climaError, usuario, onAbrirMenu }) {
   const navigate = useNavigate()
   const { cerrarSesion: cerrarSesionAuth, permisos } = useAuth()
   const [rol, setRol] = useState(null)
   const [notificaciones, setNotificaciones] = useState([])
+  const [notifCursor, setNotifCursor] = useState(null)
+  const [notifCargandoMas, setNotifCargandoMas] = useState(false)
   const [notifAbierto, setNotifAbierto] = useState(false)
-  const [confirmarBorrado, setConfirmarBorrado] = useState(false)
   const [menuCuentaAbierto, setMenuCuentaAbierto] = useState(false)
   const [modulos, setModulos] = useState([])
   const [busqueda, setBusqueda] = useState('')
@@ -67,13 +74,32 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
 
   useEffect(() => {
     let cancelado = false
-    notificacionesService.getNotificaciones().then((data) => {
-      if (!cancelado) setNotificaciones(data)
+    notificacionesService.listar({ limit: LIMITE_NOTIFICACIONES }).then((respuesta) => {
+      if (cancelado) return
+      setNotificaciones(respuesta.data)
+      setNotifCursor(siguienteCursor(respuesta))
     })
     return () => {
       cancelado = true
     }
   }, [])
+
+  // Refresca al abrir el dropdown — no hay push en vivo todavía (ver
+  // comentario junto al import de notificacionesService), así que esto es
+  // lo que evita mostrar una bandeja desactualizada si pasó tiempo desde
+  // que se montó el header.
+  useEffect(() => {
+    if (!notifAbierto) return
+    let cancelado = false
+    notificacionesService.listar({ limit: LIMITE_NOTIFICACIONES }).then((respuesta) => {
+      if (cancelado) return
+      setNotificaciones(respuesta.data)
+      setNotifCursor(siguienteCursor(respuesta))
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [notifAbierto])
 
   useEffect(() => {
     let cancelado = false
@@ -113,24 +139,44 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
     setBusquedaEnfocada(false)
   }
 
-  const marcarTodasLeidas = async () => {
-    setNotificaciones(await notificacionesService.marcarTodasLeidas())
+  // Marca leída una notificación puntual (click en el ítem, o parte del
+  // loop de "marcar todas" de abajo) — actualiza el estado local con la
+  // respuesta real del backend en vez de asumir que salió bien.
+  const marcarUnaLeida = async (notificationId) => {
+    const { readAt } = await notificacionesService.marcarLeida(notificationId)
+    setNotificaciones((actual) => actual.map((n) => (n.id === notificationId ? { ...n, readAt } : n)))
   }
 
-  const eliminarTodas = async () => {
-    setNotificaciones(await notificacionesService.eliminarTodas())
-    setConfirmarBorrado(false)
+  // El backend no tiene un endpoint de "marcar todas" — es una por una (ver
+  // notificacionesService.js). Se resuelve en paralelo porque son
+  // independientes entre sí (cada una es su propia fila de
+  // notification_recipients).
+  const marcarTodasLeidas = async () => {
+    const pendientes = notificaciones.filter((n) => !n.readAt)
+    await Promise.all(pendientes.map((n) => notificacionesService.marcarLeida(n.id)))
+    setNotificaciones((actual) => actual.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })))
+  }
+
+  const cargarMasNotificaciones = async () => {
+    if (!notifCursor || notifCargandoMas) return
+    setNotifCargandoMas(true)
+    try {
+      const respuesta = await notificacionesService.listar({ limit: LIMITE_NOTIFICACIONES, cursor: notifCursor })
+      setNotificaciones((actual) => [...actual, ...respuesta.data])
+      setNotifCursor(siguienteCursor(respuesta))
+    } finally {
+      setNotifCargandoMas(false)
+    }
   }
 
   const cerrarNotificaciones = () => {
     setNotifAbierto(false)
-    setConfirmarBorrado(false)
   }
 
-  const sinLeer = notificaciones.some((n) => !n.leida)
+  const sinLeer = notificaciones.some((n) => !n.readAt)
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-marron-tierra/10 bg-crema-quinua px-3 py-4 sm:gap-4 sm:px-6">
+    <header className="flex items-center gap-2 border-b border-marron-tierra/10 bg-crema-quinua px-3 py-4 sm:gap-4 sm:px-6">
       <button
         type="button"
         onClick={onAbrirMenu}
@@ -241,10 +287,10 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
             <div className="notif-panel absolute top-full right-0 z-50 mt-2 w-80 origin-top-right rounded-2xl bg-white p-2 ring-1 ring-marron-tierra/10">
               <NotificacionesLista
                 notificaciones={notificaciones}
-                confirmarBorrado={confirmarBorrado}
-                setConfirmarBorrado={setConfirmarBorrado}
                 marcarTodasLeidas={marcarTodasLeidas}
-                eliminarTodas={eliminarTodas}
+                marcarUnaLeida={marcarUnaLeida}
+                cargarMas={notifCursor ? cargarMasNotificaciones : null}
+                cargandoMas={notifCargandoMas}
               />
             </div>
           </>
@@ -328,10 +374,10 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
                 <div className="mt-1 rounded-xl bg-marron-tierra/5 p-1">
                   <NotificacionesLista
                     notificaciones={notificaciones}
-                    confirmarBorrado={confirmarBorrado}
-                    setConfirmarBorrado={setConfirmarBorrado}
                     marcarTodasLeidas={marcarTodasLeidas}
-                    eliminarTodas={eliminarTodas}
+                    marcarUnaLeida={marcarUnaLeida}
+                    cargarMas={notifCursor ? cargarMasNotificaciones : null}
+                    cargandoMas={notifCargandoMas}
                   />
                 </div>
               )}
@@ -363,67 +409,60 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
 // escritorio anclado a la campana, y sub-sección dentro del menú de cuenta
 // en mobile), extraído para que un fix acá no dependa de acordarse de
 // repetirlo en el otro lugar.
-function NotificacionesLista({ notificaciones, confirmarBorrado, setConfirmarBorrado, marcarTodasLeidas, eliminarTodas }) {
+//
+// Sin "borrar" — el backend es append-only, no existe ese endpoint (ver
+// docs/notifications.md del backend). Click en un ítem no leído lo marca
+// leído (además del botón "marcar todas").
+function NotificacionesLista({ notificaciones, marcarTodasLeidas, marcarUnaLeida, cargarMas, cargandoMas }) {
   return (
     <>
-      {confirmarBorrado ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5">
-          <p className="text-xs text-marron-cafe/70">¿Borrar todas las notificaciones?</p>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setConfirmarBorrado(false)}
-              className="rounded-full px-2 py-1 text-xs font-medium text-marron-cafe/50 transition-colors duration-150 hover:bg-marron-tierra/10 hover:text-marron-cafe"
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={eliminarTodas}
-              className="rounded-full bg-rojo-pasankalla/90 px-2 py-1 text-xs font-medium text-white transition-colors duration-150 hover:bg-rojo-pasankalla"
-            >
-              Sí, borrar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between px-2 py-1.5">
-          <p className="text-sm font-semibold text-marron-cafe">Notificaciones</p>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={marcarTodasLeidas}
-              title="Marcar todas como leídas"
-              className="rounded-full p-1.5 text-marron-cafe/30 transition-colors duration-200 hover:bg-marron-tierra/10 hover:text-marron-cafe/70"
-            >
-              <CheckCheck className="size-4" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmarBorrado(true)}
-              title="Borrar todas"
-              className="rounded-full p-1.5 text-marron-cafe/30 transition-colors duration-200 hover:bg-marron-tierra/10 hover:text-marron-cafe/70"
-            >
-              <Trash2 className="size-4" strokeWidth={1.75} />
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="flex items-center justify-between px-2 py-1.5">
+        <p className="text-sm font-semibold text-marron-cafe">Notificaciones</p>
+        <button
+          type="button"
+          onClick={marcarTodasLeidas}
+          title="Marcar todas como leídas"
+          className="rounded-full p-1.5 text-marron-cafe/30 transition-colors duration-200 hover:bg-marron-tierra/10 hover:text-marron-cafe/70"
+        >
+          <CheckCheck className="size-4" strokeWidth={1.75} />
+        </button>
+      </div>
 
       {notificaciones.length === 0 ? (
         <p className="px-2 py-6 text-center text-xs text-marron-cafe/40">No hay notificaciones.</p>
       ) : (
-        <ul className="flex flex-col">
-          {notificaciones.map((n) => (
-            <li key={n.id} className="flex items-start gap-2 rounded-xl px-2 py-2">
-              <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${n.leida ? '' : 'bg-verde-lima'}`} />
-              <div>
-                <p className="text-xs text-marron-cafe/80">{n.texto}</p>
-                <p className="mt-0.5 text-[10px] text-marron-cafe/40">{formatearFecha(n.fecha)}</p>
-              </div>
-            </li>
-          ))}
+        <ul className="flex max-h-96 flex-col overflow-y-auto">
+          {notificaciones.map((n) => {
+            const noLeida = !n.readAt
+            return (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => noLeida && marcarUnaLeida(n.id)}
+                  className="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left transition-colors duration-150 hover:bg-marron-tierra/5"
+                >
+                  <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${noLeida ? 'bg-verde-lima' : ''}`} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-marron-cafe/90">{n.title}</p>
+                    <p className="mt-0.5 text-xs text-marron-cafe/70">{n.message}</p>
+                    <p className="mt-0.5 text-[10px] text-marron-cafe/40">{formatearFecha(n.createdAt)}</p>
+                  </div>
+                </button>
+              </li>
+            )
+          })}
         </ul>
+      )}
+
+      {cargarMas && (
+        <button
+          type="button"
+          onClick={cargarMas}
+          disabled={cargandoMas}
+          className="w-full rounded-xl px-2 py-2 text-center text-xs font-medium text-marron-cafe/50 transition-colors duration-150 hover:bg-marron-tierra/5 hover:text-marron-cafe disabled:opacity-50"
+        >
+          {cargandoMas ? 'Cargando…' : 'Cargar más'}
+        </button>
       )}
     </>
   )

@@ -4,10 +4,10 @@ import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 
 // Tarjeta de categoría — puerta de entrada al formulario de resultados de
-// esa categoría (InformeAnalisisFisicoquimico.jsx para PHYSICOCHEMICAL,
-// FormularioResultadosCategoria.jsx genérico para el resto), o al registro
-// de envío externo si `esExterno` (ver CATEGORIAS_EXTERNAS en
-// analisisCategorias.js — hoy solo Toxicológico). No despliega nada
+// esa categoría (InformeAnalisisFisicoquimico.jsx / InformeAnalisisMicrobiologico.jsx,
+// las dos planillas internas reales), o al registro de envío externo si
+// `esExterno` (ver CATEGORIAS_EXTERNAS en analisisCategorias.js — hoy solo
+// Toxicológico). No despliega nada
 // inline: cada categoría tiene un formulario propio y potencialmente
 // largo (ver P-LAB-10/R-04), así que a pedido explícito la tarjeta no es
 // clicable entera — solo el botón de acción abre la pantalla completa.
@@ -41,10 +41,10 @@ export default function TarjetaCategoria({ categoria, cantidadEnsayos, estado, e
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {/* El estado SIN_INICIAR/GUARDADO/FINALIZADO viene del borrador
-            mock de resultados (useAnalisisDraft.js) — no aplica a
-            Toxicológico, que no pasa por ese formulario, así que no
-            muestra badge acá. */}
+        {/* El estado SIN_INICIAR/GUARDADO/FINALIZADO viene del informe real
+            (laboratory_reports.status, ver FormularioIniciarAnalisis.jsx) —
+            no aplica a Toxicológico, que no pasa por ese formulario, así
+            que no muestra badge acá. */}
         {!esExterno && <Badge tono={ESTADO_CATEGORIA_TONO[estado]}>{ESTADO_CATEGORIA_LABEL[estado]}</Badge>}
         <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={onClick}>
           {esExterno ? (

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ShieldAlert } from 'lucide-react'
 import { auditLogService } from '../../services/auditLogService'
-import { ORDEN_CATEGORIAS, CATEGORIA_LABEL } from '../../config/analisisCategorias'
-import Badge from '../Badge.jsx'
+import { informesVigentes, REPORT_STATUS_LABEL, etiquetaInforme } from './SeccionInformeMuestra.jsx'
 import Skeleton from '../Skeleton.jsx'
 
 const formatearFecha = (iso) => new Date(iso).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })
@@ -37,7 +36,7 @@ function tituloEntrada(entry) {
 // la auditoría real no está disponible (permiso o error), para no dejar la
 // pestaña vacía.
 function eventosDerivados(detalle, solicitudDetalle) {
-  const eventos = [{ fecha: detalle.sampledAt, titulo: 'Muestra tomada', detalle: `por ${detalle.sampledBy.name}`, real: true }]
+  const eventos = [{ fecha: detalle.sampledAt, titulo: 'Muestra tomada', detalle: `por ${detalle.sampledBy.name}` }]
 
   if (!solicitudDetalle) return eventos
 
@@ -45,7 +44,6 @@ function eventosDerivados(detalle, solicitudDetalle) {
     fecha: solicitudDetalle.requestedAt,
     titulo: 'Solicitud de análisis creada',
     detalle: `${solicitudDetalle.effectiveType} · por ${solicitudDetalle.requestedBy.name}`,
-    real: true,
   })
 
   if (solicitudDetalle.reception) {
@@ -53,7 +51,6 @@ function eventosDerivados(detalle, solicitudDetalle) {
       fecha: solicitudDetalle.reception.receivedAt,
       titulo: 'Muestra recibida en laboratorio',
       detalle: `por ${solicitudDetalle.reception.receivedBy.name}`,
-      real: true,
     })
   }
 
@@ -62,7 +59,6 @@ function eventosDerivados(detalle, solicitudDetalle) {
       fecha: solicitudDetalle.acceptanceEvaluation.evaluatedAt,
       titulo: 'Muestra rechazada',
       detalle: `por ${solicitudDetalle.acceptanceEvaluation.evaluatedBy.name}`,
-      real: true,
     })
   }
 
@@ -77,13 +73,14 @@ function eventosDerivados(detalle, solicitudDetalle) {
 // Requiere el permiso `audit:read` — hoy solo lo tiene `superadmin`, no
 // `calidad` (0006_audit_log.sql) — si el usuario logueado no lo tiene, el
 // 403 se muestra como aviso en vez de error duro, y la sección igual
-// funciona con lo que sí puede ver (progreso mock por categoría).
+// funciona con lo que sí puede ver.
 //
-// El progreso por categoría (Fisicoquímico guardado/finalizado…) sigue
-// siendo MOCK: no hay ninguna tabla que lo registre todavía (ver
-// useAnalisisDraft.js) — audit_log solo audita lo que de verdad se
-// escribió en la base, y esas categorías no escriben nada ahí.
-export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, categoriaDraft }) {
+// Los eventos de informe (creado/enviado a validación/validado) NO salen de
+// audit_log — `laboratory_reports` no está en TABLA_LABEL porque un mismo
+// registro va cambiando de fila entera en algunos pasos (createdAt,
+// validatedAt) — se arman directo desde `informes` (GET .../reports, la
+// misma fuente que la pestaña "Informe"), así que ya son reales, no mock.
+export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, informes }) {
   const [entradasAudit, setEntradasAudit] = useState(null) // null = cargando
   const [sinPermiso, setSinPermiso] = useState(false)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -146,21 +143,28 @@ export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, 
           fecha: entry.createdAt,
           titulo: tituloEntrada(entry),
           detalle: entry.userEmail ?? 'Sistema',
-          real: true,
         }))
       : eventosDerivados(detalle, solicitudDetalle)
   const usandoAuditoriaReal = entradasAudit.length > 0
 
-  if (solicitudDetalle) {
-    for (const cat of ORDEN_CATEGORIAS) {
-      if (!solicitudDetalle.items.some((i) => i.category === cat)) continue
-      const d = categoriaDraft(cat)
-      if (!d.actualizadoEn) continue
+  for (const informe of informesVigentes(informes)) {
+    eventos.push({
+      fecha: informe.createdAt,
+      titulo: `Informe ${etiquetaInforme(informe)}: creado`,
+      detalle: 'Laboratorio',
+    })
+    if (informe.status !== 'BORRADOR') {
       eventos.push({
-        fecha: d.actualizadoEn,
-        titulo: `${CATEGORIA_LABEL[cat]}: ${d.estado === 'FINALIZADO' ? 'finalizada' : 'guardada'}`,
-        detalle: 'Registrado en Laboratorio, solo en este navegador',
-        real: false,
+        fecha: informe.lastSavedAt ?? informe.createdAt,
+        titulo: `Informe ${etiquetaInforme(informe)}: ${REPORT_STATUS_LABEL.PENDIENTE_VALIDACION.toLowerCase()}`,
+        detalle: 'Laboratorio',
+      })
+    }
+    if (informe.status === 'VALIDADO') {
+      eventos.push({
+        fecha: informe.validatedAt,
+        titulo: `Informe ${etiquetaInforme(informe)}: validado`,
+        detalle: 'Laboratorio',
       })
     }
   }
@@ -170,11 +174,9 @@ export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, 
   return (
     <div className="flex flex-col gap-4">
       <p className="rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs text-marron-cafe/70">
-        Los eventos con badge <span className="font-semibold">Local</span> son progreso guardado en este navegador
-        (todavía no hay dónde persistirlo en el servidor);{' '}
         {usandoAuditoriaReal
-          ? 'el resto viene de la auditoría real del backend (audit_log).'
-          : 'el resto se arma con los datos de la muestra/solicitud que ya carga esta pantalla, no con audit_log.'}
+          ? 'Los eventos de muestra/solicitud vienen de la auditoría real del backend (audit_log); los de informe, del propio registro de Laboratorio.'
+          : 'Los eventos de muestra/solicitud se arman con los datos que ya carga esta pantalla (no audit_log); los de informe, del propio registro de Laboratorio.'}
       </p>
 
       {sinPermiso && (
@@ -197,18 +199,11 @@ export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, 
           {eventos.map((e, i) => (
             <li key={`${e.titulo}-${e.fecha}`} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className={`mt-1 size-3 shrink-0 rounded-full ${e.real ? 'bg-verde-lima' : 'bg-marron-arcilla/60'}`} />
+                <div className="mt-1 size-3 shrink-0 rounded-full bg-verde-lima" />
                 {i < eventos.length - 1 && <div className="w-px flex-1 bg-marron-tierra/15" />}
               </div>
               <div className="min-w-0 flex-1 pb-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-marron-cafe">{e.titulo}</p>
-                  {!e.real && (
-                    <Badge tono="alerta" className="normal-case">
-                      Local
-                    </Badge>
-                  )}
-                </div>
+                <p className="text-sm font-semibold text-marron-cafe">{e.titulo}</p>
                 <p className="text-xs text-marron-cafe/50">
                   {formatearFecha(e.fecha)} · {e.detalle}
                 </p>

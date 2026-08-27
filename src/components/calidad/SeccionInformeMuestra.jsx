@@ -1,25 +1,47 @@
+import { useState } from 'react'
 import { FileText, Download } from 'lucide-react'
-import {
-  ORDEN_CATEGORIAS,
-  CATEGORIA_LABEL,
-  CATEGORIA_ICON,
-  CATEGORIA_ESTILO,
-  ESTADO_CATEGORIA_LABEL,
-  ESTADO_CATEGORIA_TONO,
-} from '../../config/analisisCategorias'
-import { PARAMETROS_QUIMICO, PARAMETROS_FISICO } from '../../config/informeFisicoquimicoParametros'
+import { documentsService } from '../../services/documentsService'
+import { toast } from '../../lib/toast'
 import Badge from '../Badge.jsx'
+import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
+
+export const REPORT_STATUS_LABEL = {
+  BORRADOR: 'Borrador',
+  PENDIENTE_VALIDACION: 'Pendiente de validación',
+  VALIDADO: 'Validado',
+}
+
+export const REPORT_STATUS_TONO = {
+  BORRADOR: 'neutro',
+  PENDIENTE_VALIDACION: 'alerta',
+  VALIDADO: 'positivo',
+}
+
+const INTERNAL_REPORT_TYPE_LABEL = {
+  FISICO_QUIMICO: 'Físico-Químico',
+  MICROBIOLOGICO: 'Microbiológico',
+}
+
+// Un informe deja de contar como vigente cuando fue reemplazado o anulado —
+// mismo criterio que usa el backend (SUPERSEDED_STATUSES en
+// laboratory-reports.service.ts) y que ya aplicaba FormularioIniciarAnalisis.jsx
+// (Laboratorio) para no mostrar dos veces la misma planilla.
+const ESTADOS_SUPERADOS = new Set(['REEMPLAZADO', 'ANULADO'])
+export const informesVigentes = (informes) => (informes ?? []).filter((i) => !ESTADOS_SUPERADOS.has(i.status))
+
+export const etiquetaInforme = (informe) =>
+  informe.origin === 'INTERNO'
+    ? (INTERNAL_REPORT_TYPE_LABEL[informe.internalReportType] ?? informe.internalReportType)
+    : `Externo${informe.externalReportCode ? ` — ${informe.externalReportCode}` : ''}`
 
 // Pestaña "Informe" del detalle de muestra (ModalDetalleMuestra.jsx,
-// Calidad). El backend no genera ningún informe real todavía (fuera de
-// alcance del módulo laboratory, ver docs/laboratory.md §1) — esto es una
-// vista previa armada 100% en el cliente: combina datos REALES de la
-// solicitud (muestra/lote/producto/proveedor, ya vienen de GET
-// /samples/:sampleId + GET /analysis-requests/:id) con el progreso MOCK
-// por categoría de useAnalisisDraft.js. Si Fisicoquímico tiene valores
-// guardados en ESTE navegador, se adelanta un resumen — mismos datos que
-// InformeAnalisisFisicoquimico.jsx (Laboratorio) lee del mismo localStorage.
-export default function SeccionInformeMuestra({ detalle, solicitudDetalle, categoriaDraft }) {
+// Calidad) — lista los informes reales de la solicitud (GET
+// /analysis-requests/:id/reports, mismos datos que arma Laboratorio en
+// FormularioIniciarAnalisis.jsx): un informe por planilla interna
+// (Físico-Químico / Microbiológico) vigente, más uno por envío externo ya
+// resuelto. El PDF final se descarga acá mismo una vez VALIDADO.
+export default function SeccionInformeMuestra({ detalle, solicitudDetalle, informes }) {
   if (!solicitudDetalle) {
     return (
       <p className="rounded-2xl bg-marron-tierra/5 px-4 py-8 text-center text-sm text-marron-cafe/50">
@@ -28,17 +50,19 @@ export default function SeccionInformeMuestra({ detalle, solicitudDetalle, categ
     )
   }
 
-  const categoriasSolicitud = ORDEN_CATEGORIAS.filter((cat) => solicitudDetalle.items.some((i) => i.category === cat))
-  const fisicoquimico = categoriaDraft('PHYSICOCHEMICAL')
-  const parametrosConValor = [...PARAMETROS_QUIMICO, ...PARAMETROS_FISICO].filter((p) => fisicoquimico.valores[p.id])
+  if (informes === null) {
+    return (
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-20" />
+      </div>
+    )
+  }
+
+  const vigentes = informesVigentes(informes)
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs text-marron-cafe/70">
-        El backend todavía no genera informes reales — esto es una vista previa armada en el navegador con los datos
-        que ya existen más el progreso guardado localmente en Laboratorio.
-      </p>
-
       <div className="rounded-2xl border border-marron-tierra/10 p-4">
         <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-marron-cafe">
           <FileText className="size-4 text-verde-bosque" strokeWidth={1.75} />
@@ -65,63 +89,65 @@ export default function SeccionInformeMuestra({ detalle, solicitudDetalle, categ
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Categorías analizadas</p>
-        <div className="flex flex-col gap-1.5">
-          {categoriasSolicitud.map((cat) => {
-            const Icono = CATEGORIA_ICON[cat]
-            const estilo = CATEGORIA_ESTILO[cat]
-            const d = categoriaDraft(cat)
-            return (
-              <div
-                key={cat}
-                className={`flex flex-wrap items-center gap-2.5 rounded-xl border-l-4 bg-marron-tierra/5 px-3 py-2 ${estilo.borde}`}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  <div className={`flex size-6 shrink-0 items-center justify-center rounded-full ${estilo.icono}`}>
-                    <Icono className="size-3.5" strokeWidth={1.75} />
-                  </div>
-                  <span className="truncate text-xs font-semibold text-marron-cafe">{CATEGORIA_LABEL[cat]}</span>
-                </div>
-                <Badge tono={ESTADO_CATEGORIA_TONO[d.estado]} className="shrink-0">
-                  {ESTADO_CATEGORIA_LABEL[d.estado]}
-                </Badge>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {parametrosConValor.length > 0 && (
-        <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">
-            Adelanto de resultados fisicoquímicos{' '}
-            <span className="font-normal normal-case text-marron-cafe/35">(borrador local)</span>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Informes</p>
+        {vigentes.length === 0 ? (
+          <p className="rounded-2xl bg-marron-tierra/5 px-4 py-8 text-center text-sm text-marron-cafe/50">
+            Todavía no se cargó ningún informe para esta solicitud.
           </p>
-          <div className="overflow-hidden rounded-2xl border border-marron-tierra/10">
-            {parametrosConValor.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 border-b border-marron-tierra/10 px-4 py-2 last:border-b-0"
-              >
-                <span className="min-w-0 flex-1 text-xs text-marron-cafe">{p.parametro}</span>
-                <span className="shrink-0 text-sm font-semibold text-marron-cafe">
-                  {fisicoquimico.valores[p.id]} {p.unidad}
-                </span>
-              </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {vigentes.map((informe) => (
+              <TarjetaInforme key={informe.id} informe={informe} />
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </div>
+  )
+}
 
-      <button
-        type="button"
-        disabled
-        title="El backend todavía no genera el documento — disponible cuando exista el endpoint de informes."
-        className="flex w-fit cursor-not-allowed items-center gap-1.5 self-start rounded-full bg-marron-tierra/10 px-4 py-2 text-sm font-semibold text-marron-cafe/40"
-      >
-        <Download className="size-4" strokeWidth={1.75} />
-        Descargar informe (próximamente)
-      </button>
+function TarjetaInforme({ informe }) {
+  const [descargando, setDescargando] = useState(false)
+
+  const descargar = async () => {
+    setDescargando(true)
+    try {
+      const url = await documentsService.urlDescarga(informe.documentId)
+      window.open(url, '_blank')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setDescargando(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-marron-tierra/10 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-bold text-marron-cafe">{etiquetaInforme(informe)}</span>
+        <Badge tono={REPORT_STATUS_TONO[informe.status] ?? 'neutro'} className="ml-auto">
+          {REPORT_STATUS_LABEL[informe.status] ?? informe.status}
+        </Badge>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {informe.items.map((it) => (
+          <span key={it.itemId} className="rounded-full bg-marron-tierra/5 px-2.5 py-0.5 text-xs text-marron-cafe/70">
+            {it.testName}
+          </span>
+        ))}
+      </div>
+      {informe.status === 'VALIDADO' && informe.documentId && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-fit gap-1.5 px-3 py-1.5 text-xs"
+          disabled={descargando}
+          onClick={descargar}
+        >
+          <Download className="size-3.5" strokeWidth={2} />
+          {descargando ? 'Abriendo…' : 'Descargar PDF'}
+        </Button>
+      )}
     </div>
   )
 }

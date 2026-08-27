@@ -43,62 +43,10 @@ export const ORDEN_CATEGORIAS = ['PHYSICOCHEMICAL', 'MICROBIOLOGICAL', 'TOXICOLO
 // `item.executionMode === 'EXTERNAL'` en vez de una categoría fija.
 export const CATEGORIAS_EXTERNAS = new Set(['TOXICOLOGICAL'])
 
-// Campos del formulario de resultados por categoría — usado por
-// FormularioResultadosCategoria.jsx (Laboratorio) — formulario genérico
-// para las categorías que todavía no tienen un documento oficial propio.
-// MOCK: el backend todavía no define qué se registra por ensayo (fuera de
-// alcance del módulo laboratory actual, ver docs/laboratory.md §1) — esta
-// forma de campos es una suposición razonable por tipo de categoría, sin
-// confirmar con Calidad/Laboratorio. Reemplazar en cuanto el backend
-// publique el contrato real de resultados.
-export const CATEGORIA_CAMPOS = {
-  PHYSICOCHEMICAL: [
-    { key: 'valor', label: 'Valor obtenido', type: 'number' },
-    { key: 'unidad', label: 'Unidad', type: 'text', placeholder: 'ej. %, mg/kg' },
-  ],
-  MICROBIOLOGICAL: [
-    { key: 'recuento', label: 'Recuento', type: 'number' },
-    { key: 'unidad', label: 'Unidad', type: 'text', placeholder: 'ej. UFC/g' },
-    {
-      key: 'cumple',
-      label: 'Cumple criterio',
-      type: 'select',
-      options: [
-        { value: 'SI', label: 'Cumple' },
-        { value: 'NO', label: 'No cumple' },
-      ],
-    },
-  ],
-  TOXICOLOGICAL: [
-    {
-      key: 'resultado',
-      label: 'Resultado',
-      type: 'select',
-      options: [
-        { value: 'NO_DETECTADO', label: 'No detectado' },
-        { value: 'DETECTADO', label: 'Detectado' },
-      ],
-    },
-    { key: 'concentracion', label: 'Concentración (si detectado)', type: 'number' },
-  ],
-  SENSORY: [
-    {
-      key: 'calificacion',
-      label: 'Calificación',
-      type: 'select',
-      options: [
-        { value: 'ACEPTABLE', label: 'Aceptable' },
-        { value: 'NO_ACEPTABLE', label: 'No aceptable' },
-      ],
-    },
-    { key: 'observaciones', label: 'Observaciones', type: 'textarea' },
-  ],
-  OTHER: [{ key: 'resultado', label: 'Resultado', type: 'text' }],
-}
-
-// Estado local (mock, no backend) de cada tarjeta de categoría en
-// FormularioIniciarAnalisis.jsx — se persiste solo en localStorage
-// (ver useAnalisisDraft.js) para poder "reanudar después" sin servidor.
+// Estado de cada tarjeta de categoría en FormularioIniciarAnalisis.jsx —
+// deriva del `status` real del informe (laboratory_reports.status): sin
+// informe todavía es SIN_INICIAR, BORRADOR es GUARDADO, cualquier otro
+// estado (enviado a validación o validado) es FINALIZADO.
 export const ESTADO_CATEGORIA_LABEL = {
   SIN_INICIAR: 'Sin iniciar',
   GUARDADO: 'Guardado',

@@ -20,10 +20,11 @@ const TONO_ESTADO = {
   PENDIENTE_MUESTRA: 'alerta',
   RECIBIDA: 'positivo',
   EN_PROCESO: 'alerta',
+  PENDIENTE_EXTERNOS: 'alerta',
   ANALIZADA: 'positivo',
   RECHAZADA: 'negativo',
 }
-const ESTADOS = ['PENDIENTE_MUESTRA', 'RECIBIDA', 'EN_PROCESO', 'ANALIZADA', 'RECHAZADA']
+const ESTADOS = ['PENDIENTE_MUESTRA', 'RECIBIDA', 'EN_PROCESO', 'PENDIENTE_EXTERNOS', 'ANALIZADA', 'RECHAZADA']
 const TAMANIO_PAGINA = 20
 
 const formatearFechaHora = (iso) =>

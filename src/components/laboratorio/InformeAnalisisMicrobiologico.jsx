@@ -25,10 +25,10 @@ const fechaDeHoy = () => new Date().toLocaleDateString('en-CA')
 // fecha de toma de muestra, fechas de inicio/fin de análisis, fecha de
 // emisión del reporte) queda editable — "Fecha inicio de análisis" se
 // autocompleta con la fecha de la máquina, mismo criterio que el
-// fisicoquímico. Resultados y firmas son 100% mock: no hay endpoint
-// todavía para guardarlos (ver docs/laboratory.md §1) — "Guardar
-// cambios"/"Finalizar categoría" solo persisten en este navegador
-// (useAnalisisDraft.js).
+// fisicoquímico. `valores`/`onGuardar`/`onFinalizar` son props genéricas
+// (mismo criterio que InformeAnalisisFisicoquimico.jsx): quien persiste de
+// verdad en `laboratory_reports.report_data` es FormularioIniciarAnalisis.jsx,
+// vía laboratoryReportsService.
 export default function InformeAnalisisMicrobiologico({
   solicitud,
   estado,

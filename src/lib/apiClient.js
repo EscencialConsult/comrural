@@ -26,7 +26,7 @@ if (!API_URL) {
 }
 
 const BASE_URL = `${API_URL.replace(/\/$/, '')}/api/v1`
-const METODOS_CON_REQUEST_ID = new Set(['POST', 'PATCH'])
+const METODOS_CON_REQUEST_ID = new Set(['POST', 'PATCH', 'PUT'])
 
 class ApiError extends Error {
   constructor(message, status, body) {
@@ -113,5 +113,9 @@ export const apiClient = {
   get: (path, options) => request(path, { ...options, method: 'GET' }),
   post: (path, body, options) => request(path, { ...options, method: 'POST', body }),
   patch: (path, body, options) => request(path, { ...options, method: 'PATCH', body }),
+  // PUT se usa donde el body reemplaza el recurso entero en vez de traer un
+  // delta — hoy solo el guardado parcial del informe interno
+  // (PUT /laboratory-reports/:id/data manda el snapshot completo del JSONB).
+  put: (path, body, options) => request(path, { ...options, method: 'PUT', body }),
   delete: (path, options) => request(path, { ...options, method: 'DELETE' }),
 }

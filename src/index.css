@@ -100,6 +100,20 @@ body {
 }
 
 /*
+  Badge "Interno"/"Externo" que aparece en FormularioAsignarLaboratorio.jsx
+  apenas se confirma la asignación de un ensayo — remarca el cambio que
+  acaba de pasar (reemplaza al spinner "Asignando…").
+*/
+@keyframes badge-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.badge-in {
+  animation: badge-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/*
   Ripple de feedback al hacer click en Button.jsx — la parte que vale la
   pena del "liquid metal button" de referencia, sin el shader WebGL ni
   las sombras en capas que rompían DESIGN.md.

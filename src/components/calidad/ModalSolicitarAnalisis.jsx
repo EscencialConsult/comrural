@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, FlaskConical, ClipboardList, Truck, Beaker } from 'lucide-react'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { laboratoryTestsService } from '../../services/laboratoryTestsService'
@@ -62,6 +62,18 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
 
   const [disponibilidad, setDisponibilidad] = useState(null)
   const { enviando, error, ejecutar, limpiarError } = useSolicitud()
+
+  // Refs para scroll-to-error: cada campo obligatorio tiene su ref apuntando
+  // al contenedor de la sección/campo, para poder hacer scrollIntoView si
+  // el usuario intenta enviar con ese campo vacío.
+  const refNaturaleza = useRef(null)
+  const refUso = useRef(null)
+  const refEnsayos = useRef(null)
+  const refResponsable = useRef(null)
+
+  // Campos que fallaron la última validación — se limpian individualmente
+  // en cuanto el usuario los toca.
+  const [camposError, setCamposError] = useState(new Set())
 
   useEffect(() => {
     if (!abierto) return
@@ -144,6 +156,10 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
   const puedeEnviar =
     naturaleza !== '' && uso !== '' && tipoSolicitud !== '' && responsableEntregaId.trim() !== '' && totalEnsayos > 0
 
+  // Limpia el error de un campo en cuanto el usuario interactúa con él.
+  const limpiarCampoError = (campo) =>
+    setCamposError((prev) => { const s = new Set(prev); s.delete(campo); return s })
+
   const cerrar = () => {
     setNaturaleza('')
     setUso('')
@@ -152,13 +168,30 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
     setSeleccionados(new Set())
     setOtroTexto('')
     setOtrosAgregados([])
+    setCamposError(new Set())
     limpiarError()
     onCerrar()
   }
 
   const enviar = async (e) => {
     e.preventDefault()
-    if (!puedeEnviar || !muestra) return
+    if (!muestra) return
+
+    // Validar y hacer scroll al primer campo vacío si hay alguno.
+    if (!puedeEnviar) {
+      const errores = new Set()
+      let primerRef = null
+
+      if (naturaleza === '') { errores.add('naturaleza'); primerRef = primerRef ?? refNaturaleza }
+      if (uso === '')        { errores.add('uso');        primerRef = primerRef ?? refUso }
+      if (totalEnsayos === 0) { errores.add('ensayos');   primerRef = primerRef ?? refEnsayos }
+      if (responsableEntregaId.trim() === '') { errores.add('responsable'); primerRef = primerRef ?? refResponsable }
+
+      setCamposError(errores)
+      primerRef?.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
     const items = [
       ...Array.from(seleccionados).map((laboratoryTestId) => ({ laboratoryTestId })),
       ...otrosAgregados.map((o) => ({ laboratoryTestId: testOtro.id, otherTestName: o.otherTestName })),
@@ -200,26 +233,51 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
         <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
           <TituloSeccion Icon={ClipboardList}>Datos generales</TituloSeccion>
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormSelect label="Naturaleza" value={naturaleza} onChange={(e) => setNaturaleza(e.target.value)}>
-              <option value="">Seleccioná…</option>
-              {NATURALEZAS.map((n) => (
-                <option key={n.value} value={n.value}>
-                  {n.label}
-                </option>
-              ))}
-            </FormSelect>
-            <FormSelect label="Uso" value={uso} onChange={(e) => setUso(e.target.value)}>
-              <option value="">Seleccioná…</option>
-              {USOS.map((u) => (
-                <option key={u.value} value={u.value}>
-                  {u.label}
-                </option>
-              ))}
-            </FormSelect>
+            <div ref={refNaturaleza}>
+              <FormSelect
+                label="Naturaleza"
+                value={naturaleza}
+                onChange={(e) => { setNaturaleza(e.target.value); limpiarCampoError('naturaleza') }}
+                className={camposError.has('naturaleza') ? 'ring-2 ring-rojo-pasankalla/60 rounded-xl' : ''}
+              >
+                <option value="">Seleccioná…</option>
+                {NATURALEZAS.map((n) => (
+                  <option key={n.value} value={n.value}>
+                    {n.label}
+                  </option>
+                ))}
+              </FormSelect>
+              {camposError.has('naturaleza') && (
+                <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Campo obligatorio</p>
+              )}
+            </div>
+            <div ref={refUso}>
+              <FormSelect
+                label="Uso"
+                value={uso}
+                onChange={(e) => { setUso(e.target.value); limpiarCampoError('uso') }}
+                className={camposError.has('uso') ? 'ring-2 ring-rojo-pasankalla/60 rounded-xl' : ''}
+              >
+                <option value="">Seleccioná…</option>
+                {USOS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </FormSelect>
+              {camposError.has('uso') && (
+                <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Campo obligatorio</p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
+        <div
+          ref={refEnsayos}
+          className={`flex flex-col gap-3 rounded-2xl border p-4 transition-colors ${
+            camposError.has('ensayos') ? 'border-rojo-pasankalla/50' : 'border-marron-tierra/10'
+          }`}
+        >
           <div className="flex items-center justify-between gap-3">
             <TituloSeccion Icon={Beaker}>Ensayos solicitados</TituloSeccion>
             {totalEnsayos > 0 && (
@@ -228,6 +286,9 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
               </Badge>
             )}
           </div>
+          {camposError.has('ensayos') && (
+            <p className="text-xs font-medium text-rojo-pasankalla">Elegí al menos un ensayo para continuar.</p>
+          )}
           {errorCatalogo && (
             <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar el catálogo: {errorCatalogo}</p>
           )}
@@ -319,7 +380,7 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
               )}
             </div>
           )}
-          {totalEnsayos === 0 && catalogo && (
+          {totalEnsayos === 0 && catalogo && !camposError.has('ensayos') && (
             <p className="text-xs text-marron-cafe/50">Elegí al menos un ensayo para poder enviar la solicitud.</p>
           )}
         </div>
@@ -344,27 +405,32 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
                 <span className="text-xs text-marron-cafe/40">Consultando…</span>
               )}
             </div>
-            <FormSelect
-              label="Responsable de entrega"
-              value={responsableEntregaId}
-              onChange={(e) => setResponsableEntregaId(e.target.value)}
-              hint={
-                errorUsuarios
-                  ? `No se pudo cargar la lista de personal: ${errorUsuarios}`
-                  : usuarios?.length === 0
-                    ? 'Tu rol no tiene acceso a listar personal (users:read).'
-                    : undefined
-              }
-              className="sm:col-span-2"
-              disabled={usuarios === null}
-            >
-              <option value="">{usuarios === null ? 'Cargando…' : 'Seleccioná…'}</option>
-              {usuarios?.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.fullName} ({u.email})
-                </option>
-              ))}
-            </FormSelect>
+            <div ref={refResponsable} className="sm:col-span-2">
+              <FormSelect
+                label="Responsable de entrega"
+                value={responsableEntregaId}
+                onChange={(e) => { setResponsableEntregaId(e.target.value); limpiarCampoError('responsable') }}
+                hint={
+                  errorUsuarios
+                    ? `No se pudo cargar la lista de personal: ${errorUsuarios}`
+                    : usuarios?.length === 0
+                      ? 'Tu rol no tiene acceso a listar personal (users:read).'
+                      : undefined
+                }
+                className={camposError.has('responsable') ? 'ring-2 ring-rojo-pasankalla/60 rounded-xl' : ''}
+                disabled={usuarios === null}
+              >
+                <option value="">{usuarios === null ? 'Cargando…' : 'Seleccioná…'}</option>
+                {usuarios?.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullName} ({u.email})
+                  </option>
+                ))}
+              </FormSelect>
+              {camposError.has('responsable') && (
+                <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Campo obligatorio</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -373,7 +439,7 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
             <p className="text-xs text-marron-cafe/50">
               {totalEnsayos} ensayo{totalEnsayos === 1 ? '' : 's'} seleccionado{totalEnsayos === 1 ? '' : 's'}
             </p>
-            <Button type="submit" disabled={enviando || !puedeEnviar} className="px-5 py-2.5">
+            <Button type="submit" disabled={enviando} className="px-5 py-2.5">
               {enviando ? 'Enviando…' : 'Enviar solicitud'}
             </Button>
           </div>

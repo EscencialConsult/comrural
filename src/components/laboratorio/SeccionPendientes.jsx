@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
-import { FlaskConical, PackageCheck, Clock, CheckCircle2, Scale } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { FlaskConical, PackageCheck, Clock, CheckCircle2, Scale, ClipboardCheck, Beaker } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
+import { analysisExecutionsService } from '../../services/analysisExecutionsService'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import ModalRecibirMuestra from '../calidad/ModalRecibirMuestra.jsx'
-import FormularioSubdividirMuestra from './FormularioSubdividirMuestra.jsx'
+import FormularioAsignarLaboratorio from './FormularioAsignarLaboratorio.jsx'
 import Skeleton from '../Skeleton.jsx'
 import EmptyState from '../EmptyState.jsx'
 import PillTabs from '../dashboard/PillTabs.jsx'
@@ -19,17 +20,18 @@ import PillTabs from '../dashboard/PillTabs.jsx'
 // recibe, son roles distintos aunque hoy el mismo permiso (calidad) los
 // cubra a los dos.
 //
-// "Iniciar/Continuar análisis" NO vive acá — a pedido explícito, esa acción
-// se mudó a la pestaña "Solicitudes" (SeccionSolicitudes.jsx): solo aparece
-// una vez que la solicitud quedó asignada a "Laboratorio interno" en
-// "Asignar laboratorio" (ver FormularioSubdividirMuestra.jsx). Acá en
-// Pendientes solo se recibe la muestra y se le asigna laboratorio — el
+// "Analizar" (cargar resultados) NO vive acá — a pedido explícito, esa
+// acción se mudó a la pestaña "Solicitudes" (SeccionSolicitudes.jsx): solo
+// aparece una vez que la solicitud quedó asignada a "Laboratorio interno"
+// en "Asignar laboratorio" (ver FormularioAsignarLaboratorio.jsx). Acá en
+// Pendientes solo se recibe la muestra y se le asigna modalidad — el
 // trabajo de análisis en sí se organiza por destino, no por cola de
 // llegada.
 const TONO_ESTADO_SOLICITUD = {
   PENDIENTE_MUESTRA: 'alerta',
   RECIBIDA: 'positivo',
   EN_PROCESO: 'alerta',
+  PENDIENTE_EXTERNOS: 'alerta',
   ANALIZADA: 'positivo',
   RECHAZADA: 'negativo',
 }
@@ -47,18 +49,34 @@ const SUBPESTAÑAS_PENDIENTES = [
 export default function SeccionPendientes() {
   const { permisos } = useAuth()
   const puedeRecibir = permisos.has('analysis-requests:receive')
-  // "Asignar laboratorio" reusa analysis-requests:update porque no tiene un
-  // permiso propio (ver analysis-request.controller.ts) — mismo criterio
-  // que ya se usaba acá para "Iniciar análisis".
-  const puedeAsignarLaboratorio = permisos.has('analysis-requests:update')
+  const puedeAsignarLaboratorio = permisos.has('analysis-requests:assign-modality')
 
   const [subPestaña, setSubPestaña] = useState('por-recibir')
   const [solicitudes, setSolicitudes] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [recibirPara, setRecibirPara] = useState(null) // solicitud | null
-  const [asignacionEnCurso, setAsignacionEnCurso] = useState(null) // detalle completo | null
+  // { detalle, soloLectura } | null
+  const [asignacionEnCurso, setAsignacionEnCurso] = useState(null)
   const [cargandoAsignacionId, setCargandoAsignacionId] = useState(null)
   const [errorAsignacion, setErrorAsignacion] = useState(null)
+
+  // Detalle (items[] con su modalidad asignada) de cada solicitud RECIBIDA/
+  // EN_PROCESO — hace falta para saber si YA se le asignó laboratorio a
+  // todos los ensayos (así se decide "Asignar laboratorio" vs "Revisar").
+  // El listado no trae items[], hay que pedirlo aparte por solicitud.
+  const [detallePorSolicitud, setDetallePorSolicitud] = useState({})
+  const pedidosId = useRef(new Set())
+
+  // Ejecuciones internas ya abiertas (con su submuestra) — solo se piden
+  // para solicitudes con TODOS sus ensayos ya asignados y al menos uno
+  // interno, que es el único caso donde hace falta distinguir "ya preparó
+  // la submuestra" de "asignó modalidad pero se fue antes del paso 2". El
+  // backend no congela la modalidad hasta que existe la ejecución (ver
+  // AnalysisRequestsService.assignModality / findItemsWithStartedRoute),
+  // así que sin este chequeo el botón mostraba "Revisar" (solo lectura) y
+  // ya no dejaba volver a cargar la cantidad preparada.
+  const [ejecucionesPorSolicitud, setEjecucionesPorSolicitud] = useState({})
+  const pedidosEjecucionesId = useRef(new Set())
 
   useEffect(() => {
     let cancelado = false
@@ -70,6 +88,60 @@ export default function SeccionPendientes() {
       cancelado = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!solicitudes) return
+    const aPedir = solicitudes.filter(
+      (s) => (s.status === 'RECIBIDA' || s.status === 'EN_PROCESO') && !pedidosId.current.has(s.id),
+    )
+    if (aPedir.length === 0) return
+    aPedir.forEach((s) => pedidosId.current.add(s.id))
+    let cancelado = false
+
+    Promise.allSettled(aPedir.map((s) => analysisRequestsService.obtener(s.id))).then((resultados) => {
+      if (cancelado) return
+      setDetallePorSolicitud((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[aPedir[i].id] = r.status === 'fulfilled' ? r.value : 'error'
+        })
+        return siguiente
+      })
+    })
+
+    return () => {
+      cancelado = true
+    }
+  }, [solicitudes])
+
+  useEffect(() => {
+    const candidatos = Object.entries(detallePorSolicitud)
+      .filter(([id, detalle]) => {
+        if (!detalle || detalle === 'error' || pedidosEjecucionesId.current.has(id)) return false
+        const activos = detalle.items.filter((i) => i.status !== 'REMOVED')
+        const todosAsignados = activos.length > 0 && activos.every((i) => i.assignedExecutionMode)
+        return todosAsignados && activos.some((i) => i.assignedExecutionMode === 'INTERNAL')
+      })
+      .map(([id]) => id)
+    if (candidatos.length === 0) return
+    candidatos.forEach((id) => pedidosEjecucionesId.current.add(id))
+    let cancelado = false
+
+    Promise.allSettled(candidatos.map((id) => analysisExecutionsService.listarPorSolicitud(id))).then((resultados) => {
+      if (cancelado) return
+      setEjecucionesPorSolicitud((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[candidatos[i]] = r.status === 'fulfilled' ? r.value : []
+        })
+        return siguiente
+      })
+    })
+
+    return () => {
+      cancelado = true
+    }
+  }, [detallePorSolicitud])
 
   const alRecibir = (detalleActualizado) => {
     setSolicitudes((prev) =>
@@ -83,15 +155,17 @@ export default function SeccionPendientes() {
   }
 
   // "Asignar laboratorio" — para una solicitud ya RECIBIDA, abre el
-  // asistente de 3 pasos (ver FormularioSubdividirMuestra.jsx): qué ensayos
-  // procesar, a qué laboratorio va cada uno, y cuánto peso le manda a cada
-  // uno. Hace falta el detalle completo (items[]), que el listado no trae.
-  const alClicarAsignarLaboratorio = async (solicitudId) => {
+  // asistente (ver FormularioAsignarLaboratorio.jsx): qué ensayos van a
+  // Laboratorio interno o a uno externo, y cuánta muestra se prepara para
+  // lo interno. Hace falta el detalle completo (items[]), que el listado
+  // no trae.
+  const alClicarAsignarLaboratorio = async (solicitudId, soloLectura, pasoInicial) => {
     setErrorAsignacion(null)
     setCargandoAsignacionId(solicitudId)
     try {
-      const detalle = await analysisRequestsService.obtener(solicitudId)
-      setAsignacionEnCurso(detalle)
+      const yaCargado = detallePorSolicitud[solicitudId]
+      const detalle = yaCargado && yaCargado !== 'error' ? yaCargado : await analysisRequestsService.obtener(solicitudId)
+      setAsignacionEnCurso({ detalle, soloLectura, pasoInicial })
     } catch (err) {
       setErrorAsignacion(err.message)
     } finally {
@@ -100,7 +174,23 @@ export default function SeccionPendientes() {
   }
 
   if (asignacionEnCurso) {
-    return <FormularioSubdividirMuestra solicitud={asignacionEnCurso} onVolver={() => setAsignacionEnCurso(null)} />
+    return (
+      <FormularioAsignarLaboratorio
+        solicitud={asignacionEnCurso.detalle}
+        soloLectura={asignacionEnCurso.soloLectura}
+        pasoInicial={asignacionEnCurso.pasoInicial}
+        onVolver={() => setAsignacionEnCurso(null)}
+        // Abrir el trabajo interno mueve la solicitud a EN_PROCESO del lado
+        // del servidor — se refleja en la lista sin recargar todo.
+        onActualizada={(detalle) => {
+          setSolicitudes((prev) => prev.map((s) => (s.id === detalle.id ? { ...s, status: detalle.status } : s)))
+          setDetallePorSolicitud((prev) => ({ ...prev, [detalle.id]: detalle }))
+          // Se acaba de abrir/tocar el trabajo interno — invalida el caché
+          // de ejecuciones para que se vuelva a pedir si hace falta.
+          pedidosEjecucionesId.current.delete(detalle.id)
+        }}
+      />
+    )
   }
 
   if (errorCarga) {
@@ -151,37 +241,78 @@ export default function SeccionPendientes() {
         />
       ) : (
         <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-          {solicitudesFiltradas.map((s) => (
-            <div
-              key={s.id}
-              className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
-            >
-              <span className="font-mono text-xs font-semibold text-marron-cafe/70">{s.sample.code}</span>
-              <span className="text-sm text-marron-cafe">{s.product.name}</span>
-              <span className="font-mono text-xs text-marron-cafe/50">{s.lot.code}</span>
-              <Badge tono={s.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{s.effectiveType}</Badge>
-              <Badge tono={TONO_ESTADO_SOLICITUD[s.status] ?? 'neutro'} className="ml-auto">
-                {s.status.replace(/_/g, ' ')}
-              </Badge>
-              {s.status === 'PENDIENTE_MUESTRA' && puedeRecibir && (
-                <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setRecibirPara(s)}>
-                  <PackageCheck className="size-3.5" strokeWidth={2} />
-                  Recibir
-                </Button>
-              )}
-              {(s.status === 'RECIBIDA' || s.status === 'EN_PROCESO') && puedeAsignarLaboratorio && (
-                <Button
-                  variant="secondary"
-                  className="gap-1.5 px-3 py-1.5 text-xs"
-                  disabled={cargandoAsignacionId === s.id}
-                  onClick={() => alClicarAsignarLaboratorio(s.id)}
-                >
-                  <Scale className="size-3.5" strokeWidth={2} />
-                  {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Asignar laboratorio'}
-                </Button>
-              )}
-            </div>
-          ))}
+          {solicitudesFiltradas.map((s) => {
+            const detalle = detallePorSolicitud[s.id]
+            const itemsActivos = detalle && detalle !== 'error' ? detalle.items.filter((i) => i.status !== 'REMOVED') : null
+            const todosAsignados = itemsActivos !== null && itemsActivos.length > 0 && itemsActivos.every((i) => i.assignedExecutionMode)
+            const internos = itemsActivos?.filter((i) => i.assignedExecutionMode === 'INTERNAL') ?? []
+            const ejecuciones = ejecucionesPorSolicitud[s.id]
+            // Con todo asignado, si hay ensayos internos hace falta además
+            // que exista su ejecución (submuestra ya preparada) — mientras
+            // no exista, el backend todavía deja corregir la modalidad y
+            // falta el paso de preparación, así que no puede pasar a "solo
+            // lectura" (ver comentario de ejecucionesPorSolicitud arriba).
+            const esperandoEjecuciones = todosAsignados && internos.length > 0 && ejecuciones === undefined
+            const faltaPreparar = todosAsignados && internos.length > 0 && ejecuciones !== undefined && ejecuciones.length === 0
+            const completo = todosAsignados && !esperandoEjecuciones && !faltaPreparar
+            return (
+              <div
+                key={s.id}
+                className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
+              >
+                <span className="font-mono text-xs font-semibold text-marron-cafe/70">{s.sample.code}</span>
+                <span className="text-sm text-marron-cafe">{s.product.name}</span>
+                <span className="font-mono text-xs text-marron-cafe/50">{s.lot.code}</span>
+                <Badge tono={s.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{s.effectiveType}</Badge>
+                <Badge tono={TONO_ESTADO_SOLICITUD[s.status] ?? 'neutro'} className="ml-auto">
+                  {s.status.replace(/_/g, ' ')}
+                </Badge>
+                {s.status === 'PENDIENTE_MUESTRA' && puedeRecibir && (
+                  <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setRecibirPara(s)}>
+                    <PackageCheck className="size-3.5" strokeWidth={2} />
+                    Recibir
+                  </Button>
+                )}
+                {(s.status === 'RECIBIDA' || s.status === 'EN_PROCESO') &&
+                  puedeAsignarLaboratorio &&
+                  (esperandoEjecuciones ? (
+                    <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" disabled>
+                      <Scale className="size-3.5" strokeWidth={2} />…
+                    </Button>
+                  ) : completo ? (
+                    <Button
+                      variant="secondary"
+                      className="gap-1.5 px-3 py-1.5 text-xs"
+                      disabled={cargandoAsignacionId === s.id}
+                      onClick={() => alClicarAsignarLaboratorio(s.id, true)}
+                    >
+                      <ClipboardCheck className="size-3.5" strokeWidth={2} />
+                      {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Revisar'}
+                    </Button>
+                  ) : faltaPreparar ? (
+                    <Button
+                      variant="secondary"
+                      className="gap-1.5 px-3 py-1.5 text-xs"
+                      disabled={cargandoAsignacionId === s.id}
+                      onClick={() => alClicarAsignarLaboratorio(s.id, false, 'preparacion')}
+                    >
+                      <Beaker className="size-3.5" strokeWidth={2} />
+                      {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Preparar muestra'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      className="gap-1.5 px-3 py-1.5 text-xs"
+                      disabled={cargandoAsignacionId === s.id}
+                      onClick={() => alClicarAsignarLaboratorio(s.id, false, 'modalidad')}
+                    >
+                      <Scale className="size-3.5" strokeWidth={2} />
+                      {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Asignar laboratorio'}
+                    </Button>
+                  ))}
+              </div>
+            )
+          })}
         </div>
       )}
 

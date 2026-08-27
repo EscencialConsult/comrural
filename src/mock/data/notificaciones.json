@@ -1,5 +1,0 @@
-[
-  { "id": "notif_1", "texto": "Se actualizó la versión del sistema", "fecha": "2026-07-31T09:00:00Z", "leida": false },
-  { "id": "notif_2", "texto": "Nuevo lote registrado: Lote 12 — Quinua Real Blanca", "fecha": "2026-07-29T14:30:00Z", "leida": false },
-  { "id": "notif_3", "texto": "Análisis de suelo actualizado esta semana", "fecha": "2026-07-27T11:00:00Z", "leida": true }
-]

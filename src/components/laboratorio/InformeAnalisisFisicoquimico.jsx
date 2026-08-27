@@ -19,22 +19,21 @@ const fechaDeHoy = () => new Date().toLocaleDateString('en-CA')
 
 // Informe P-LAB-10/R-04 "Informe de Análisis de Materia Prima" —
 // formulario oficial de la categoría Fisicoquímico, maquetado según el
-// documento real (código, versión 03, página 1 de 1). Es un caso especial
-// dentro de Laboratorio: a diferencia de FormularioResultadosCategoria.jsx
-// (genérico, uno por ensayo solicitado), este NO depende de qué ensayos
-// eligió Calidad al pedir el análisis — es una planilla FIJA de parámetros
-// físico-químicos estándar para cualquier materia prima (Humedad, Dureza,
-// tamaño de grano, impurezas, sensorial…), definida por
-// informeFisicoquimicoParametros.js.
+// documento real (código, versión 03, página 1 de 1). Es una planilla FIJA
+// de parámetros físico-químicos estándar para cualquier materia prima
+// (Humedad, Dureza, tamaño de grano, impurezas, sensorial…), definida por
+// informeFisicoquimicoParametros.js — NO depende de qué ensayos eligió
+// Calidad al pedir el análisis.
 //
 // Autocompletado: los datos que YA existen en la solicitud (GET
 // /analysis-requests/:id) llegan de solo lectura — no tiene sentido dejar
 // editable un dato que el sistema ya conoce. Lo que el backend no tiene
 // (N°, fecha de inicio de ensayo, fecha de emisión del informe) queda
-// editable. El resto de la planilla (resultados de laboratorio, firmas) es
-// 100% mock: no hay endpoint todavía para guardar resultados de ensayos
-// (ver docs/laboratory.md §1) — "Guardar cambios"/"Finalizar categoría"
-// solo persisten en este navegador (useAnalisisDraft.js).
+// editable. `valores`/`onGuardar`/`onFinalizar` son props genéricas: el
+// backend real (`laboratory_reports.report_data`, JSONB) no interpreta la
+// forma de este contrato — es FormularioIniciarAnalisis.jsx (Laboratorio)
+// quien guarda/envía a validación vía laboratoryReportsService, así que
+// esta planilla no sabe ni le importa si persiste en el servidor.
 export default function InformeAnalisisFisicoquimico({
   solicitud,
   estado,

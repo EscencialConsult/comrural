@@ -49,4 +49,18 @@ export const analysisRequestsService = {
   async iniciarAnalisis(requestId) {
     return apiClient.post(`/analysis-requests/${requestId}/start-analysis`)
   },
+
+  // POST .../assign-modality — Laboratorio decide, ensayo por ensayo, si lo
+  // procesa internamente o lo deriva a un externo. Es PARCIAL: solo van los
+  // ensayos que se están asignando o corrigiendo ahora.
+  //
+  // `assignments`: [{ itemId, executionMode: 'INTERNAL'|'EXTERNAL', observation? }]
+  //
+  // El backend rechaza (409) si el ensayo ya tiene su ruta iniciada (hay
+  // ejecución o viaja en un envío vigente), o si se pide INTERNAL para un
+  // ensayo sin planilla interna en el catálogo. Devuelve el detalle completo
+  // de la solicitud, con `items[].assignedExecutionMode` actualizado.
+  async asignarModalidad(requestId, assignments) {
+    return apiClient.post(`/analysis-requests/${requestId}/assign-modality`, { assignments })
+  },
 }

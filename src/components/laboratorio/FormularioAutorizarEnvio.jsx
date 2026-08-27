@@ -1,69 +1,163 @@
-import { useEffect } from 'react'
-import { ShieldCheck } from 'lucide-react'
-import { CATEGORIAS_EXTERNAS } from '../../config/analisisCategorias'
-import { useEnvioExternoDraft } from '../../hooks/useEnvioExternoDraft'
+import { useEffect, useMemo, useState } from 'react'
+import { Send, Stamp, Gavel, Truck, Ban } from 'lucide-react'
+import { suppliersService } from '../../services/suppliersService'
+import { externalShipmentsService } from '../../services/externalShipmentsService'
+import { laboratoryReportsService } from '../../services/laboratoryReportsService'
+import { UNIDADES_SUBMUESTRA } from '../../config/laboratoriosDestino'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { toast } from '../../lib/toast'
 import BotonVolver from '../BotonVolver.jsx'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
+import SelectorDeBase from '../formularios/SelectorDeBase.jsx'
 import CabeceraFormulario from '../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../formularios/SeccionFormulario.jsx'
+import SubidorDocumento from './SubidorDocumento.jsx'
 
-// Registro I-LAB-16/R-01 — "Registro Envío de Muestras", papel que
-// autoriza y hace seguimiento del envío de ensayos a un laboratorio
-// externo. Se abre desde el botón "Autorizar envío" de la tabla "Análisis
-// externo" (SeccionPendientes.jsx) — solo tiene sentido ahí: son
-// justamente los ensayos que NO se procesan en el propio Laboratorio (ver
-// CATEGORIAS_EXTERNAS).
+// Registro I-LAB-16/R-01 — "Registro Envío de Muestras". Ahora respaldado
+// por `external_shipments` real, con su circuito de dos firmas:
 //
-// 100% mock: el backend no tiene ningún endpoint para esto (no hay
-// "shipment"/"envío externo" en `analysis-requests` ni en ningún otro
-// módulo) — pedido explícito de mantenerlo puro frontend por ahora.
-// "Guardar" persiste solo en localStorage (useEnvioExternoDraft.js), mismo
-// criterio que useAnalisisDraft.js para los resultados de ensayos.
+//   BORRADOR → (enviar a firma) PENDIENTE_GAC → (verificar) PENDIENTE_GG
+//            → (autorizar) AUTORIZADO → (despachar) ENVIADO
+//            → (cargar resultado) RESULTADO_RECIBIDO → CERRADO
+//
+// Se abre en dos situaciones distintas:
+//   * `envio === null` → se está ARMANDO uno nuevo, con los `ensayos` que
+//     vienen del bloque "Por despachar".
+//   * `envio` presente → se está gestionando uno ya creado; el formulario
+//     pasa a solo lectura y lo que se muestra son las acciones de su estado.
 const TIPOS_SERVICIO = ['HIPER', 'SUPER', 'REGULAR']
-const OPCIONES_SI_NO = ['SI', 'NO']
-const ESTADOS_LIBERACION = ['PENDIENTE', 'LIBERADO', 'RECHAZADO']
 
-export default function FormularioAutorizarEnvio({ solicitud, onVolver }) {
-  const { valores, cambiarValor, precargar, guardar, guardadoEn } = useEnvioExternoDraft(solicitud.id)
+const ESTADO_TONO = {
+  BORRADOR: 'neutro',
+  PENDIENTE_GAC: 'alerta',
+  PENDIENTE_GG: 'alerta',
+  AUTORIZADO: 'positivo',
+  ENVIADO: 'positivo',
+  RESULTADO_RECIBIDO: 'positivo',
+  CERRADO: 'positivo',
+  ANULADO: 'negativo',
+}
 
-  // Precarga "Análisis solicitados" con los ensayos externos reales de esta
-  // solicitud (los toxicológicos, ver CATEGORIAS_EXTERNAS) — solo la
-  // primera vez que no hay nada guardado todavía, para no pisar una
-  // corrección manual ya hecha.
+// El nombre visible de un proveedor sale de la persona o la organización que
+// lo respalda — nunca las dos (ver suppliers_exactly_one_identity_check).
+const nombreProveedor = (sup) =>
+  sup.organization?.tradeName ??
+  sup.organization?.legalName ??
+  [sup.person?.firstNames, sup.person?.lastNames].filter(Boolean).join(' ') ??
+  'Sin nombre'
+
+export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: envioInicial, onVolver }) {
+  const { permisos } = useAuth()
+  const puedeVerificar = permisos.has('external-shipments:verify')
+  const puedeAutorizar = permisos.has('external-shipments:authorize')
+  const puedeGestionar = permisos.has('external-shipments:manage')
+  const puedeCargarInforme = permisos.has('laboratory-reports:manage')
+
+  const [envio, setEnvio] = useState(envioInicial ?? null)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState(null)
+
+  // Catálogo real de laboratorios: proveedores activos con type=LABORATORY.
+  // Si el que hace falta no está, se da de alta en Proveedores — no hay
+  // opción de escribir un nombre suelto.
+  const [laboratorios, setLaboratorios] = useState([])
+  const [cargandoLabs, setCargandoLabs] = useState(true)
+
   useEffect(() => {
-    const nombres = solicitud.items
-      .filter((i) => CATEGORIAS_EXTERNAS.has(i.category))
-      .map((i) => i.name)
-      .join(', ')
-    if (nombres) precargar({ analisisSolicitados: nombres })
+    let cancelado = false
+    suppliersService
+      .listar({ type: 'LABORATORY', isActive: true, limit: 100 })
+      .then((resp) => {
+        if (cancelado) return
+        setLaboratorios(resp.data.map((s) => ({ id: s.id, nombre: nombreProveedor(s), detalle: '' })))
+      })
+      .catch((err) => !cancelado && setError(`No se pudo cargar el catálogo de laboratorios: ${err.message}`))
+      .finally(() => !cancelado && setCargandoLabs(false))
+    return () => {
+      cancelado = true
+    }
+  }, [])
+
+  // ---- Formulario de alta (solo cuando todavía no existe el envío) ------
+  const [laboratorio, setLaboratorio] = useState(null)
+  const [destino, setDestino] = useState('')
+  const [tipoServicio, setTipoServicio] = useState('REGULAR')
+  const [cuantificacion, setCuantificacion] = useState('')
+  const [cantidad, setCantidad] = useState('')
+  const [unidad, setUnidad] = useState('G')
+  const [precioTotal, setPrecioTotal] = useState('')
+  const [justificacion, setJustificacion] = useState('')
+  const [fechaResultado, setFechaResultado] = useState('')
+
+  const ensayosDelEnvio = useMemo(() => {
+    if (envio) return envio.items.map((i) => ({ id: i.itemId, nombre: i.testName }))
+    return (ensayos ?? []).map((i) => ({ id: i.id, nombre: i.isCustom ? i.otherTestName : i.name }))
+  }, [envio, ensayos])
+
+  // Precarga el destino analítico con los ensayos que viajan — es un texto
+  // libre en el papel, pero por defecto describe qué se manda.
+  useEffect(() => {
+    if (!envio && destino === '' && ensayosDelEnvio.length > 0) {
+      setDestino(ensayosDelEnvio.map((e) => e.nombre).join(', ').slice(0, 200))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solicitud.id])
+  }, [ensayosDelEnvio.length])
 
-  const set = (campo) => (e) => cambiarValor(campo, e.target.value)
+  const puedeCrear =
+    laboratorio !== null && destino.trim() !== '' && Number(cantidad) > 0 && ensayosDelEnvio.length > 0
 
-  const enviar = (e) => {
-    e.preventDefault()
-    guardar()
-    toast.success('Registro de envío guardado.')
+  const ejecutar = async (accion, mensajeExito) => {
+    setError(null)
+    setGuardando(true)
+    try {
+      const actualizado = await accion()
+      if (actualizado) setEnvio(actualizado)
+      if (mensajeExito) toast.success(mensajeExito)
+      return actualizado
+    } catch (err) {
+      setError(err.message)
+      return null
+    } finally {
+      setGuardando(false)
+    }
   }
 
+  const crear = () =>
+    ejecutar(
+      () =>
+        externalShipmentsService.crear(solicitud.id, {
+          laboratorySupplierId: laboratorio.id,
+          analyticalDestination: destino.trim(),
+          serviceType: tipoServicio,
+          ...(cuantificacion.trim() ? { quantification: cuantificacion.trim() } : {}),
+          quantity: cantidad,
+          unit: unidad,
+          ...(precioTotal ? { totalPrice: precioTotal } : {}),
+          ...(justificacion.trim() ? { justification: justificacion.trim() } : {}),
+          ...(fechaResultado ? { expectedResultDate: fechaResultado } : {}),
+          items: ensayosDelEnvio.map((e) => ({ itemId: e.id })),
+        }),
+      'Envío creado en borrador.',
+    )
+
+  const esBorrador = !envio || envio.status === 'BORRADOR'
+
   return (
-    <form onSubmit={enviar} className="flex w-full flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <BotonVolver onClick={onVolver} ariaLabel="Volver a Pendientes" />
+    <div className="flex w-full flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <BotonVolver onClick={onVolver} ariaLabel="Volver a Solicitudes" />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-bold text-marron-cafe sm:text-lg">
-            Autorizar envío — {solicitud.sample.code}
+            {envio ? 'Envío externo' : 'Armar envío externo'} — {solicitud.sample.code}
           </h2>
           <p className="truncate text-xs text-marron-cafe/60">
             Lote {solicitud.lot.code} · {solicitud.product.name}
           </p>
         </div>
-        {guardadoEn && <Badge tono="positivo">Guardado</Badge>}
+        {envio && <Badge tono={ESTADO_TONO[envio.status] ?? 'neutro'}>{envio.status.replace(/_/g, ' ')}</Badge>}
       </div>
 
       <CabeceraFormulario
@@ -74,110 +168,348 @@ export default function FormularioAutorizarEnvio({ solicitud, onVolver }) {
         pagina="1 de 1"
       />
 
-      <SeccionFormulario numero={1} titulo="Autorización de envío">
+      {error && (
+        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
+      )}
+
+      <SeccionFormulario numero={1} titulo="Muestra y ensayos">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-1.5">
+            {ensayosDelEnvio.map((e) => (
+              <span key={e.id} className="rounded-full bg-marron-tierra/5 px-2.5 py-0.5 text-xs text-marron-cafe/70">
+                {e.nombre}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-marron-cafe/50">
+            Muestra total disponible: {solicitud.sample.quantity}{' '}
+            {solicitud.sample.unit === 'OTRA' ? solicitud.sample.otherUnit : solicitud.sample.unit}
+          </p>
+        </div>
+      </SeccionFormulario>
+
+      <SeccionFormulario numero={2} titulo="Destino y servicio">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {envio ? (
+            <FormInput
+              label="Laboratorio"
+              value={laboratorios.find((l) => l.id === envio.laboratorySupplierId)?.nombre ?? envio.laboratorySupplierId}
+              disabled
+            />
+          ) : (
+            <SelectorDeBase
+              label="Laboratorio destino"
+              valor={laboratorio}
+              opciones={laboratorios}
+              onSeleccionar={setLaboratorio}
+              cargando={cargandoLabs}
+              placeholder="Buscar laboratorio…"
+              className="sm:col-span-2 lg:col-span-1"
+            />
+          )}
+
           <FormInput
-            label="Análisis solicitados"
-            className="sm:col-span-2 lg:col-span-3"
-            value={valores.analisisSolicitados}
-            onChange={set('analisisSolicitados')}
+            label="Destino analítico"
+            value={envio ? envio.analyticalDestination : destino}
+            onChange={(e) => setDestino(e.target.value)}
+            disabled={!!envio}
+            className="sm:col-span-2"
           />
-          <FormSelect label="Tipo de servicio" value={valores.tipoServicio} onChange={set('tipoServicio')}>
-            <option value="">Seleccioná…</option>
+
+          <FormSelect
+            label="Tipo de servicio"
+            value={envio ? envio.serviceType : tipoServicio}
+            onChange={(e) => setTipoServicio(e.target.value)}
+            disabled={!!envio}
+          >
             {TIPOS_SERVICIO.map((v) => (
               <option key={v} value={v}>
                 {v}
               </option>
             ))}
           </FormSelect>
-          <FormInput label="Tipo de cuantificación" value={valores.tipoCuantificacion} onChange={set('tipoCuantificacion')} />
-          <FormInput label="Laboratorio / Destino" value={valores.laboratorioDestino} onChange={set('laboratorioDestino')} />
-          <FormInput label="Cantidad" type="number" min="0" value={valores.cantidad} onChange={set('cantidad')} />
-          <FormInput label="Unidad" placeholder="ej. kg" value={valores.unidad} onChange={set('unidad')} />
-          <FormInput label="Fecha de envío" type="date" value={valores.fechaEnvio} onChange={set('fechaEnvio')} />
+
           <FormInput
-            label="Precio unitario de análisis ($)"
+            label="Tipo de cuantificación"
+            value={envio ? (envio.quantification ?? '') : cuantificacion}
+            onChange={(e) => setCuantificacion(e.target.value)}
+            disabled={!!envio}
+          />
+
+          <FormInput
+            label="Cantidad enviada"
+            type="number"
+            min="0.001"
+            step="0.001"
+            value={envio ? envio.quantity : cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            disabled={!!envio}
+          />
+
+          <FormSelect
+            label="Unidad"
+            value={envio ? envio.unit : unidad}
+            onChange={(e) => setUnidad(e.target.value)}
+            disabled={!!envio}
+          >
+            {UNIDADES_SUBMUESTRA.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </FormSelect>
+
+          <FormInput
+            label="Precio total ($)"
             type="number"
             min="0"
             step="0.01"
-            value={valores.precioUnitario}
-            onChange={set('precioUnitario')}
+            value={envio ? (envio.totalPrice ?? '') : precioTotal}
+            onChange={(e) => setPrecioTotal(e.target.value)}
+            disabled={!!envio}
           />
+
           <FormInput
-            label="Precio total de análisis ($)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={valores.precioTotal}
-            onChange={set('precioTotal')}
+            label="Fecha esperada de resultado"
+            type="date"
+            value={envio ? (envio.expectedResultDate ?? '') : fechaResultado}
+            onChange={(e) => setFechaResultado(e.target.value)}
+            disabled={!!envio && envio.status !== 'AUTORIZADO'}
           />
-          <FormInput label="Solicitado por" value={valores.solicitadoPor} onChange={set('solicitadoPor')} />
-          <FormInput label="Verificado por" value={valores.verificadoPorEnvio} onChange={set('verificadoPorEnvio')} />
-          <FormInput label="Autorizados por" value={valores.autorizadoPor} onChange={set('autorizadoPor')} />
+
           <label className="flex flex-col gap-1.5 text-sm text-marron-cafe sm:col-span-2 lg:col-span-3">
             Justificación
             <textarea
               rows={3}
-              value={valores.justificacion}
-              onChange={set('justificacion')}
+              value={envio ? (envio.justification ?? '') : justificacion}
+              onChange={(e) => setJustificacion(e.target.value)}
+              disabled={!!envio}
               placeholder="Motivo del envío — opcional si es parte de un programa de seguimiento."
-              className="w-full resize-y rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima"
+              className="w-full resize-y rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima disabled:bg-marron-tierra/5 disabled:text-marron-cafe/50"
             />
           </label>
         </div>
       </SeccionFormulario>
 
-      <SeccionFormulario numero={2} titulo="Factura">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FormInput label="N.° factura laboratorio" value={valores.facturaNumero} onChange={set('facturaNumero')} />
-        </div>
-      </SeccionFormulario>
+      {envio && (
+        <SeccionFormulario numero={3} titulo="Autorización">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FirmaEstado
+              titulo="Verificación GAC"
+              Icon={Stamp}
+              estado={envio.verification.status}
+              fecha={envio.verification.at}
+              observacion={envio.verification.observation}
+            />
+            <FirmaEstado
+              titulo="Autorización Gerencia General"
+              Icon={Gavel}
+              estado={envio.authorization.status}
+              fecha={envio.authorization.at}
+              observacion={envio.authorization.observation}
+            />
+          </div>
+        </SeccionFormulario>
+      )}
 
-      <SeccionFormulario numero={3} titulo="Liberación">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FormSelect label="Conforme" value={valores.conforme} onChange={set('conforme')}>
-            <option value="">Seleccioná…</option>
-            {OPCIONES_SI_NO.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </FormSelect>
-          <FormInput label="Verificado por" value={valores.verificadoPorLiberacion} onChange={set('verificadoPorLiberacion')} />
-          <FormInput label="Código laboratorio externo" value={valores.codigoLaboratorioExterno} onChange={set('codigoLaboratorioExterno')} />
-          <FormInput
-            label="Fecha recepción de resultados"
-            type="date"
-            value={valores.fechaRecepcionResultados}
-            onChange={set('fechaRecepcionResultados')}
-          />
-          <FormInput label="Reporte de análisis" placeholder="ej. PDF" value={valores.reporteAnalisis} onChange={set('reporteAnalisis')} />
-          <FormInput label="Categoría" placeholder="ej. A+" value={valores.categoria} onChange={set('categoria')} />
-          <FormSelect label="Estado" value={valores.estado} onChange={set('estado')}>
-            <option value="">Seleccioná…</option>
-            {ESTADOS_LIBERACION.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </FormSelect>
-        </div>
-      </SeccionFormulario>
+      {envio && ['ENVIADO', 'RESULTADO_RECIBIDO', 'CERRADO'].includes(envio.status) && (
+        <SeccionFormulario numero={4} titulo="Resultado del laboratorio">
+          {envio.status === 'ENVIADO' && puedeCargarInforme ? (
+            <SubidorDocumento
+              etiqueta="Informe del laboratorio externo (PDF)"
+              ayuda="Se sube directo al almacenamiento privado; el backend verifica el archivo antes de aceptarlo."
+              onSubido={async (documento) => {
+                await ejecutar(async () => {
+                  await laboratoryReportsService.crearExterno(envio.id, { documentId: documento.id })
+                  return externalShipmentsService.obtener(envio.id)
+                }, 'Resultado registrado — queda pendiente de validación.')
+              }}
+            />
+          ) : (
+            <p className="text-sm text-marron-cafe/60">
+              {envio.status === 'ENVIADO'
+                ? 'Esperando el informe del laboratorio.'
+                : 'El resultado ya fue registrado — se valida desde la pestaña de informes de la solicitud.'}
+            </p>
+          )}
+        </SeccionFormulario>
+      )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" className="gap-1.5">
-          <ShieldCheck className="size-4" strokeWidth={2} />
-          Guardar registro
-        </Button>
+      {/* Acciones según el estado. Cada una está además gateada por su
+          permiso: `authorize` no lo tiene el rol calidad a propósito. */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-marron-tierra/10 pt-4">
         <Button type="button" variant="secondary" onClick={onVolver}>
           Volver
         </Button>
-        {guardadoEn && (
-          <span className="text-xs text-marron-cafe/50">
-            Último guardado: {new Date(guardadoEn).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })}
-          </span>
+
+        {!envio && (
+          <Button type="button" disabled={!puedeCrear || guardando} onClick={crear} className="gap-1.5">
+            <Send className="size-4" strokeWidth={2} />
+            {guardando ? 'Creando…' : 'Crear envío'}
+          </Button>
+        )}
+
+        {envio && esBorrador && puedeGestionar && (
+          <Button
+            type="button"
+            disabled={guardando}
+            onClick={() => ejecutar(() => externalShipmentsService.enviarAFirma(envio.id), 'Enviado a verificación GAC.')}
+            className="gap-1.5"
+          >
+            <Send className="size-4" strokeWidth={2} />
+            Enviar a verificación
+          </Button>
+        )}
+
+        {envio?.status === 'PENDIENTE_GAC' && puedeVerificar && (
+          <>
+            <Button
+              type="button"
+              disabled={guardando}
+              onClick={() =>
+                ejecutar(() => externalShipmentsService.verificar(envio.id, { approved: true }), 'Verificado — pasa a Gerencia.')
+              }
+              className="gap-1.5"
+            >
+              <Stamp className="size-4" strokeWidth={2} />
+              Verificar (GAC)
+            </Button>
+            <BotonObservar
+              disabled={guardando}
+              etiqueta="Observar"
+              onConfirmar={(observation) =>
+                ejecutar(
+                  () => externalShipmentsService.verificar(envio.id, { approved: false, observation }),
+                  'Observado — vuelve a borrador para corregir.',
+                )
+              }
+            />
+          </>
+        )}
+
+        {envio?.status === 'PENDIENTE_GG' && puedeAutorizar && (
+          <>
+            <Button
+              type="button"
+              disabled={guardando}
+              onClick={() =>
+                ejecutar(() => externalShipmentsService.autorizar(envio.id, { approved: true }), 'Envío autorizado.')
+              }
+              className="gap-1.5"
+            >
+              <Gavel className="size-4" strokeWidth={2} />
+              Autorizar (Gerencia)
+            </Button>
+            <BotonObservar
+              disabled={guardando}
+              etiqueta="Rechazar"
+              onConfirmar={(observation) =>
+                ejecutar(
+                  () => externalShipmentsService.autorizar(envio.id, { approved: false, observation }),
+                  'Rechazado — vuelve a borrador.',
+                )
+              }
+            />
+          </>
+        )}
+
+        {envio?.status === 'AUTORIZADO' && puedeGestionar && (
+          <Button
+            type="button"
+            disabled={guardando}
+            onClick={() =>
+              ejecutar(
+                () =>
+                  externalShipmentsService.marcarEnviado(envio.id, {
+                    ...(fechaResultado ? { expectedResultDate: fechaResultado } : {}),
+                  }),
+                'Envío despachado.',
+              )
+            }
+            className="gap-1.5"
+          >
+            <Truck className="size-4" strokeWidth={2} />
+            Marcar como enviado
+          </Button>
+        )}
+
+        {envio && !['CERRADO', 'ANULADO', 'RESULTADO_RECIBIDO'].includes(envio.status) && puedeGestionar && (
+          <BotonObservar
+            disabled={guardando}
+            etiqueta="Anular envío"
+            variante="peligro"
+            onConfirmar={(cancellationReason) =>
+              ejecutar(() => externalShipmentsService.anular(envio.id, cancellationReason), 'Envío anulado.')
+            }
+          />
         )}
       </div>
-    </form>
+    </div>
+  )
+}
+
+function FirmaEstado({ titulo, Icon, estado, fecha, observacion }) {
+  const tono =
+    estado === 'APROBADO' ? 'positivo' : estado === 'PENDIENTE' ? 'neutro' : 'negativo'
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+      <div className="flex items-center gap-2">
+        <Icon className="size-4 shrink-0 text-marron-cafe/60" strokeWidth={1.75} />
+        <p className="text-sm font-bold text-marron-cafe">{titulo}</p>
+        <Badge tono={tono} className="ml-auto">
+          {estado}
+        </Badge>
+      </div>
+      {fecha && (
+        <p className="text-xs text-marron-cafe/50">
+          {new Date(fecha).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })}
+        </p>
+      )}
+      {observacion && <p className="text-xs text-marron-cafe/70">{observacion}</p>}
+    </div>
+  )
+}
+
+// Acción que necesita un motivo escrito antes de ejecutarse (observar,
+// rechazar, anular) — despliega el campo en vez de abrir un modal aparte.
+function BotonObservar({ etiqueta, onConfirmar, disabled, variante }) {
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+
+  if (!abierto) {
+    return (
+      <Button type="button" variant="secondary" disabled={disabled} onClick={() => setAbierto(true)} className="gap-1.5">
+        <Ban className="size-4" strokeWidth={2} />
+        {etiqueta}
+      </Button>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <FormInput
+        label={`Motivo — ${etiqueta.toLowerCase()}`}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        autoFocus
+        className="min-w-[240px]"
+      />
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={disabled || texto.trim() === ''}
+        onClick={async () => {
+          await onConfirmar(texto.trim())
+          setAbierto(false)
+          setTexto('')
+        }}
+        className={variante === 'peligro' ? 'border-rojo-pasankalla/30 text-rojo-pasankalla' : ''}
+      >
+        Confirmar
+      </Button>
+      <Button type="button" variant="secondary" onClick={() => setAbierto(false)}>
+        Cancelar
+      </Button>
+    </div>
   )
 }
