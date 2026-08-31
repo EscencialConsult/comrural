@@ -29,7 +29,7 @@ import { compararPorFechaRecepcion } from '../utils/fecha'
 // Al tocar un lote se abre el formulario de inspección DIRECTO, inline, sin
 // navegar — la pantalla intermedia de estado (PanelRecepcionLote.jsx) sigue
 // viva para quien la necesite completa (recepción + inspección + resolución
-// juntas), hoy solo enlazada desde PanelLotes.jsx (Compras).
+// juntas), hoy solo enlazada desde PanelCompras.jsx (Compras).
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',

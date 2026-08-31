@@ -26,7 +26,7 @@ export default function Modal({ abierto, titulo, onCerrar, children, maxWidth = 
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-titulo"
-        className={`rise-in relative flex max-h-[90vh] w-full ${maxWidth} flex-col rounded-3xl bg-white`}
+        className={`rise-in relative flex max-h-[90vh] w-full ${maxWidth} flex-col rounded-3xl bg-white shadow-2xl`}
       >
         <div className="flex items-center justify-between gap-3 border-b border-marron-tierra/10 px-6 py-4">
           <h2 id="modal-titulo" className="text-lg font-extrabold text-marron-cafe">

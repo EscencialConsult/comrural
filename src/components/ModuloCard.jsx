@@ -31,8 +31,8 @@ export default function ModuloCard({ modulo, index, visible }) {
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       } ${
         destacado
-          ? 'sm:col-span-2 bg-verde-hoja/10 hover:bg-verde-hoja/15'
-          : 'bg-marron-tierra/5 hover:bg-marron-tierra/10'
+          ? 'sm:col-span-2 border border-verde-hoja/20 bg-verde-hoja/10 hover:bg-verde-hoja/15'
+          : 'border border-marron-tierra/10 bg-marron-tierra/5 hover:bg-marron-tierra/10'
       }`}
       style={{ transitionDelay: visible ? `${index * 60}ms` : '0ms' }}
     >

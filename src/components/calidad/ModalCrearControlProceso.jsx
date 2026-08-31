@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Layers, Droplets, Beaker, Ruler, Boxes } from 'lucide-react'
+import { Layers } from 'lucide-react'
 import { controlProcesoAService } from '../../services/controlProcesoAService'
 import { shiftsService } from '../../services/shiftsService'
 import { iamService } from '../../services/iamService'
@@ -8,34 +8,8 @@ import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
 import Button from '../Button.jsx'
 import Modal from '../Modal.jsx'
-
-// Conteo de piezas encontradas en la muestra, NO gramos — el peso total va
-// aparte en pesoImpurezaG (ver comrural_erp_backend/docs/control-proceso-a.md
-// §3, ERR-03: aclarado explícitamente para no confundir ambos).
-const CAMPOS_IMPUREZAS = [
-  { key: 'paja', label: 'Paja' },
-  { key: 'heces_raton', label: 'Heces de ratón' },
-  { key: 'heces_ave', label: 'Heces de ave' },
-  { key: 'larva', label: 'Larva' },
-  { key: 'semilla', label: 'Semilla' },
-  { key: 'piedra_volcanica', label: 'Piedra volcánica' },
-  { key: 'piedra_dura', label: 'Piedra dura' },
-  { key: 'piedra_cuarzo', label: 'Piedra cuarzo' },
-  { key: 'otros', label: 'Otros' },
-]
-
-// null (no 0) para que el input arranque vacío — un "0" precargado obliga a
-// borrarlo a mano antes de tipear el valor real, y es fácil hacer clic sin
-// darse cuenta de que ya había un cero.
-const IMPUREZAS_VACIAS = Object.fromEntries([...CAMPOS_IMPUREZAS.map((c) => [c.key, null]), ['otros_descripcion', null]])
-
-const CAMPOS_TAMANO_GRANO = [
-  { key: 'm12_pct', label: 'Malla 12 (%)' },
-  { key: 'm14_pct', label: 'Malla 14 (%)' },
-  { key: 'm16_pct', label: 'Malla 16 (%)' },
-  { key: 'polvillo_pct', label: 'Polvillo (%)' },
-]
-const TAMANO_GRANO_VACIO = { m12_pct: null, m14_pct: null, m16_pct: null, polvillo_pct: null }
+import CamposMedicionControlProceso from './CamposMedicionControlProceso.jsx'
+import { IMPUREZAS_VACIAS, TAMANO_GRANO_VACIO, tamanoGranoValido } from './controlProcesoAConstantes'
 
 function TituloSeccion({ Icon, children }) {
   return (
@@ -50,6 +24,11 @@ function TituloSeccion({ Icon, children }) {
 // lavado de Área A) — ver comrural_erp_backend/docs/control-proceso-a.md.
 // `inspectorId`/`purezaPct`/vobo NUNCA se mandan: el servidor los deriva
 // (inspectorId del JWT, purezaPct calculado, vobo es un endpoint aparte).
+// Los 4 bloques de medición (Saponina/Impurezas/Tamaño de grano/
+// Conformidad) viven en CamposMedicionControlProceso.jsx, compartido con
+// ModalDetalleControlProceso.jsx (edición) — acá solo queda la sección
+// "Lote y turno", que en edición no es editable (son la clave natural del
+// registro).
 export default function ModalCrearControlProceso({ abierto, onCerrar, lotes, productoNombre, onCreada }) {
   const [lotId, setLotId] = useState('')
   const [shiftId, setShiftId] = useState('')
@@ -117,9 +96,6 @@ export default function ModalCrearControlProceso({ abierto, onCerrar, lotes, pro
     onCerrar()
   }
 
-  const sumaTamanoGrano = CAMPOS_TAMANO_GRANO.reduce((acc, { key }) => acc + (Number(tamanoGrano[key]) || 0), 0)
-  const tamanoGranoValido = sumaTamanoGrano >= 99.5 && sumaTamanoGrano <= 100.5
-
   const [erroresValidacion, setErroresValidacion] = useState([])
 
   // En vez de deshabilitar "Guardar" hasta que todo esté completo (el
@@ -137,10 +113,10 @@ export default function ModalCrearControlProceso({ abierto, onCerrar, lotes, pro
     if (washHumidityPct === '') errores.push('Humedad de lavado es obligatoria.')
     if (saponinaSecadoMm === '') errores.push('Saponina secado es obligatoria.')
     if (pesoImpurezaG === '') errores.push('Peso total de impurezas es obligatorio.')
-    if (!CAMPOS_TAMANO_GRANO.every(({ key }) => tamanoGrano[key] !== null && tamanoGrano[key] !== ''))
+    const camposTamanoGrano = ['m12_pct', 'm14_pct', 'm16_pct', 'polvillo_pct']
+    if (!camposTamanoGrano.every((k) => tamanoGrano[k] !== null && tamanoGrano[k] !== ''))
       errores.push('Completá los 4 porcentajes de tamaño de grano.')
-    else if (!tamanoGranoValido)
-      errores.push(`La suma de tamaño de grano debe estar entre 99.5% y 100.5% (actual: ${sumaTamanoGrano.toFixed(2)}%).`)
+    else if (!tamanoGranoValido(tamanoGrano)) errores.push('La suma de tamaño de grano debe estar entre 99.5% y 100.5%.')
     if (contrastante === '') errores.push('Contrastante es obligatorio.')
     if (otrosControles.trim() === '') errores.push("El campo 'Otros controles' es obligatorio.")
     if (cantidadPallets === '') errores.push('Cantidad de pallets es obligatoria.')
@@ -173,11 +149,11 @@ export default function ModalCrearControlProceso({ abierto, onCerrar, lotes, pro
           washHumidityPct: Number(washHumidityPct),
           saponinaSecadoMm: Number(saponinaSecadoMm),
           impurezas: {
-            ...Object.fromEntries(CAMPOS_IMPUREZAS.map((c) => [c.key, Number(impurezas[c.key]) || 0])),
+            ...Object.fromEntries(Object.keys(IMPUREZAS_VACIAS).filter((k) => k !== 'otros_descripcion').map((k) => [k, Number(impurezas[k]) || 0])),
             otros_descripcion: impurezas.otros_descripcion?.trim() || null,
           },
           pesoImpurezaG: Number(pesoImpurezaG),
-          tamanoGrano: Object.fromEntries(CAMPOS_TAMANO_GRANO.map(({ key }) => [key, Number(tamanoGrano[key])])),
+          tamanoGrano: Object.fromEntries(Object.keys(TAMANO_GRANO_VACIO).map((k) => [k, Number(tamanoGrano[k])])),
           clasificacionGrano: {
             contrastante: Number(contrastante),
             otros_controles: otrosControles.trim(),
@@ -246,134 +222,34 @@ export default function ModalCrearControlProceso({ abierto, onCerrar, lotes, pro
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
-          <TituloSeccion Icon={Droplets}>Saponina y humedad</TituloSeccion>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <FormInput
-              label="Saponina escarificado (mm)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={saponinaEscarificadoMm}
-              onChange={(e) => setSaponinaEscarificadoMm(e.target.value)}
-            />
-            <FormInput
-              label="Humedad de lavado (%)"
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              value={washHumidityPct}
-              onChange={(e) => setWashHumidityPct(e.target.value)}
-            />
-            <FormInput
-              label="Saponina secado (mm)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={saponinaSecadoMm}
-              onChange={(e) => setSaponinaSecadoMm(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
-          <TituloSeccion Icon={Beaker}>Impurezas (conteo de piezas) y pureza</TituloSeccion>
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {CAMPOS_IMPUREZAS.map(({ key, label }) => (
-              <FormInput
-                key={key}
-                label={label}
-                type="number"
-                min="0"
-                value={impurezas[key] ?? ''}
-                onChange={(e) => setImpurezas((i) => ({ ...i, [key]: e.target.value === '' ? 0 : Number(e.target.value) }))}
-              />
-            ))}
-          </div>
-          <FormInput
-            label="Descripción de 'otros' (opcional)"
-            value={impurezas.otros_descripcion ?? ''}
-            onChange={(e) => setImpurezas((i) => ({ ...i, otros_descripcion: e.target.value }))}
-          />
-          <FormInput
-            label="Peso total de impurezas (g)"
-            type="number"
-            step="0.0001"
-            min="0"
-            value={pesoImpurezaG}
-            onChange={(e) => setPesoImpurezaG(e.target.value)}
-            hint={
-              pesoImpurezaG !== ''
-                ? `Pureza calculada: ${(100 - (100 * Number(pesoImpurezaG)) / 1000).toFixed(2)}%`
-                : 'Sobre una referencia de 1000 g de muestra.'
-            }
-          />
-        </div>
-
-        <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
-          <TituloSeccion Icon={Ruler}>Tamaño y clasificación de grano</TituloSeccion>
-          <div className="grid gap-3 sm:grid-cols-4">
-            {CAMPOS_TAMANO_GRANO.map(({ key, label }) => (
-              <FormInput
-                key={key}
-                label={label}
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={tamanoGrano[key] ?? ''}
-                onChange={(e) => setTamanoGrano((t) => ({ ...t, [key]: e.target.value === '' ? null : Number(e.target.value) }))}
-              />
-            ))}
-          </div>
-          <p className={`text-xs font-medium ${tamanoGranoValido ? 'text-verde-bosque' : 'text-rojo-pasankalla'}`}>
-            Suma: {sumaTamanoGrano.toFixed(2)}% (debe estar entre 99.5% y 100.5%)
-          </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <FormInput
-              label="Contrastante"
-              type="number"
-              min="0"
-              value={contrastante}
-              onChange={(e) => setContrastante(e.target.value)}
-            />
-            <FormInput
-              label="Otros controles"
-              value={otrosControles}
-              onChange={(e) => setOtrosControles(e.target.value)}
-              className="sm:col-span-2"
-            />
-            <FormInput
-              label="Descripción (opcional)"
-              value={descripcionClasificacion ?? ''}
-              onChange={(e) => setDescripcionClasificacion(e.target.value)}
-              className="sm:col-span-3"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
-          <TituloSeccion Icon={Boxes}>Conformidad de volumen</TituloSeccion>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <FormInput label="Cantidad de pallets" type="number" min="0" value={cantidadPallets} onChange={(e) => setCantidadPallets(e.target.value)} />
-            <FormInput label="Cantidad de sacos" type="number" min="0" value={cantidadSacos} onChange={(e) => setCantidadSacos(e.target.value)} />
-            <FormInput
-              label="Pallets no conformes"
-              type="number"
-              min="0"
-              value={palletsNoConformes}
-              onChange={(e) => setPalletsNoConformes(e.target.value)}
-            />
-            <FormInput
-              label="Sacos no conformes"
-              type="number"
-              min="0"
-              value={sacosNoConformes}
-              onChange={(e) => setSacosNoConformes(e.target.value)}
-            />
-          </div>
-        </div>
+        <CamposMedicionControlProceso
+          saponinaEscarificadoMm={saponinaEscarificadoMm}
+          onCambiarSaponinaEscarificadoMm={setSaponinaEscarificadoMm}
+          washHumidityPct={washHumidityPct}
+          onCambiarWashHumidityPct={setWashHumidityPct}
+          saponinaSecadoMm={saponinaSecadoMm}
+          onCambiarSaponinaSecadoMm={setSaponinaSecadoMm}
+          impurezas={impurezas}
+          onCambiarImpurezas={setImpurezas}
+          pesoImpurezaG={pesoImpurezaG}
+          onCambiarPesoImpurezaG={setPesoImpurezaG}
+          tamanoGrano={tamanoGrano}
+          onCambiarTamanoGrano={setTamanoGrano}
+          contrastante={contrastante}
+          onCambiarContrastante={setContrastante}
+          otrosControles={otrosControles}
+          onCambiarOtrosControles={setOtrosControles}
+          descripcionClasificacion={descripcionClasificacion}
+          onCambiarDescripcionClasificacion={setDescripcionClasificacion}
+          cantidadPallets={cantidadPallets}
+          onCambiarCantidadPallets={setCantidadPallets}
+          cantidadSacos={cantidadSacos}
+          onCambiarCantidadSacos={setCantidadSacos}
+          palletsNoConformes={palletsNoConformes}
+          onCambiarPalletsNoConformes={setPalletsNoConformes}
+          sacosNoConformes={sacosNoConformes}
+          onCambiarSacosNoConformes={setSacosNoConformes}
+        />
 
         <div className="flex flex-col items-end gap-2 border-t border-marron-tierra/10 pt-4">
           <Button type="submit" disabled={enviando} className="px-5 py-2.5">

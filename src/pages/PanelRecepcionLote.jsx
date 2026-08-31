@@ -15,7 +15,7 @@ import Skeleton from '../components/Skeleton.jsx'
 // Calidad y Laboratorio · Proceso 1 (recepción e inspección de materia
 // prima) — ver comrural_erp_backend/docs/raw-material-receptions.md,
 // docs/warehouse-receipts.md, docs/inspections.md y docs/quality-resolutions.md,
-// los 4 leídos completos. Pantalla independiente de PanelLotes.jsx a
+// los 4 leídos completos. Pantalla independiente de PanelCompras.jsx a
 // propósito: el rol `calidad` NO tiene `lots:read` (ver
 // 0019_business_modules_permissions.sql — solo `almacen` recibe esa capa
 // técnica) así que el gate de acceso acá es `raw-material-receptions:read`,

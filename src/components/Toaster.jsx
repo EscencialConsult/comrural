@@ -40,7 +40,7 @@ export default function Toaster() {
           <div
             key={t.id}
             role="status"
-            className={`rise-in pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-2xl px-4 py-3 text-sm font-medium shadow-lg ${clase}`}
+            className={`rise-in pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-2xl px-4 py-3 text-sm font-medium shadow-xl ${clase}`}
           >
             <Icono className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
             <p className="min-w-0 flex-1">{t.mensaje}</p>

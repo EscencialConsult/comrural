@@ -29,7 +29,7 @@ export default function Button({
     'transition-all duration-300 active:scale-95 active:duration-100 select-none'
 
   const variants = {
-    primary: 'bg-verde-lima text-marron-cafe hover:bg-verde-hoja hover:-translate-y-0.5',
+    primary: 'bg-verde-lima text-marron-cafe shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] hover:bg-verde-hoja hover:-translate-y-0.5',
     secondary:
       'border border-marron-tierra/20 text-marron-cafe hover:bg-marron-tierra/5 hover:-translate-y-0.5',
     // Para botones sobre fondos oscuros (paneles de auth, hero con partículas).

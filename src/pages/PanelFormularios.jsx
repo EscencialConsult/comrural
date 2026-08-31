@@ -153,7 +153,7 @@ export default function PanelFormularios() {
                     key={f.id}
                     type="button"
                     onClick={() => abrirDetalle(f.id)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
+                    className="flex w-full items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-all duration-200 hover:bg-marron-tierra/5 hover:translate-x-1 hover:border-l-2 hover:border-l-verde-lima"
                   >
                     <div className="flex items-center gap-3">
                       <span className="rounded-full bg-marron-tierra/10 px-2.5 py-1 font-mono text-xs font-semibold text-marron-cafe/70">
@@ -201,9 +201,9 @@ export default function PanelFormularios() {
           <button
             type="button"
             onClick={() => setVista({ modo: 'lista', formId: null })}
-            className="flex items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
+            className="group flex items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
           >
-            <ChevronLeft className="size-4" strokeWidth={1.75} />
+            <ChevronLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" strokeWidth={1.75} />
             Volver al listado
           </button>
 

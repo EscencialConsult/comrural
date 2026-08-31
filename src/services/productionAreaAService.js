@@ -25,4 +25,10 @@ export const productionAreaAService = {
   async balanceMasa(lotId) {
     return apiClient.get(`/production-area-a/lots/${lotId}/mass-balance`)
   },
+
+  // Site-wide (todos los lotes, todas las entradas cerradas) — no por lote.
+  // Reemplaza el array mock que leía la pestaña "Indicadores" del frontend.
+  async indicadores() {
+    return apiClient.get('/production-area-a/indicators')
+  },
 }

@@ -8,7 +8,7 @@ export function DocumentSheet({ children, className = '' }) {
           .print-area { position: absolute; left: 0; top: 0; width: 100%; border: none !important; box-shadow: none !important; }
         }
       `}</style>
-      <div className={`print-area mx-auto w-full overflow-hidden rounded-xl border border-marron-tierra/30 bg-white font-sans text-[13px] text-marron-cafe shadow-lg ${className}`}>
+      <div className={`print-area mx-auto w-full overflow-hidden rounded-xl border border-marron-tierra/10 bg-white font-sans text-[13px] text-marron-cafe shadow-xl ${className}`}>
         {children}
       </div>
     </div>

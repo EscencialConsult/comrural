@@ -83,7 +83,7 @@ export default function AuthPage({ modoInicial = 'login' }) {
     setEnviando(true)
     try {
       if (esLogin) {
-        await login({ email, contrasena })
+        await login({ email, contrasena, recordarme })
       } else {
         await authService.registrar({ nombre, email, contrasena, aceptaTerminos })
       }

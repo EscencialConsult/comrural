@@ -15,7 +15,7 @@ const TONOS_CIRCULO = {
 
 export default function StatCard({ valor, etiqueta, Icon, tono = 'neutro' }) {
   return (
-    <div className="flex items-center gap-4 rounded-3xl bg-marron-tierra/5 p-5">
+    <div className="flex items-center gap-4 rounded-3xl border border-marron-tierra/10 bg-marron-tierra/5 p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-marron-tierra/15 hover:bg-marron-tierra/8">
       {Icon && (
         <div className={`flex size-11 shrink-0 items-center justify-center rounded-full ${TONOS_CIRCULO[tono]}`}>
           <Icon className="size-5" strokeWidth={1.75} />

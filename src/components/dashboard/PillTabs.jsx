@@ -26,7 +26,7 @@ export default function PillTabs({ pestañas, activa, onCambiar }) {
               onClick={() => onCambiar(pestaña.id)}
               className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-out ${
                 esActiva
-                  ? 'bg-verde-lima text-marron-cafe shadow-sm scale-[1.03]'
+                  ? 'bg-verde-lima text-marron-cafe shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.03]'
                   : 'text-marron-cafe/50 hover:-translate-y-0.5 hover:bg-marron-tierra/5 hover:text-marron-cafe/80'
               }`}
             >

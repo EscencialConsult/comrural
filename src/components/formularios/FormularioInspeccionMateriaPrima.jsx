@@ -38,7 +38,7 @@ import { ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS, COLUMNAS_RECHAZO } from
 // lote ahí se abre el formulario directo, sin pasar por la pantalla
 // intermedia de estado (PanelRecepcionLote.jsx) que existía antes. Ese
 // hub sigue vivo para quien lo necesite completo (Compras, desde
-// PanelLotes.jsx), pero ya no es el único camino hacia acá.
+// PanelCompras.jsx), pero ya no es el único camino hacia acá.
 //
 // Diferencia de fondo con FormularioInspeccion.jsx, que ya existía: aquel
 // es un renderer GENÉRICO — recorre form.items y dibuja un control por

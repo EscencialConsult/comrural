@@ -21,7 +21,13 @@ export const authService = {
   // perfil ANTES de resolver, así quien llama a login() (AuthPage) puede
   // navegar a /panel con la certeza de que ya hay usuario cargado, sin
   // pasar por un instante intermedio con sesión pero sin perfil.
-  async login({ email, contrasena }) {
+  //
+  // `recordarme` (default true, mismo default que el checkbox en AuthPage)
+  // se guarda ANTES de firmar el login — supabaseClient.js lee esta
+  // preferencia recién cuando el SDK escribe el token, así que tiene que
+  // estar seteada antes de esa escritura, no después.
+  async login({ email, contrasena, recordarme = true }) {
+    localStorage.setItem('comrural.recordarme', recordarme ? '1' : '0')
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password: contrasena,

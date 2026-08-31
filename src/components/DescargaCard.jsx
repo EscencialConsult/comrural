@@ -13,7 +13,7 @@ export default function DescargaCard({ descarga, index, visible }) {
 
   return (
     <div
-      className={`rounded-3xl bg-marron-tierra/5 p-6 flex flex-col gap-4 transition-all duration-500 hover:-translate-y-1 hover:bg-marron-tierra/10 ${
+      className={`rounded-3xl border border-marron-tierra/10 bg-marron-tierra/5 p-6 flex flex-col gap-4 transition-all duration-500 hover:-translate-y-1 hover:bg-marron-tierra/10 hover:border-marron-tierra/15 ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       }`}
       style={{ transitionDelay: visible ? `${index * 60}ms` : '0ms' }}

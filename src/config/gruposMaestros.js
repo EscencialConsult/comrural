@@ -4,7 +4,6 @@ import {
   Building2,
   Handshake,
   Boxes,
-  Layers,
   ShoppingCart,
   SlidersHorizontal,
   ClipboardList,
@@ -54,7 +53,6 @@ export const GRUPOS_MAESTROS = [
         Icon: Handshake,
       },
       { id: 'productos', nombre: 'Productos', ruta: '/panel/productos', permiso: 'products:read', Icon: Boxes },
-      { id: 'lotes', nombre: 'Lotes', ruta: '/panel/lotes', permiso: 'lots:read', Icon: Layers },
     ],
   },
   {
@@ -139,12 +137,15 @@ export const GRUPOS_MAESTROS = [
   {
     id: 'produccion',
     // Mismo criterio que Calidad/Almacén: "Producción" (el padre) es el
-    // Inicio del área — solo dashboard/analytics — y las dos hermanas son
-    // las áreas FÍSICAS reales de la planta, no pantallas por tipo de
-    // dato. Adentro de cada una vive su propia fila de subpestañas locales
-    // (PillTabs, ver SeccionAreaA.jsx/SeccionAreaB.jsx) con los formularios
-    // de esa área — esas subpestañas NO son rutas, viven en un solo nivel
-    // más abajo que esto.
+    // Inicio del área — solo dashboard/analytics — y "Área A" es la única
+    // área física conectada al backend real (production-area-a). "Área B"
+    // se sacó por completo (pedido explícito) — era 100% mockup, sin ningún
+    // módulo de backend detrás; no queda ni la ruta, ni la pantalla, ni sus
+    // 5 formularios, ver comrural_erp_backend/docs/production-area-a.md.
+    // Adentro de "Área A" vive su propia fila de subpestañas locales
+    // (PillTabs, ver SeccionAreaA.jsx) con los formularios de esa área —
+    // esas subpestañas NO son rutas, viven en un solo nivel más abajo que
+    // esto.
     padre: { nombre: 'Producción', ruta: '/panel/produccion', permiso: 'produccion:read', Icon: Factory },
     items: [
       {
@@ -153,13 +154,6 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/produccion/area-a',
         permiso: 'produccion:read',
         Icon: Warehouse,
-      },
-      {
-        id: 'area-b',
-        nombre: 'Área B',
-        ruta: '/panel/produccion/area-b',
-        permiso: 'produccion:read',
-        Icon: Factory,
       },
     ],
   },

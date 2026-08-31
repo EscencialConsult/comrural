@@ -18,6 +18,12 @@ export const controlProcesoAService = {
     return apiClient.get(`/control-proceso-a/lots/${lotId}`)
   },
 
+  // Editable mientras el registro no tenga vobo (agregado a pedido
+  // explícito, ver docs/control-proceso-a.md §4/§8) — 409 si ya lo tiene.
+  async actualizar(id, dto) {
+    return apiClient.patch(`/control-proceso-a/${id}`, dto)
+  },
+
   async darVobo(id, dto = {}) {
     return apiClient.patch(`/control-proceso-a/${id}/vobo`, dto)
   },

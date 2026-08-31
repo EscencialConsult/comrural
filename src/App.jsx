@@ -17,7 +17,6 @@ import PanelAlmacenRecepcion from './pages/PanelAlmacenRecepcion.jsx'
 import PanelCalidad from './pages/PanelCalidad.jsx'
 import PanelProduccion from './pages/PanelProduccion.jsx'
 import PanelProduccionAreaA from './pages/PanelProduccionAreaA.jsx'
-import PanelProduccionAreaB from './pages/PanelProduccionAreaB.jsx'
 import PanelLaboratorio from './pages/PanelLaboratorio.jsx'
 import PanelCalidadRecepcion from './pages/PanelCalidadRecepcion.jsx'
 import PanelCalidadRemito from './pages/PanelCalidadRemito.jsx'
@@ -35,7 +34,6 @@ import PanelPersonas from './pages/PanelPersonas.jsx'
 import PanelOrganizaciones from './pages/PanelOrganizaciones.jsx'
 import PanelProveedores from './pages/PanelProveedores.jsx'
 import PanelProductos from './pages/PanelProductos.jsx'
-import PanelLotes from './pages/PanelLotes.jsx'
 import NotFound from './pages/NotFound.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
 
@@ -93,14 +91,12 @@ function App() {
         <Route path="/panel/organizaciones" element={<PanelOrganizaciones />} />
         <Route path="/panel/proveedores" element={<PanelProveedores />} />
         <Route path="/panel/productos" element={<PanelProductos />} />
-        <Route path="/panel/lotes" element={<PanelLotes />} />
         <Route path="/panel/compras" element={<PanelCompras />} />
         <Route path="/panel/almacen" element={<PanelAlmacen />} />
         <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
         <Route path="/panel/calidad" element={<PanelCalidad />} />
         <Route path="/panel/produccion" element={<PanelProduccion />} />
         <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
-        <Route path="/panel/produccion/area-b" element={<PanelProduccionAreaB />} />
         <Route path="/panel/laboratorio" element={<PanelLaboratorio />} />
         <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
         <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />

@@ -24,6 +24,7 @@ const ESTADOS_CANDIDATOS = ['ACEPTADO_RECEPCION', 'LAVADO']
 export default function SeccionControlProceso() {
   const { permisos } = useAuth()
   const puedeAprobar = permisos.has('control-proceso-a:approve')
+  const puedeEditar = permisos.has('control-proceso-a:update')
 
   const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
@@ -84,7 +85,7 @@ export default function SeccionControlProceso() {
     }))
   }
 
-  const alRegistrarVobo = (actualizado) => {
+  const alActualizar = (actualizado) => {
     setControlesPorLote((prev) => ({
       ...prev,
       [actualizado.lotId]: prev[actualizado.lotId].map((c) => (c.id === actualizado.id ? actualizado : c)),
@@ -144,7 +145,7 @@ export default function SeccionControlProceso() {
                     </Badge>
                   ) : (
                     <Badge tono="alerta" className="ml-auto">
-                      {puedeAprobar ? 'Ver y dar visto bueno' : 'Pendiente de visto bueno'}
+                      {puedeAprobar ? 'Ver y dar visto bueno' : puedeEditar ? 'Ver y editar' : 'Pendiente de visto bueno'}
                     </Badge>
                   )}
                 </button>
@@ -165,9 +166,10 @@ export default function SeccionControlProceso() {
       <ModalDetalleControlProceso
         abierto={detalleDe !== null}
         control={detalleDe}
+        puedeEditar={puedeEditar}
         puedeAprobar={puedeAprobar}
         onCerrar={() => setDetalleDe(null)}
-        onVoboRegistrado={alRegistrarVobo}
+        onActualizado={alActualizar}
       />
     </section>
   )
