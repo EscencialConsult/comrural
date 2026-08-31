@@ -29,6 +29,7 @@ const MOTIVO_RECLASIFICACION_LABEL = {
 
 const TONO_ESTADO_LOTE = {
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   LIBERADO: 'positivo',
   RECHAZADO: 'negativo',
@@ -276,9 +277,15 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                 hayan achicado — con esto el scroll queda CONTENIDO acá
                 (degradé + flecha visibles), en vez de arrastrar a todo el
                 modal a scrollear horizontal (ver overflow-x-hidden del
-                contenedor general, más arriba). */}
+                contenedor general, más arriba). `pt-1.5` acá adentro (no en
+                el `p-5` de afuera, que queda fuera del propio div que
+                scrollea): `overflow-x-auto` sin `overflow-y` explícito hace
+                que el navegador compute el eje vertical como no-visible
+                también, y sin este margen el `ring-4` del círculo (un
+                box-shadow que sobresale del borde) quedaba recortado por
+                arriba al no tener aire dentro de ese div. */}
             <ScrollHorizontal>
-              <div className="flex min-w-[280px] items-start">
+              <div className="flex min-w-[280px] items-start pt-1.5">
                 {pasos.map((p, i) => (
                   <Paso key={p.titulo} {...p} esUltimo={i === pasos.length - 1} />
                 ))}

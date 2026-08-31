@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   SlidersHorizontal,
   ClipboardList,
+  ClipboardCheck,
   LayoutGrid,
   FlaskConical,
   Warehouse,
@@ -120,6 +121,18 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/calidad/muestras',
         permiso: 'samples:read',
         Icon: TestTubes,
+      },
+      // Control de proceso de Área A (control-proceso-a) — lo llena un
+      // inspector de Calidad sobre el lavado que registra Producción, pero
+      // el permiso real es propio (control-proceso-a:read, agregado en
+      // 0035), no lots:read — pedido explícito: vive en Calidad, no dentro
+      // del grupo Producción, ver comrural_erp_backend/docs/control-proceso-a.md.
+      {
+        id: 'control-proceso',
+        nombre: 'Control de Proceso',
+        ruta: '/panel/calidad/control-proceso',
+        permiso: 'control-proceso-a:read',
+        Icon: ClipboardCheck,
       },
     ],
   },

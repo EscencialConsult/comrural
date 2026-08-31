@@ -22,6 +22,7 @@ import PanelLaboratorio from './pages/PanelLaboratorio.jsx'
 import PanelCalidadRecepcion from './pages/PanelCalidadRecepcion.jsx'
 import PanelCalidadRemito from './pages/PanelCalidadRemito.jsx'
 import PanelCalidadMuestras from './pages/PanelCalidadMuestras.jsx'
+import PanelCalidadControlProceso from './pages/PanelCalidadControlProceso.jsx'
 import PanelRecepcionLote from './pages/PanelRecepcionLote.jsx'
 import PanelInspeccionMateriaPrima from './pages/PanelInspeccionMateriaPrima.jsx'
 import PanelIngresoMateriaPrima from './pages/PanelIngresoMateriaPrima.jsx'
@@ -104,6 +105,7 @@ function App() {
         <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
         <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />
         <Route path="/panel/calidad/muestras" element={<PanelCalidadMuestras />} />
+        <Route path="/panel/calidad/control-proceso" element={<PanelCalidadControlProceso />} />
         <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
         <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
         <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />

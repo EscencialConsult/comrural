@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, Printer } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSolicitud } from '../../hooks/useSolicitud'
@@ -51,10 +51,14 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // de mandar la hoja entera de una. El botón de abajo cambia según el estado
 // real: "Finalizar recepción" (todavía no existe — este POST es el que de
 // verdad arranca la recepción: crea el warehouseReceipt en INICIADA y pasa
-// el lote a EN_RECEPCION, con `startedAt` sellado en ese instante) →
-// "Guardar cambios" (existe, INICIADA) → nada (FINALIZADA, todo de solo
-// lectura). Al completar "Finalizar recepción" se vuelve al listado
-// (`onVolver`) con un toast, en vez de quedarse en el asistente.
+// el lote a EN_RECEPCION) → "Guardar cambios" (existe, INICIADA) → nada
+// (FINALIZADA, todo de solo lectura). El POST sella `startedAt` con el
+// instante real del servidor, pero eso casi nunca coincide con la fecha/
+// hora que el usuario ve en pantalla (capturada al abrir el formulario,
+// editable — ver DatosRecepcionLote.jsx): por eso `finalizar()` manda un
+// PATCH de corrección inmediatamente después, con ese valor. Al completar
+// "Finalizar recepción" se vuelve al listado (`onVolver`) con un toast, en
+// vez de quedarse en el asistente.
 //
 // Se ve UNA sección a la vez (AsistenteDeEtapas.jsx) — corrección
 // post-revisión: antes las secciones se mostraban todas juntas ("como el
@@ -62,6 +66,12 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // la 1/2/3. Mientras `soloLectura` (FINALIZADA), no hay nada que "saltear"
 // — se ve todo de una, como un documento cerrado normal.
 const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
+
+// Índice de la etapa "producto" dentro de `etapas` (armado más abajo, en el
+// cuerpo del componente) — documentos(0), recepción(1), transporte(2),
+// producto(3, unidades de medida), firmas(4). Vive acá arriba porque el
+// efecto que decide el salto automático corre antes de que `etapas` exista.
+const PASO_PRODUCTO = 3
 
 const DOCUMENTOS_VACIOS = { productores: { verificado: null, notas: '' }, guia: { verificado: null, notas: '' } }
 // Solo los campos que pide negocio (ver DatosTransporte.jsx) — el backend
@@ -93,6 +103,12 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
   const [notes, setNotes] = useState('')
   const [pesoBruto, setPesoBruto] = useState('')
   const [pesoNeto, setPesoNeto] = useState('')
+  // Editables mientras la recepción siga abierta (pedido explícito) — ver
+  // DatosRecepcionLote.jsx y warehouse-receipt.dto.ts (`startedAt` ahora
+  // acepta PATCH). Antes de crearse la recepción no hay nada que editar:
+  // `startedAt` lo sella el propio POST al presionar "Iniciar".
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [horaInicio, setHoraInicio] = useState(null)
   const [pasoActual, setPasoActual] = useState(0)
 
   const { enviando, error, ejecutar } = useSolicitud()
@@ -164,8 +180,49 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
     setNotes(warehouseReceipt?.notes ?? '')
     setPesoBruto(warehouseReceipt?.acceptedGrossWeightKg != null ? String(warehouseReceipt.acceptedGrossWeightKg) : '')
     setPesoNeto(warehouseReceipt?.acceptedNetWeightKg != null ? String(warehouseReceipt.acceptedNetWeightKg) : '')
+    // Si ya existe la recepción, la fecha/hora real vienen del backend
+    // (`startedAt`). Si todavía no existe, la captura del momento actual la
+    // hace el efecto de abajo (atado a `recepcion`, no a `wrId` — ver por
+    // qué) — acá no hace nada en ese caso, para no pisarla en cada
+    // `recargar()`.
+    if (warehouseReceipt) {
+      setFechaInicio(soloFecha(warehouseReceipt.startedAt))
+      setHoraInicio(soloHora(warehouseReceipt.startedAt))
+    }
+
+    // Si Calidad ya resolvió (habilitó el pesaje, o el cierre sin pesos por
+    // rechazo total) y la recepción sigue INICIADA, saltar directo al paso
+    // de "Datos del producto" — ahí viven las unidades de medida. Pedido
+    // explícito: antes de esto, Almacén volvía a caer siempre en el paso 0
+    // y tenía que reclickear "Siguiente" 1/2/3 (ya completos, solo
+    // colapsados) para llegar al peso. Solo corre cuando cambia `wrId`
+    // (mismo motivo que el resto de este efecto: no pisar el paso en el
+    // que está parado alguien cada vez que `recargar()` refresca datos).
+    const { summary } = recepcion
+    setPasoActual(warehouseReceipt?.status === 'INICIADA' && (summary.canRegisterWeight || summary.canCompleteWithoutWeight) ? PASO_PRODUCTO : 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wrId])
+
+  // Captura el momento actual como fecha/hora de inicio EDITABLE, apenas se
+  // confirma que el lote todavía no tiene recepción — es el mismo instante
+  // en que se clickeó "Iniciar" en la lista de Almacén, que solo abre este
+  // formulario sin crear nada (ver DatosRecepcionLote.jsx). No puede vivir
+  // en el efecto de arriba: ese está atado a `wrId`
+  // (`recepcion?.warehouseReceipt?.id`), que sigue siendo `null` tanto
+  // ANTES de cargar `recepcion` como DESPUÉS si la recepción no existe
+  // todavía — la dependencia nunca cambia, así que ese efecto nunca vuelve
+  // a correr para capturar nada. Acá se usa `recepcion` (no `wrId`) como
+  // disparador, y un ref para no re-capturar en cada `recargar()` (que
+  // repite mientras el usuario sigue completando el resto del formulario).
+  const loteYaCapturado = useRef(null)
+  useEffect(() => {
+    if (!recepcion || recepcion.warehouseReceipt) return
+    if (loteYaCapturado.current === lotId) return
+    loteYaCapturado.current = lotId
+    const ahora = new Date()
+    setFechaInicio(ahora.toLocaleDateString('en-CA'))
+    setHoraInicio(`${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`)
+  }, [recepcion, lotId])
 
   const cambiarDocumento = (clave, campo, valor) =>
     setDocumentos((prev) => ({ ...prev, [clave]: { ...prev[clave], [campo]: valor } }))
@@ -258,7 +315,20 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
   const finalizar = async () => {
     if (!validoParaGuardar) return
     try {
-      await ejecutar(() => warehouseReceiptsService.iniciar(lotId, dtoDocumentosYTransporte()))
+      await ejecutar(async () => {
+        const creado = await warehouseReceiptsService.iniciar(lotId, dtoDocumentosYTransporte())
+        // El POST sella `startedAt` con el instante real del servidor —
+        // acá se corrige de inmediato con el valor capturado al abrir el
+        // formulario (o editado a mano mientras se completaba el resto),
+        // en la misma acción de "Finalizar recepción". Sin esto, la fecha/
+        // hora que se ve en pantalla nunca coincidía con la que terminaba
+        // guardada.
+        if (fechaInicio && horaInicio) {
+          await warehouseReceiptsService.actualizar(creado.id, {
+            startedAt: new Date(`${fechaInicio}T${horaInicio}`).toISOString(),
+          })
+        }
+      })
       toast.success('Recepción registrada.')
       onVolver?.()
     } catch {
@@ -274,6 +344,13 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
       // `receivedPackageCount` queda afuera del PATCH — mandarlo igual es
       // un 400 asegurado, no algo que valga la pena intentar.
       if (cantidadBloqueada) delete dto.receivedPackageCount
+      // `startedAt` se manda solo si fecha/hora de inicio están cargadas
+      // (no antes de crear la recepción) — combinar los dos campos locales
+      // en un instante único e interpretarlo en hora local del navegador,
+      // igual criterio que aInputLocal/datetime-local en utils/fecha.js.
+      if (fechaInicio && horaInicio) {
+        dto.startedAt = new Date(`${fechaInicio}T${horaInicio}`).toISOString()
+      }
       await ejecutar(() => warehouseReceiptsService.actualizar(warehouseReceipt.id, dto))
       setConfirmacion('Cambios guardados.')
       recargar()
@@ -295,8 +372,8 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
           ...(puedeCerrarConPesos ? { acceptedGrossWeightKg: Number(pesoBruto), acceptedNetWeightKg: Number(pesoNeto) } : {}),
         }),
       )
-      setConfirmacion('Recepción cerrada.')
-      recargar()
+      toast.success('Recepción cerrada.')
+      onVolver?.()
     } catch {
       // mensaje ya en `error`
     }
@@ -337,11 +414,14 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
           <DatosRecepcionLote
             valores={{
               producto: lot.productId ? { id: lot.productId, nombre: lot.productName ?? '' } : null,
-              fecha: soloFecha(warehouseReceipt?.startedAt),
-              horaInicio: soloHora(warehouseReceipt?.startedAt),
+              fecha: fechaInicio,
+              horaInicio,
               horaFin: soloHora(warehouseReceipt?.completedAt),
               lote: { id: lot.id, nombre: lot.code },
             }}
+            soloLectura={soloLectura}
+            onCambiarFecha={setFechaInicio}
+            onCambiarHoraInicio={setHoraInicio}
           />
         </SeccionFormulario>
       ),

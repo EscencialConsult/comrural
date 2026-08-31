@@ -556,10 +556,22 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
         }
       }
     }
-    if (cambios.length === 0) return
+    // startedAt se manda junto con las respuestas en el mismo "Guardar" —
+    // mismo criterio que FormularioIngresoMateriaPrima.jsx (Almacén): se
+    // combinan fecha+hora locales y se interpretan en hora local del
+    // navegador.
+    const startedAtIso =
+      generales.fecha && generales.horaInicio ? new Date(`${generales.fecha}T${generales.horaInicio}`).toISOString() : null
+
+    if (cambios.length === 0 && !startedAtIso) return
     try {
-      await ejecutar(() => inspectionsService.guardarRespuestas(inspection.id, cambios))
-      setConfirmacion('Respuestas guardadas.')
+      await ejecutar(() =>
+        Promise.all([
+          cambios.length > 0 ? inspectionsService.guardarRespuestas(inspection.id, cambios) : Promise.resolve(),
+          startedAtIso ? inspectionsService.actualizar(inspection.id, { startedAt: startedAtIso }) : Promise.resolve(),
+        ]),
+      )
+      setConfirmacion('Cambios guardados.')
       setAvisoGuardarPrimero(false)
       // `recargar()` no reseeda `tocados` (el `useEffect` que lo hace está
       // atado a `formId`, que no cambia al guardar) — sin esto, "Finalizar"
@@ -630,7 +642,13 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
         // son justo los de esta sección, así que la salida tiene que estar
         // donde aparece el problema, no a media pantalla de distancia.
         <SeccionFormulario numero={1} titulo="Datos generales" acciones={<AvisoFaltante onEnviar={solicitarAlta} />}>
-          <DatosGeneralesLote valores={generales} opciones={listados} />
+          <DatosGeneralesLote
+            valores={generales}
+            opciones={listados}
+            soloLectura={soloLectura}
+            onCambiarFecha={(v) => setGenerales((g) => ({ ...g, fecha: v }))}
+            onCambiarHoraInicio={(v) => setGenerales((g) => ({ ...g, horaInicio: v }))}
+          />
         </SeccionFormulario>
       ),
     },
