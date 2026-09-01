@@ -22,8 +22,11 @@ const MEDIA_ESCRITORIO = '(min-width: 768px)'
 // necesita también `grupo.padre.nombre` — algunos grupos (Calidad) piden un
 // nombre más corto acá que el que usan las páginas públicas de
 // mock/data/modulos.json.
-const GRUPOS_POR_MODULO = new Map(GRUPOS_MAESTROS.filter((g) => g.id !== 'configuracion').map((g) => [g.id, g]))
+const GRUPOS_POR_MODULO = new Map(
+  GRUPOS_MAESTROS.filter((g) => g.id !== 'configuracion' && g.id !== 'usuarios').map((g) => [g.id, g]),
+)
 const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
+const SUBITEMS_USUARIOS = GRUPOS_MAESTROS.find((g) => g.id === 'usuarios').items
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
 // (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
@@ -53,6 +56,10 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   }, [permisos])
   const subitemsConfiguracion = useMemo(
     () => SUBITEMS_CONFIGURACION.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsUsuarios = useMemo(
+    () => SUBITEMS_USUARIOS.filter((s) => permisos.has(s.permiso)),
     [permisos],
   )
   const [colapsado, setColapsado] = useState(
@@ -119,7 +126,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
       el.removeEventListener('scroll', actualizar)
       resizeObserver.disconnect()
     }
-  }, [modulos, subitemsPorModulo, subitemsConfiguracion, colapsadoEfectivo, navVersion])
+  }, [modulos, subitemsPorModulo, subitemsConfiguracion, subitemsUsuarios, colapsadoEfectivo, navVersion])
 
   const linkClass = ({ isActive }) =>
     `sidebar-navitem flex items-center rounded-xl py-2.5 text-sm font-medium ${
@@ -278,17 +285,31 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
               )}
 
               {/* Gestión de usuarios/roles — solo superadmin hoy (permiso
-                  real "iam:read", no un código de rol hardcodeado). */}
-              {permisos.has('iam:read') && (
-                <NavLink
-                  to="/panel/usuarios"
-                  className={linkClass}
-                  title={colapsadoEfectivo ? 'Usuarios' : undefined}
-                >
-                  <Users className="size-5 shrink-0" strokeWidth={1.75} />
-                  <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Usuarios</span>
-                </NavLink>
-              )}
+                  real "iam:read", no un código de rol hardcodeado). "Roles y
+                  permisos" vive como hermana (GestionRoles.jsx), mismo
+                  criterio que Configuración→Países: el padre sigue siendo la
+                  lista de usuarios. */}
+              {permisos.has('iam:read') &&
+                (subitemsUsuarios.length > 0 ? (
+                  <NavGroup
+                    nombre="Usuarios"
+                    ruta="/panel/usuarios"
+                    Icon={Users}
+                    subitems={subitemsUsuarios}
+                    colapsadoEfectivo={colapsadoEfectivo}
+                    linkClass={linkClass}
+                    onToggle={alExpandirGrupo}
+                  />
+                ) : (
+                  <NavLink
+                    to="/panel/usuarios"
+                    className={linkClass}
+                    title={colapsadoEfectivo ? 'Usuarios' : undefined}
+                  >
+                    <Users className="size-5 shrink-0" strokeWidth={1.75} />
+                    <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Usuarios</span>
+                  </NavLink>
+                ))}
 
               {/* Configuración: acceso libre en sí misma (por eso nunca se
                   gatea el link padre), pero Países vive adentro como

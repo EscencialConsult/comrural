@@ -14,6 +14,8 @@ import {
   Receipt,
   TestTubes,
   Factory,
+  Users,
+  ShieldCheck,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -54,6 +56,25 @@ export const GRUPOS_MAESTROS = [
       },
       { id: 'productos', nombre: 'Productos', ruta: '/panel/productos', permiso: 'products:read', Icon: Boxes },
       { id: 'lotes', nombre: 'Lotes', ruta: '/panel/lotes', permiso: 'lots:read', Icon: Layers },
+    ],
+  },
+  {
+    // Igual que 'configuracion': no es un módulo de negocio de modulos.json,
+    // así que DashboardSidebar.jsx lo resuelve aparte (subitemsUsuarios,
+    // mismo criterio que subitemsConfiguracion) en vez de por el
+    // modulos.map() genérico. Entra acá solo para que esta sea la ÚNICA
+    // fuente de "padre + hermanas" — así GrupoTabs.jsx (las pastillas
+    // arriba de la pantalla) funciona gratis, sin un caso especial más.
+    id: 'usuarios',
+    padre: { nombre: 'Usuarios', ruta: '/panel/usuarios', permiso: 'iam:read', Icon: Users },
+    items: [
+      {
+        id: 'roles',
+        nombre: 'Roles y permisos',
+        ruta: '/panel/usuarios/roles',
+        permiso: 'iam:read',
+        Icon: ShieldCheck,
+      },
     ],
   },
   {
