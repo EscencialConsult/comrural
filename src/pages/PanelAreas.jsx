@@ -7,6 +7,7 @@ import { toast } from '../lib/toast'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import Button from '../components/Button.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 
 // FE·Configuración · Gestionar Área (ver comrural_erp_backend/docs/areas.md,
@@ -82,12 +83,10 @@ export default function PanelAreas() {
           </div>
 
           {errorCarga ? (
-            <div className="flex flex-col items-start gap-2 rounded-2xl bg-rojo-pasankalla/10 px-4 py-3.5 text-sm">
-              <p className="font-medium text-rojo-pasankalla">No se pudo cargar el catálogo: {errorCarga}</p>
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={cargar}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorBanner
+              mensaje={`No se pudo cargar el catálogo: ${errorCarga}`}
+              onReintentar={cargar}
+            />
           ) : areas === null ? (
             <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
               {Array.from({ length: 3 }, (_, i) => (

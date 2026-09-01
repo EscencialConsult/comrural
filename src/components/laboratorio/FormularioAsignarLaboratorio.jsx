@@ -325,7 +325,20 @@ export default function FormularioAsignarLaboratorio({
                 </span>
               ))}
             </div>
-            <div className="grid grid-cols-[1fr_auto] gap-3">
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-2xl border border-marron-tierra/10 p-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-marron-tierra/10 text-marron-cafe/60">
+                <Scale className="size-4.5" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-marron-cafe">Peso de la muestra</p>
+                <p className="text-xs text-marron-cafe/50">Cuánto se aparta para el trabajo interno.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
               <FormInput
                 label="Cantidad preparada"
                 type="number"
@@ -334,8 +347,14 @@ export default function FormularioAsignarLaboratorio({
                 placeholder="0"
                 value={cantidadInterna}
                 onChange={(e) => setCantidadInterna(e.target.value)}
+                className="min-w-[8rem] flex-1"
               />
-              <FormSelect label="Unidad" value={unidadInterna} onChange={(e) => setUnidadInterna(e.target.value)}>
+              <FormSelect
+                label="Unidad"
+                value={unidadInterna}
+                onChange={(e) => setUnidadInterna(e.target.value)}
+                className="w-24 shrink-0"
+              >
                 {UNIDADES_SUBMUESTRA.map((u) => (
                   <option key={u} value={u}>
                     {u}
@@ -343,16 +362,26 @@ export default function FormularioAsignarLaboratorio({
                 ))}
               </FormSelect>
             </div>
-          </div>
 
-          {muestraTotalGramos !== null && internaGramos !== null && (
-            <p className={`flex items-center gap-1.5 text-xs font-medium ${excedeMuestra ? 'text-rojo-pasankalla' : 'text-marron-cafe/45'}`}>
-              <Package className="size-3.5 shrink-0" strokeWidth={1.75} />
-              {excedeMuestra
-                ? `Lo preparado (${internaGramos} g) supera la muestra total (${solicitud.sample.quantity} ${unidadMuestra}).`
-                : `${internaGramos} g de ${solicitud.sample.quantity} ${unidadMuestra} disponibles.`}
-            </p>
-          )}
+            {muestraTotalGramos !== null && (
+              <div className="flex flex-col gap-1.5">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-marron-tierra/10">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${excedeMuestra ? 'bg-rojo-pasankalla' : 'bg-verde-bosque'}`}
+                    style={{ width: `${Math.min(100, ((internaGramos ?? 0) / muestraTotalGramos) * 100)}%` }}
+                  />
+                </div>
+                <p className={`flex items-center gap-1.5 text-xs font-medium ${excedeMuestra ? 'text-rojo-pasankalla' : 'text-marron-cafe/45'}`}>
+                  <Package className="size-3.5 shrink-0" strokeWidth={1.75} />
+                  {excedeMuestra
+                    ? `Lo preparado (${internaGramos} g) supera la muestra total (${solicitud.sample.quantity} ${unidadMuestra}).`
+                    : internaGramos !== null
+                      ? `${internaGramos} g de ${solicitud.sample.quantity} ${unidadMuestra} disponibles.`
+                      : `Muestra total disponible: ${solicitud.sample.quantity} ${unidadMuestra}.`}
+                </p>
+              </div>
+            )}
+          </div>
 
           {externos.length > 0 && (
             <p className="flex items-start gap-1.5 rounded-xl bg-oro-quinua/10 px-3 py-2 text-xs text-marron-cafe/70">

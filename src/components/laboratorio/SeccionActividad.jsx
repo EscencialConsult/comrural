@@ -9,6 +9,7 @@ import FormInput from '../FormInput.jsx'
 import SearchInput from '../SearchInput.jsx'
 import Skeleton from '../Skeleton.jsx'
 import EmptyState from '../EmptyState.jsx'
+import ModalDetalleActividad from './ModalDetalleActividad.jsx'
 
 // Pestaña "Actividad" de Laboratorio — bitácora de solicitudes de análisis
 // (GET /analysis-requests, ya existe y ya soporta los filtros de acá:
@@ -49,6 +50,7 @@ export default function SeccionActividad() {
   const [effectiveType, setEffectiveType] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const [solicitudSeleccionadaId, setSolicitudSeleccionadaId] = useState(null)
 
   const hayFiltrosActivos =
     sampleCode !== '' || lotCode !== '' || status !== '' || effectiveType !== '' || desde !== '' || hasta !== ''
@@ -167,9 +169,11 @@ export default function SeccionActividad() {
         <>
           <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
             {solicitudes.map((s) => (
-              <div
+              <button
                 key={s.id}
-                className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
+                type="button"
+                onClick={() => setSolicitudSeleccionadaId(s.id)}
+                className="flex w-full flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 hover:bg-marron-tierra/5"
               >
                 <span className="w-36 shrink-0 text-xs text-marron-cafe/50">{formatearFechaHora(s.requestedAt)}</span>
                 <span className="font-mono text-xs font-semibold text-marron-cafe/70">{s.sample.code}</span>
@@ -183,7 +187,7 @@ export default function SeccionActividad() {
                 <Badge tono={TONO_ESTADO[s.status] ?? 'neutro'} className="ml-auto">
                   {s.status.replace(/_/g, ' ')}
                 </Badge>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -197,6 +201,12 @@ export default function SeccionActividad() {
           )}
         </>
       )}
+
+      <ModalDetalleActividad
+        abierto={solicitudSeleccionadaId !== null}
+        solicitudId={solicitudSeleccionadaId}
+        onCerrar={() => setSolicitudSeleccionadaId(null)}
+      />
     </section>
   )
 }

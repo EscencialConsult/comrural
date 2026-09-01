@@ -26,7 +26,7 @@ export default function Badge({ tono = 'neutro', className = '', children, ...pr
   return (
     <span
       {...props}
-      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide uppercase ${TONOS[tono]} ${className}`}
+      className={`inline-block w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide whitespace-nowrap uppercase ${TONOS[tono]} ${className}`}
     >
       {children}
     </span>

@@ -12,6 +12,7 @@ import FormSelect from '../components/FormSelect.jsx'
 import FormDateTimeInput from '../components/FormDateTimeInput.jsx'
 import SearchInput from '../components/SearchInput.jsx'
 import Button from '../components/Button.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Badge from '../components/Badge.jsx'
 import Skeleton from '../components/Skeleton.jsx'
@@ -190,12 +191,10 @@ export default function PanelCompras() {
           </div>
 
           {errorCarga ? (
-            <div className="flex flex-col items-start gap-2 rounded-2xl bg-rojo-pasankalla/10 px-4 py-3.5 text-sm">
-              <p className="font-medium text-rojo-pasankalla">No se pudo cargar el listado: {errorCarga}</p>
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={cargarPrimeraPagina}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorBanner
+              mensaje={`No se pudo cargar el listado: ${errorCarga}`}
+              onReintentar={cargarPrimeraPagina}
+            />
           ) : lotes === null ? (
             <div className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-3">

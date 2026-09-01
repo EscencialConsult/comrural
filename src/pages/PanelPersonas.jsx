@@ -8,6 +8,7 @@ import { telefonoValido, ciValido, normalizarCi } from '../config/validaciones'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import Button from '../components/Button.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 
@@ -79,12 +80,10 @@ export default function PanelPersonas() {
           </div>
 
           {errorCarga ? (
-            <div className="flex flex-col items-start gap-2 rounded-2xl bg-rojo-pasankalla/10 px-4 py-3.5 text-sm">
-              <p className="font-medium text-rojo-pasankalla">No se pudo cargar el listado: {errorCarga}</p>
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={cargarPrimeraPagina}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorBanner
+              mensaje={`No se pudo cargar el listado: ${errorCarga}`}
+              onReintentar={cargarPrimeraPagina}
+            />
           ) : personas === null ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }, (_, i) => (

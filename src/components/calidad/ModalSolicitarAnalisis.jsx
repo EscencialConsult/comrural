@@ -12,6 +12,7 @@ import FormSelect from '../FormSelect.jsx'
 import Button from '../Button.jsx'
 import Badge from '../Badge.jsx'
 import Skeleton from '../Skeleton.jsx'
+import ErrorBanner from '../ErrorBanner.jsx'
 
 // Solo crea la SOLICITUD DE ANÁLISIS (POST /samples/:sampleId/analysis-requests)
 // sobre una muestra que YA existe — separado de ModalCrearMuestra.jsx a
@@ -290,7 +291,7 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
             <p className="text-xs font-medium text-rojo-pasankalla">Elegí al menos un ensayo para continuar.</p>
           )}
           {errorCatalogo && (
-            <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar el catálogo: {errorCatalogo}</p>
+            <ErrorBanner mensaje={`No se pudo cargar el catálogo: ${errorCatalogo}`} />
           )}
           {catalogo === null && !errorCatalogo && (
             <div className="flex flex-col gap-3">
@@ -443,9 +444,7 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
               {enviando ? 'Enviando…' : 'Enviar solicitud'}
             </Button>
           </div>
-          {error && (
-            <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-          )}
+          {error && <ErrorBanner mensaje={error} />}
         </div>
       </form>
     </Modal>
