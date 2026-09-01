@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import { qualityResolutionsService } from '../services/qualityResolutionsService'
+import { compararPorFechaRecepcion } from '../utils/fecha'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Badge from '../components/Badge.jsx'
@@ -117,6 +118,23 @@ function InicioCalidad() {
     return { enRecepcion, aceptadosEsteMes, pendientesInspeccion, pendientesVistoBueno }
   }, [lotes, resumenes])
 
+  // Preview de "Pendientes de inspección" — mismos lotes que ya cuenta
+  // stats.pendientesInspeccion, sin pedir nada nuevo al backend. Los
+  // primeros 5 por fecha de llegada más próxima, mismo criterio de orden
+  // que la tabla de "Inspección".
+  const resumenesCargando = (lotes ?? []).length > 0 && Object.keys(resumenes).length < lotes.length
+  const pendientesInspeccion = useMemo(() => {
+    if (!lotes) return []
+    return lotes
+      .filter((l) => {
+        const r = resumenes[l.id]
+        if (!r || r === 'error') return false
+        return r.summary.inspectionStatus == null || r.summary.inspectionStatus === 'INICIADA'
+      })
+      .sort(compararPorFechaRecepcion)
+      .slice(0, 5)
+  }, [lotes, resumenes])
+
   if (errorCarga) {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
   }
@@ -144,6 +162,41 @@ function InicioCalidad() {
         así que en volumen muy alto esto va a necesitar pedírselo. El detalle por lote está en "Inspección", en el
         menú lateral.
       </p>
+
+      <div className="mt-3 flex flex-col gap-3 rounded-3xl bg-marron-tierra/5 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-extrabold text-marron-cafe">Pendientes de inspección</h2>
+          <Link
+            to="/panel/calidad/inspeccion"
+            className="flex items-center gap-1 text-sm font-medium text-verde-bosque hover:text-verde-hoja"
+          >
+            Ver todos
+            <ArrowRight className="size-3.5" strokeWidth={2} />
+          </Link>
+        </div>
+
+        {resumenesCargando ? (
+          <Skeleton className="h-32" />
+        ) : pendientesInspeccion.length === 0 ? (
+          <EmptyState Icon={ClipboardList} titulo="No hay lotes pendientes de inspección" />
+        ) : (
+          <div className="overflow-hidden rounded-2xl bg-white/70">
+            {pendientesInspeccion.map((l) => (
+              <div
+                key={l.id}
+                className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3 last:border-b-0"
+              >
+                <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
+                <span className="text-sm text-marron-cafe/60">
+                  {l.scheduledReceptionAt
+                    ? new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                    : 'Sin fecha programada'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -59,15 +59,30 @@ export const GRUPOS_MAESTROS = [
     id: 'configuracion',
     padre: { nombre: 'Configuración', ruta: '/panel/configuracion', Icon: SlidersHorizontal },
     items: [
-      { id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe },
+      {
+        id: 'paises',
+        nombre: 'Países',
+        ruta: '/panel/paises',
+        permiso: 'countries:read',
+        Icon: Globe,
+        descripcion: 'Catálogo de países usados en direcciones, teléfonos y datos de proveedores.',
+      },
       {
         id: 'formularios',
         nombre: 'Formularios',
         ruta: '/panel/formularios',
         permiso: 'forms:read',
         Icon: ClipboardList,
+        descripcion: 'Plantillas de formulario y sus campos — la base de los registros dinámicos del sistema.',
       },
-      { id: 'areas', nombre: 'Áreas', ruta: '/panel/areas', permiso: 'areas:read', Icon: LayoutGrid },
+      {
+        id: 'areas',
+        nombre: 'Áreas',
+        ruta: '/panel/areas',
+        permiso: 'areas:read',
+        Icon: LayoutGrid,
+        descripcion: 'Áreas de planta a las que se asocian formularios y registros de producción.',
+      },
     ],
   },
   {

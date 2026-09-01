@@ -11,6 +11,7 @@ import Registro from './pages/Registro.jsx'
 import RecuperarContrasena from './pages/RecuperarContrasena.jsx'
 import Panel from './pages/Panel.jsx'
 import PanelModulo from './pages/PanelModulo.jsx'
+import PanelConfiguracion from './pages/PanelConfiguracion.jsx'
 import PanelCompras from './pages/PanelCompras.jsx'
 import PanelAlmacen from './pages/PanelAlmacen.jsx'
 import PanelAlmacenRecepcion from './pages/PanelAlmacenRecepcion.jsx'
@@ -106,6 +107,7 @@ function App() {
         <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
         <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />
         <Route path="/panel/calidad/lotes/:lotId/aprobacion" element={<PanelAprobacionResolucion />} />
+        <Route path="/panel/configuracion" element={<PanelConfiguracion />} />
         <Route path="/panel/:moduloId" element={<PanelModulo />} />
       </Route>
 
