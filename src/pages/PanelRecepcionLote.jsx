@@ -314,10 +314,12 @@ function SeccionResolucion({
       </div>
 
       {/* Emitir la resolución (paso 1 del ciclo) ya no se hace desde acá —
-          pedido explícito: ese paso queda solo en Calidad
-          (PanelAprobacionResolucion.jsx). Esta pantalla (alcanzable desde
-          Compras → Lotes) se queda con corregir/aprobar una resolución que
-          YA existe, y con este aviso mientras no exista ninguna. */}
+          pedido explícito: ese paso queda solo en Calidad, como la última
+          etapa del propio formulario de inspección (ver
+          FormularioInspeccionMateriaPrima.jsx, SeccionResolucionCalidad.jsx).
+          Esta pantalla (alcanzable desde Gerencia → Recepción y calidad) se
+          queda con corregir/aprobar una resolución que YA existe, y con
+          este aviso mientras no exista ninguna. */}
       {!qualityResolution ? (
         <p className="text-sm text-marron-cafe/50">Todavía no se emitió una resolución para este lote — se emite desde Calidad.</p>
       ) : (

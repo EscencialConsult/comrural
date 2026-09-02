@@ -15,11 +15,6 @@ import { Check, ChevronDown, Search } from 'lucide-react'
 // lista entera para bajar hasta el que se busca es más lento que tipear tres
 // letras. Se escribe, se filtra, se elige.
 //
-// Cuando lo buscado no está, la salida no vive acá adentro: hay un único
-// aviso de "falta un dato en el sistema" arriba a la derecha de la pantalla
-// (ver AvisoFaltante.jsx). Tenerlo una vez y siempre en el mismo lugar es
-// mejor que repetir el mismo link debajo de cada campo, donde competía con
-// los propios campos y encima solo cubría los que tienen selector.
 // NFD separa cada letra acentuada en letra + marca combinante, y el replace
 // borra esas marcas: así "Pérez" se encuentra tipeando "perez". Sin esto,
 // buscar sin acentos —que es como se tipea rápido— no encuentra nada.

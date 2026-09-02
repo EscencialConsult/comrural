@@ -20,8 +20,6 @@ import ResumenRecepcion from './ResumenRecepcion.jsx'
 import PesajeFinal from './PesajeFinal.jsx'
 import CampoObservaciones from './CampoObservaciones.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
-import AvisoFaltante from './AvisoFaltante.jsx'
-import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 
 // Registro P-ADM-03/R-02 — "Ingreso de Materia Prima", segundo formulario
 // de la maqueta (ver docs/formulario-ingreso-materia-prima.md). Cuerpo del
@@ -42,7 +40,7 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // Section-aware contra el papel real, reusando los átomos de
 // src/components/formularios/ que el primer formulario (Calidad) ya dejó
 // genéricos (CabeceraFormulario, SeccionFormulario, FirmasResponsables,
-// CampoObservaciones, AvisoFaltante).
+// CampoObservaciones).
 //
 // Diferencia real con el formulario de Calidad: acá el documento vive en
 // DOS pasos del backend, no uno. El papel es una sola hoja continua, pero
@@ -56,9 +54,10 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // instante real del servidor, pero eso casi nunca coincide con la fecha/
 // hora que el usuario ve en pantalla (capturada al abrir el formulario,
 // editable — ver DatosRecepcionLote.jsx): por eso `finalizar()` manda un
-// PATCH de corrección inmediatamente después, con ese valor. Al completar
-// "Finalizar recepción" se vuelve al listado (`onVolver`) con un toast, en
-// vez de quedarse en el asistente.
+// PATCH de corrección inmediatamente después, con ese valor. Tanto
+// "Finalizar recepción" como "Guardar cambios" vuelven al listado
+// (`onVolver`) con un toast al terminar, en vez de quedarse en el asistente
+// — un solo botón de acción abajo, sin un "Volver al listado" aparte.
 //
 // Se ve UNA sección a la vez (AsistenteDeEtapas.jsx) — corrección
 // post-revisión: antes las secciones se mostraban todas juntas ("como el
@@ -67,11 +66,13 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // — se ve todo de una, como un documento cerrado normal.
 const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
 
-// Índice de la etapa "producto" dentro de `etapas` (armado más abajo, en el
-// cuerpo del componente) — documentos(0), recepción(1), transporte(2),
-// producto(3, unidades de medida), firmas(4). Vive acá arriba porque el
-// efecto que decide el salto automático corre antes de que `etapas` exista.
+// Índices de etapas dentro de `etapas` (armado más abajo, en el cuerpo del
+// componente) — documentos(0), recepción(1), transporte(2), producto(3,
+// unidades de medida), firmas(4). Viven acá arriba porque el efecto que
+// decide el salto automático (más abajo) corre antes de que `etapas` exista.
+const PASO_DOCUMENTOS = 0
 const PASO_PRODUCTO = 3
+const PASO_FIRMAS = 4
 
 const DOCUMENTOS_VACIOS = { productores: { verificado: null, notas: '' }, guia: { verificado: null, notas: '' } }
 // Solo los campos que pide negocio (ver DatosTransporte.jsx) — el backend
@@ -93,7 +94,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
 
   const [recepcion, setRecepcion] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
 
   const [documentos, setDocumentos] = useState(DOCUMENTOS_VACIOS)
   const [conductor, setConductor] = useState(CONDUCTOR_VACIO)
@@ -147,12 +147,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
     recargar()
   }, [recargar])
 
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
-
   // Se resiembra SOLO cuando cambia la recepción de verdad (creada, o el
   // lote cambió), nunca en cada `recargar()` — mismo bug ya resuelto antes
   // en este mismo formulario y en el de Calidad: si dependiera de todo
@@ -190,16 +184,39 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
       setHoraInicio(soloHora(warehouseReceipt.startedAt))
     }
 
-    // Si Calidad ya resolvió (habilitó el pesaje, o el cierre sin pesos por
-    // rechazo total) y la recepción sigue INICIADA, saltar directo al paso
-    // de "Datos del producto" — ahí viven las unidades de medida. Pedido
+    // Al continuar una recepción ya iniciada, entrar directo a la etapa más
+    // inmediata que todavía necesita algo — no siempre al paso 0. Pedido
     // explícito: antes de esto, Almacén volvía a caer siempre en el paso 0
-    // y tenía que reclickear "Siguiente" 1/2/3 (ya completos, solo
-    // colapsados) para llegar al peso. Solo corre cuando cambia `wrId`
-    // (mismo motivo que el resto de este efecto: no pisar el paso en el
-    // que está parado alguien cada vez que `recargar()` refresca datos).
+    // y tenía que reclickear "Siguiente" en las etapas ya completas
+    // (colapsadas, sin nada más que hacer ahí) para llegar a donde de
+    // verdad hacía falta seguir. Se calcula sobre `warehouseReceipt`/
+    // `summary` (el dato recién llegado del backend), no sobre el estado
+    // local (`documentos`/`packagingType`/...) — ese todavía tiene los
+    // valores del `wrId` anterior en este mismo efecto, una carrera contra
+    // los `setDocumentos`/`setPackagingType`/... de arriba, que recién se
+    // reflejan en el próximo render. Solo corre cuando cambia `wrId` (mismo
+    // motivo que el resto de este efecto: no pisar el paso en el que está
+    // parado alguien cada vez que `recargar()` refresca datos).
     const { summary } = recepcion
-    setPasoActual(warehouseReceipt?.status === 'INICIADA' && (summary.canRegisterWeight || summary.canCompleteWithoutWeight) ? PASO_PRODUCTO : 0)
+    const documentosCompletaWR =
+      (warehouseReceipt?.producerListVerified === true || (warehouseReceipt?.producerListNotes ?? '').trim() !== '') &&
+      (warehouseReceipt?.shippingGuideVerified === true || (warehouseReceipt?.shippingGuideNotes ?? '').trim() !== '')
+    const productoCompletaWR =
+      (warehouseReceipt?.packagingType ?? '') !== '' &&
+      warehouseReceipt?.receivedPackageCount != null &&
+      warehouseReceipt.receivedPackageCount > 0
+    // El pesaje (unidades de medida, vive en la misma etapa "producto") no
+    // entra en `productoCompletaWR` — se habilita recién cuando Calidad
+    // resuelve, así que es su propia condición de "todavía falta algo acá".
+    const pesajePendiente = summary.canRegisterWeight || summary.canCompleteWithoutWeight
+
+    let pasoInicial = PASO_DOCUMENTOS
+    if (warehouseReceipt?.status === 'INICIADA') {
+      if (!documentosCompletaWR) pasoInicial = PASO_DOCUMENTOS
+      else if (!productoCompletaWR || pesajePendiente) pasoInicial = PASO_PRODUCTO
+      else pasoInicial = PASO_FIRMAS
+    }
+    setPasoActual(pasoInicial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wrId])
 
@@ -228,7 +245,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
     setDocumentos((prev) => ({ ...prev, [clave]: { ...prev[clave], [campo]: valor } }))
   const cambiarConductor = (campo, valor) => setConductor((prev) => ({ ...prev, [campo]: valor }))
   const cambiarVehiculo = (campo, valor) => setVehiculo((prev) => ({ ...prev, [campo]: valor }))
-  const solicitarAlta = ({ tipo, detalle }) => solicitarAltaDeMaestro({ tipo, detalle, solicitante: 'Almacén' })
 
   if (!puedeVer) return <AccesoDenegado mensaje="No tenés acceso al ingreso de materia prima." />
 
@@ -352,8 +368,8 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
         dto.startedAt = new Date(`${fechaInicio}T${horaInicio}`).toISOString()
       }
       await ejecutar(() => warehouseReceiptsService.actualizar(warehouseReceipt.id, dto))
-      setConfirmacion('Cambios guardados.')
-      recargar()
+      toast.success('Cambios guardados.')
+      onVolver?.()
     } catch {
       // mensaje ya en `error`
     }
@@ -580,7 +596,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
           titulo="Ingreso de Materia Prima"
           codigo="P-ADM-03/R-02"
           version="05"
-          acciones={<AvisoFaltante onEnviar={solicitarAlta} />}
         />
 
         <AsistenteDeEtapas
@@ -632,16 +647,8 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
                 )}
               </>
             )}
-            {onVolver && (
-              <Button variant="secondary" disabled={enviando} onClick={onVolver}>
-                {tituloVolver}
-              </Button>
-            )}
           </div>
 
-          {confirmacion && (
-            <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-medium text-verde-bosque">{confirmacion}</p>
-          )}
           {error && (
             <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla">{error}</p>
           )}

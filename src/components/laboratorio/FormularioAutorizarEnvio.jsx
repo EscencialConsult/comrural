@@ -91,9 +91,13 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
   const [precioTotal, setPrecioTotal] = useState('')
   const [justificacion, setJustificacion] = useState('')
   const [fechaResultado, setFechaResultado] = useState('')
+  // Precio unitario por ensayo — solo aplica mientras se arma el envío
+  // (`!envio`); una vez creado, el precio de cada ítem viaja de solo
+  // lectura en `envio.items[i].unitPrice` (ver `ensayosDelEnvio`).
+  const [precios, setPrecios] = useState({})
 
   const ensayosDelEnvio = useMemo(() => {
-    if (envio) return envio.items.map((i) => ({ id: i.itemId, nombre: i.testName }))
+    if (envio) return envio.items.map((i) => ({ id: i.itemId, nombre: i.testName, unitPrice: i.unitPrice }))
     return (ensayos ?? []).map((i) => ({ id: i.id, nombre: i.isCustom ? i.otherTestName : i.name }))
   }, [envio, ensayos])
 
@@ -138,7 +142,7 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
           ...(precioTotal ? { totalPrice: precioTotal } : {}),
           ...(justificacion.trim() ? { justification: justificacion.trim() } : {}),
           ...(fechaResultado ? { expectedResultDate: fechaResultado } : {}),
-          items: ensayosDelEnvio.map((e) => ({ itemId: e.id })),
+          items: ensayosDelEnvio.map((e) => ({ itemId: e.id, ...(precios[e.id] ? { unitPrice: precios[e.id] } : {}) })),
         }),
       'Envío creado en borrador.',
     )
@@ -174,11 +178,28 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
 
       <SeccionFormulario numero={1} titulo="Muestra y ensayos">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-col gap-2">
             {ensayosDelEnvio.map((e) => (
-              <span key={e.id} className="rounded-full bg-marron-tierra/5 px-2.5 py-0.5 text-xs text-marron-cafe/70">
-                {e.nombre}
-              </span>
+              <div key={e.id} className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-marron-tierra/5 px-2.5 py-0.5 text-xs text-marron-cafe/70">
+                  {e.nombre}
+                </span>
+                {envio ? (
+                  <span className="text-xs text-marron-cafe/50">
+                    {e.unitPrice != null ? `$${e.unitPrice}` : 'Sin precio unitario'}
+                  </span>
+                ) : (
+                  <FormInput
+                    label="Precio unitario ($)"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={precios[e.id] ?? ''}
+                    onChange={(ev) => setPrecios((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                    className="w-28"
+                  />
+                )}
+              </div>
             ))}
           </div>
           <p className="text-xs text-marron-cafe/50">

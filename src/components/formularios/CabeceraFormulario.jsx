@@ -8,10 +8,10 @@
 // Es el mismo `logorealcolor.webp` que usa el sidebar expandido, no una
 // versión aparte: si mañana cambia la marca, cambia en un solo lugar.
 //
-// `acciones` es el rincón superior derecho de la pantalla — el lugar fijo
-// donde vive el aviso de "falta un dato en el sistema". Se recibe como slot
-// en vez de cablearlo acá adentro para que la cabecera siga sirviendo para
-// cualquier formulario, tenga o no esa acción.
+// `acciones` es el rincón superior derecho de la pantalla, para cualquier
+// acción propia del formulario. Se recibe como slot en vez de cablearlo acá
+// adentro para que la cabecera siga sirviendo para cualquier formulario,
+// tenga o no esa acción.
 export default function CabeceraFormulario({ antetitulo = 'Registro', titulo, codigo, version, pagina, acciones }) {
   return (
     <header className="flex flex-col gap-4 rounded-3xl bg-verde-pistacho/40 px-4 py-5 sm:px-6">

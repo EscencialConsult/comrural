@@ -6,10 +6,9 @@ import Button from '../Button.jsx'
 
 // Paso 1 de la Resolución de Calidad: decidir APROBADA/RECHAZADA +
 // justificación (obligatoria en un rechazo) para una inspección ya
-// FINALIZADA. Extraído de PanelRecepcionLote.jsx para reusarlo también en
-// PanelAprobacionResolucion.jsx — antes ese paso solo existía en Compras vía
-// esa pantalla, obligando a Calidad a pasar por ahí para emitir su propia
-// resolución.
+// FINALIZADA. Usado por SeccionResolucionCalidad.jsx — la última etapa del
+// propio formulario de inspección de Calidad (ver
+// FormularioInspeccionMateriaPrima.jsx).
 export default function FormularioEmitirResolucion({ inspectionId, onEmitida }) {
   const [decision, setDecision] = useState('APROBADA')
   const [decisionNotes, setDecisionNotes] = useState('')

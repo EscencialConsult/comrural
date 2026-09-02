@@ -281,7 +281,7 @@ function ColaPendientesVistoBueno() {
               <Button
                 variant="secondary"
                 className="ml-auto px-3 py-1.5 text-xs"
-                onClick={() => navigate(`/panel/calidad/lotes/${r.lot.id}/aprobacion`)}
+                onClick={() => navigate(`/panel/calidad/lotes/${r.lot.id}/inspeccion`)}
               >
                 Revisar
               </Button>

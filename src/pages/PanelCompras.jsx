@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ShoppingCart, ChevronLeft, Truck, Leaf, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
@@ -55,7 +54,6 @@ const formatearFechaHora = (iso) =>
 
 export default function PanelCompras() {
   const { permisos } = useAuth()
-  const navigate = useNavigate()
   // El gate de acceso a esta pantalla es compras:read (mismo permiso que
   // filtra el link en gruposMaestros.js) — lots:create/update siguen siendo
   // los permisos reales de las acciones puntuales (crear/reprogramar un
@@ -257,7 +255,6 @@ export default function PanelCompras() {
                       <th className="px-4 py-3">Proveedor</th>
                       <th className="px-4 py-3">Llegada</th>
                       <th className="px-4 py-3">Estado</th>
-                      <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody>
@@ -279,22 +276,11 @@ export default function PanelCompras() {
                         <td className="px-4 py-3">
                           <Badge tono={TONO_ESTADO_LOTE[l.currentStatus] ?? 'neutro'}>{l.currentStatus.replace(/_/g, ' ')}</Badge>
                         </td>
-                        <td className="px-4 py-3">
-                          {l.nature === 'PM' && (
-                            <Button
-                              variant="secondary"
-                              className="px-3 py-1.5 text-xs"
-                              onClick={() => navigate(`/panel/calidad/lotes/${l.id}`)}
-                            >
-                              Ver recepción y calidad
-                            </Button>
-                          )}
-                        </td>
                       </tr>
                     ))}
                     {lotesFiltrados.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-marron-cafe/50">
+                        <td colSpan={5} className="px-4 py-6 text-center text-sm text-marron-cafe/50">
                           {lotes.length === 0 ? 'No hay lotes cargados todavía.' : 'Ningún lote coincide con el filtro.'}
                         </td>
                       </tr>
