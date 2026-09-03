@@ -68,13 +68,6 @@ export const authService = {
     await supabase.auth.signOut()
   },
 
-  // Google/Facebook — mock hasta que exista un Client ID/App ID real y el
-  // backend soporte alta vía proveedor externo.
-  async loginConProveedor(proveedor) {
-    await delay()
-    throw new Error(`Login con ${proveedor} todavía no está disponible.`)
-  },
-
   // Alta self-service — mock: el backend hoy solo crea usuarios por
   // invitación de un superadmin (no hay endpoint público de registro).
   async registrar() {

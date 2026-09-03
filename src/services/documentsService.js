@@ -14,6 +14,30 @@
 // progreso que reintente solo el paso 2).
 import { apiClient } from '../lib/apiClient'
 
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
+
+// Backoff del paso 3 (confirmar) — Supabase Storage a veces tarda un
+// instante en que el objeto recién subido quede consultable vía
+// getObjectInfo, así que un confirm disparado apenas termina el PUT puede
+// llegar antes de que el backend lo vea (409 "El archivo todavía no llegó
+// al almacenamiento" / DOCUMENT_NOT_UPLOADED — ver documents.service.ts,
+// confirm()). Reintentar es seguro: confirm es idempotente si el
+// documento ya quedó DISPONIBLE, y cualquier otro 409 (RECHAZADO, tipo
+// inválido, tamaño) no es este código y se relanza tal cual, sin reintentar.
+const ESPERAS_CONFIRMAR_MS = [300, 600, 1200, 2400]
+
+async function confirmarConReintento(documentId) {
+  for (let intento = 0; intento <= ESPERAS_CONFIRMAR_MS.length; intento++) {
+    try {
+      return await apiClient.post(`/documents/${documentId}/confirm`, {})
+    } catch (err) {
+      const esNoSubidoTodavia = err.status === 409 && err.body?.message === 'El archivo todavía no llegó al almacenamiento'
+      if (!esNoSubidoTodavia || intento === ESPERAS_CONFIRMAR_MS.length) throw err
+      await esperar(ESPERAS_CONFIRMAR_MS[intento])
+    }
+  }
+}
+
 // SHA-256 del archivo, calculado en el navegador antes de subir. El backend
 // lo guarda para control de integridad y detección de duplicados, y exige
 // hexadecimal minúscula de 64 caracteres.
@@ -39,7 +63,7 @@ export const documentsService = {
   },
 
   async confirmar(documentId) {
-    return apiClient.post(`/documents/${documentId}/confirm`, {})
+    return confirmarConReintento(documentId)
   },
 
   async obtener(documentId) {

@@ -6,7 +6,6 @@ import { MODULO_ICON } from '../../config/moduloIcons'
 import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { puedeVerModulo } from '../../utils/permisos'
-import AiAdvisorTeaser from './AiAdvisorTeaser'
 
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
@@ -327,12 +326,6 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
               aria-hidden="true"
               className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-linear-to-t from-marron-cafe to-transparent transition-opacity duration-200 ${sombraAbajo ? 'opacity-100' : 'opacity-0'}`}
             />
-          </div>
-
-          <div className={`sidebar-aicard ${colapsadoEfectivo ? 'is-oculto' : ''}`}>
-            <div className="overflow-hidden">
-              <AiAdvisorTeaser />
-            </div>
           </div>
         </aside>
 

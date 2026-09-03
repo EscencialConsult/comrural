@@ -228,18 +228,6 @@ body {
   opacity: 0;
 }
 
-.sidebar-aicard {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transition: grid-template-rows 250ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
-}
-
-.sidebar-aicard.is-oculto {
-  grid-template-rows: 0fr;
-  opacity: 0;
-}
-
 .sidebar-logo-fade {
   transition: opacity 200ms ease-out;
 }
@@ -271,7 +259,6 @@ body {
   }
   .sidebar-collapse,
   .sidebar-label,
-  .sidebar-aicard,
   .sidebar-logo-fade,
   .sidebar-navitem {
     transition-duration: 1ms;
