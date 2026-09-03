@@ -40,10 +40,10 @@ export default function RolPermisos({ rol, catalogoPorModulo }) {
     )
   }
 
-  const idsAsignados = new Set(detalle.permissionIds)
+  const clavesAsignadas = new Set(detalle.permissions)
   const permisosAsignados = Object.values(catalogoPorModulo)
     .flatMap((grupo) => grupo.permisos)
-    .filter((p) => idsAsignados.has(p.id))
+    .filter((p) => clavesAsignadas.has(`${p.module}:${p.action}`))
 
   return (
     <div className="flex flex-wrap gap-1.5 px-1 py-2">
