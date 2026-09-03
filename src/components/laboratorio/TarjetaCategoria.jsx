@@ -1,4 +1,4 @@
-import { PlayCircle, Printer, ShieldCheck } from 'lucide-react'
+import { Eye, PlayCircle, ShieldCheck } from 'lucide-react'
 import { CATEGORIA_LABEL, CATEGORIA_ICON, CATEGORIA_ESTILO, ESTADO_CATEGORIA_LABEL, ESTADO_CATEGORIA_TONO } from '../../config/analisisCategorias'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
@@ -22,9 +22,9 @@ export default function TarjetaCategoria({ categoria, cantidadEnsayos, estado, e
   const Icono = CATEGORIA_ICON[categoria]
   const estilo = CATEGORIA_ESTILO[categoria]
   // Categoría ya finalizada: no hay nada más que "iniciar" — el botón pasa
-  // a "Imprimir" y el clic ya genera el PDF directo (ver `autoImprimir` en
-  // FormularioIniciarAnalisis.jsx), no solo abre la pantalla de solo
-  // lectura a esperar un segundo clic ahí adentro.
+  // a "Ver" y abre la planilla de solo lectura (con su panel de
+  // validación: subir/generar PDF si está pendiente, o descargarlo si ya
+  // se validó — ver PanelValidacionInforme.jsx).
   const finalizada = estado === 'FINALIZADO'
 
   return (
@@ -54,8 +54,8 @@ export default function TarjetaCategoria({ categoria, cantidadEnsayos, estado, e
             </>
           ) : finalizada ? (
             <>
-              <Printer className="size-3.5" strokeWidth={2} />
-              Imprimir
+              <Eye className="size-3.5" strokeWidth={2} />
+              Ver
             </>
           ) : (
             <>

@@ -1,26 +1,29 @@
-import { CheckCircle2, Download, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2, Download, FileUp, Loader2, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { documentsService } from '../../services/documentsService'
 import { toast } from '../../lib/toast'
 import Button from '../Button.jsx'
-import SubidorDocumento from './SubidorDocumento.jsx'
 
 // Panel que acompaña a un informe interno ya enviado a validación —
 // se muestra DEBAJO de la planilla (InformeAnalisisFisicoquimico.jsx /
 // InformeAnalisisMicrobiologico.jsx), que a partir de PENDIENTE_VALIDACION
 // queda de solo lectura. Acá vive lo que falta para cerrarlo:
 //
-//   PENDIENTE_VALIDACION sin PDF  → subir el documento
+//   PENDIENTE_VALIDACION sin PDF  → generar+subir+descargar el PDF (un
+//                                    solo botón, ver `generarYSubir` abajo)
 //   PENDIENTE_VALIDACION con PDF  → validar (permiso laboratory-reports:validate)
 //   VALIDADO                      → solo el enlace de descarga
 //
 // "Firmas" en el sentido de firma digital NO existe todavía en el sistema —
 // esto es la misma mecánica que ya usa el resto de la app (quién y cuándo
 // hizo la acción, gateado por permiso), no una firma electrónica.
-export default function PanelValidacionInforme({ informe, onDocumentoAdjuntado, onValidar, validando }) {
+export default function PanelValidacionInforme({ informe, onDocumentoAdjuntado, onValidar, validando, generarPdfComoArchivo }) {
   const { permisos } = useAuth()
   const puedeGestionar = permisos.has('laboratory-reports:manage')
   const puedeValidar = permisos.has('laboratory-reports:validate')
+  const [generandoYSubiendo, setGenerandoYSubiendo] = useState(false)
+  const [errorGeneracion, setErrorGeneracion] = useState(null)
 
   if (informe.status === 'BORRADOR') return null
 
@@ -30,6 +33,35 @@ export default function PanelValidacionInforme({ informe, onDocumentoAdjuntado, 
       window.open(url, '_blank')
     } catch (err) {
       toast.error(err.message)
+    }
+  }
+
+  // Antes: "Imprimir" generaba el PDF en una pestaña aparte, el usuario lo
+  // descargaba a mano y después lo volvía a elegir en un selector de
+  // archivo para subirlo — dos pasos manuales sobre el mismo archivo. Ahora
+  // un solo botón genera el PDF de la planilla, lo sube como documento del
+  // informe Y además lo descarga localmente, para que quede una copia en
+  // el equipo sin el paso manual.
+  const generarYSubir = async () => {
+    setErrorGeneracion(null)
+    setGenerandoYSubiendo(true)
+    try {
+      const archivo = await generarPdfComoArchivo(`informe-${informe.id}.pdf`)
+
+      const urlDescarga = URL.createObjectURL(archivo)
+      const enlace = document.createElement('a')
+      enlace.href = urlDescarga
+      enlace.download = archivo.name
+      enlace.click()
+      setTimeout(() => URL.revokeObjectURL(urlDescarga), 60_000)
+
+      const documento = await documentsService.subir(archivo)
+      await onDocumentoAdjuntado(documento)
+      toast.success('PDF generado, subido y descargado.')
+    } catch (err) {
+      setErrorGeneracion(err.message)
+    } finally {
+      setGenerandoYSubiendo(false)
     }
   }
 
@@ -58,11 +90,28 @@ export default function PanelValidacionInforme({ informe, onDocumentoAdjuntado, 
 
       {!informe.documentId ? (
         puedeGestionar ? (
-          <SubidorDocumento
-            etiqueta="Subir PDF del informe"
-            ayuda="Imprimí la planilla arriba y subí acá ese mismo PDF"
-            onSubido={onDocumentoAdjuntado}
-          />
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              disabled={generandoYSubiendo}
+              onClick={generarYSubir}
+              className="w-fit gap-1.5 px-3 py-1.5 text-xs"
+            >
+              {generandoYSubiendo ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
+                  Generando y subiendo…
+                </>
+              ) : (
+                <>
+                  <FileUp className="size-3.5" strokeWidth={2} />
+                  Generar y subir PDF
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-marron-cafe/45">Genera el PDF de la planilla de arriba, lo sube y lo descarga a tu equipo.</p>
+            {errorGeneracion && <p className="text-xs font-medium text-rojo-pasankalla">{errorGeneracion}</p>}
+          </div>
         ) : (
           <p className="text-xs text-marron-cafe/60">Falta adjuntar el PDF del informe.</p>
         )
