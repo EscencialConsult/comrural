@@ -28,6 +28,7 @@ import PanelRecepcionLote from './pages/PanelRecepcionLote.jsx'
 import PanelInspeccionMateriaPrima from './pages/PanelInspeccionMateriaPrima.jsx'
 import PanelIngresoMateriaPrima from './pages/PanelIngresoMateriaPrima.jsx'
 import GestionUsuarios from './pages/GestionUsuarios.jsx'
+import GestionRoles from './pages/GestionRoles.jsx'
 import PanelPaises from './pages/PanelPaises.jsx'
 import PanelFormularios from './pages/PanelFormularios.jsx'
 import PanelAreas from './pages/PanelAreas.jsx'
@@ -85,6 +86,7 @@ function App() {
       >
         <Route path="/panel" element={<Panel />} />
         <Route path="/panel/usuarios" element={<GestionUsuarios />} />
+        <Route path="/panel/usuarios/roles" element={<GestionRoles />} />
         <Route path="/panel/paises" element={<PanelPaises />} />
         <Route path="/panel/formularios" element={<PanelFormularios />} />
         <Route path="/panel/areas" element={<PanelAreas />} />

@@ -2,7 +2,8 @@
 //
 // Catálogo chico sin paginación por cursor (a diferencia de forms/lots):
 // GET devuelve `{ data }` completo, ordenado por name. Sin DELETE, un área
-// nunca se borra. Se usa como referencia obligatoria de forms.areaId.
+// nunca se borra. Se usa como referencia obligatoria de forms.areaId, y
+// también para agrupar roles por área en GestionRoles.jsx.
 import { apiClient } from '../lib/apiClient'
 
 export const areasService = {

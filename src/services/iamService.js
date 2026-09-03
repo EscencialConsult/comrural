@@ -10,6 +10,16 @@ export const iamService = {
     return data
   },
 
+  // Crea la identidad en Supabase Auth + le asigna roleId en un solo paso —
+  // el backend exige que quien haga esto sea superadmin global activo, no
+  // alcanza con el permiso "users:create" solo (ver
+  // UsersManagementService.create). `password` es opcional: si se manda, la
+  // cuenta queda lista para entrar con esa contraseña ya mismo; si no, sigue
+  // el flujo por defecto (correo de invitación, la persona la define ella).
+  async crearUsuario({ email, fullName, roleId, password }) {
+    return apiClient.post('/iam/users', { email, fullName, roleId, ...(password ? { password } : {}) })
+  },
+
   async actualizarUsuario(userId, patch) {
     return apiClient.patch(`/iam/users/${userId}`, patch)
   },
@@ -17,6 +27,19 @@ export const iamService = {
   async listarRoles() {
     const { data } = await apiClient.get('/iam/roles?limit=100')
     return data
+  },
+
+  // name/description del rol — nunca code (inmutable) ni isSystem (el
+  // backend lo rechaza si se manda). Roles de sistema (isSystem) también
+  // rechazan esto — ConflictException, ver RolesService.update.
+  async actualizarRol(roleId, patch) {
+    return apiClient.patch(`/iam/roles/${roleId}`, patch)
+  },
+
+  // code/name obligatorios, description/areaId opcionales — isSystem NUNCA
+  // se manda (el servidor lo fuerza a false, ver RolesService.create).
+  async crearRol({ code, name, description, areaId }) {
+    return apiClient.post('/iam/roles', { code, name, description: description || null, areaId: areaId || null })
   },
 
   // Detalle con permisos incluidos — el list de arriba NO trae permisos,
@@ -38,5 +61,16 @@ export const iamService = {
 
   async revocarRol(userId, assignmentId) {
     return apiClient.delete(`/iam/users/${userId}/roles/${assignmentId}`)
+  },
+
+  // Catálogo completo de permisos (module/action/description) — universo de
+  // opciones para armar el checklist al editar los permisos de un rol.
+  async listarPermisos() {
+    const { data } = await apiClient.get('/iam/permissions')
+    return data
+  },
+
+  async actualizarPermisosDeRol(roleId, permissionIds) {
+    return apiClient.put(`/iam/roles/${roleId}/permissions`, { permissionIds })
   },
 }

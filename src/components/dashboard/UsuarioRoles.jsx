@@ -6,7 +6,12 @@ import Skeleton from '../Skeleton.jsx'
 // Fila expandida de un usuario en GestionUsuarios.jsx: carga sus
 // asignaciones de rol recién al expandirse (no de entrada para los N
 // usuarios de la lista) y permite agregar/sacar roles ahí mismo.
-export default function UsuarioRoles({ usuario, roles }) {
+//
+// `onCambio` (opcional): se llama con la lista de roles vigentes
+// ({id, name}[]) cada vez que cambia — GestionUsuarios.jsx lo usa para
+// mantener el badge de rol de la fila colapsada al día sin pedirlo de
+// nuevo (ya lo tenemos acá, recién cargado/asignado/revocado).
+export default function UsuarioRoles({ usuario, roles, onCambio }) {
   const [asignaciones, setAsignaciones] = useState(null)
   const [rolAAgregar, setRolAAgregar] = useState('')
   const [procesando, setProcesando] = useState(false)
@@ -21,6 +26,15 @@ export default function UsuarioRoles({ usuario, roles }) {
       cancelado = true
     }
   }, [usuario.id])
+
+  useEffect(() => {
+    if (asignaciones !== null) {
+      onCambio?.(asignaciones.map((a) => ({ id: a.role.id, name: a.role.name })))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onCambio se
+    // recrea en cada render del padre; solo debe dispararse cuando cambian
+    // las asignaciones en sí.
+  }, [asignaciones])
 
   const rolesDisponibles = roles.filter(
     (r) => !asignaciones?.some((a) => a.roleId === r.id),

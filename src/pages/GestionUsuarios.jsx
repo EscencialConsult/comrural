@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Search, Users as UsersIcon } from 'lucide-react'
+import { Pencil, Plus, Search, Users as UsersIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { iamService } from '../services/iamService'
-import { MODULO_ICON } from '../config/moduloIcons'
-import UsuarioRoles from '../components/dashboard/UsuarioRoles.jsx'
+import CrearUsuarioModal from '../components/dashboard/CrearUsuarioModal.jsx'
+import EditarUsuarioModal from '../components/dashboard/EditarUsuarioModal.jsx'
 import Switch from '../components/Switch.jsx'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Skeleton from '../components/Skeleton.jsx'
-
-const MODULOS_NEGOCIO = Object.keys(MODULO_ICON)
 
 const normalizar = (texto) =>
   texto
@@ -17,28 +15,37 @@ const normalizar = (texto) =>
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 
-// Pantalla de administración: usuarios a la izquierda (lo que se opera de
-// verdad) + referencia de roles a la derecha, fija mientras se scrollea la
-// lista de usuarios — así no hay que ir y volver para recordar qué hace un
-// rol antes de asignarlo. En mobile/tablet (< lg) se apila, roles después
-// de usuarios. Gateada por el permiso "iam:read" — hoy solo lo tiene
-// superadmin (ver comrural_erp_backend/src/database/migrations/0002_iam_seed.sql),
-// pero el chequeo es por permiso real, no por código de rol hardcodeado.
+// Pantalla de administración: lista de usuarios, activar/desactivar y
+// editar (nombre + un rol, ver EditarUsuarioModal.jsx). Qué hace cada rol y
+// la asignación de PERMISOS a un rol vive aparte, en GestionRoles.jsx
+// ("Roles y permisos", hermana de esta en el sidebar — ver
+// DashboardSidebar.jsx/config/gruposMaestros.js): son tareas distintas
+// (quién tiene qué rol vs. qué puede hacer cada rol) y separarlas evita una
+// sola pantalla gigante. Gateada por el permiso "iam:read" — hoy solo lo
+// tiene superadmin (ver comrural_erp_backend/src/database/migrations/
+// 0002_iam_seed.sql), pero el chequeo es por permiso real, no por código de
+// rol hardcodeado.
 export default function GestionUsuarios() {
   const { usuario: propio, permisos } = useAuth()
   const puedeGestionar = permisos.has('iam:read')
-  const puedeActivarDesactivar = permisos.has('users:update')
+  const puedeEditarUsuarios = permisos.has('users:update')
+  // El backend además exige que quien crea sea superadmin global activo
+  // (ver UsersManagementService.create) — el permiso es la primera barrera,
+  // no la única; si a alguien con "users:create" pero sin ser superadmin le
+  // rechaza el alta, el error real del backend se muestra igual.
+  const puedeCrear = permisos.has('users:create')
+  // Asignar/revocar roles es un endpoint de IAM, no de usuarios — permiso
+  // propio, no el mismo que gatea el resto del modal de edición.
+  const puedeCambiarRol = permisos.has('iam:update')
 
   const [usuarios, setUsuarios] = useState(null)
   const [roles, setRoles] = useState(null)
-  const [expandidoId, setExpandidoId] = useState(null)
-  const [rolExpandidoId, setRolExpandidoId] = useState(null)
-  const [permisosPorRol, setPermisosPorRol] = useState({})
   const [filtroUsuarios, setFiltroUsuarios] = useState('')
-  const [filtroRoles, setFiltroRoles] = useState('')
   const [cambiandoEstadoId, setCambiandoEstadoId] = useState(null)
   const [porDesactivar, setPorDesactivar] = useState(null)
   const [errorEstado, setErrorEstado] = useState(null)
+  const [creando, setCreando] = useState(false)
+  const [editando, setEditando] = useState(null)
 
   useEffect(() => {
     if (!puedeGestionar) return
@@ -46,6 +53,9 @@ export default function GestionUsuarios() {
     iamService.listarUsuarios().then((data) => {
       if (!cancelado) setUsuarios(data)
     })
+    // Se necesita el listado completo de roles acá para los selects de
+    // CrearUsuarioModal/EditarUsuarioModal — el detalle de qué hace cada uno
+    // vive en GestionRoles.jsx.
     iamService.listarRoles().then((data) => {
       if (!cancelado) setRoles(data)
     })
@@ -53,18 +63,6 @@ export default function GestionUsuarios() {
       cancelado = true
     }
   }, [puedeGestionar])
-
-  const alternarRol = async (roleId) => {
-    if (rolExpandidoId === roleId) {
-      setRolExpandidoId(null)
-      return
-    }
-    setRolExpandidoId(roleId)
-    if (!permisosPorRol[roleId]) {
-      const detalle = await iamService.getRol(roleId)
-      setPermisosPorRol((prev) => ({ ...prev, [roleId]: detalle.permissions }))
-    }
-  }
 
   const aplicarCambioEstado = async (u, isActive) => {
     setErrorEstado(null)
@@ -99,205 +97,121 @@ export default function GestionUsuarios() {
     )
   }, [usuarios, filtroUsuarios])
 
-  const rolesFiltrados = useMemo(() => {
-    if (!roles) return null
-    const q = normalizar(filtroRoles.trim())
-    if (!q) return roles
-    return roles.filter(
-      (r) => normalizar(r.name).includes(q) || normalizar(r.code).includes(q),
-    )
-  }, [roles, filtroRoles])
-
   if (!puedeGestionar) {
     return <AccesoDenegado mensaje="La gestión de usuarios y roles es solo para superadmin." />
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-6 md:p-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-8 p-6 md:p-10">
       <header className="flex items-center gap-3">
         <div className="rounded-full bg-verde-hoja/10 p-3">
           <UsersIcon className="size-6 text-verde-bosque" strokeWidth={1.75} />
         </div>
         <div>
-          <h1 className="text-2xl font-extrabold text-marron-cafe">Usuarios y roles</h1>
-          <p className="text-sm text-marron-cafe/60">Asigná qué puede ver y hacer cada persona.</p>
+          <h1 className="text-2xl font-extrabold text-marron-cafe">Usuarios</h1>
+          <p className="text-sm text-marron-cafe/60">Asigná qué rol tiene cada persona.</p>
         </div>
       </header>
 
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
-        {/* Usuarios — columna principal, la que realmente se opera. */}
-        <section className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-marron-cafe">
-              Usuarios{usuarios && <span className="ml-2 text-sm font-medium text-marron-cafe/40">{usuarios.length}</span>}
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 ring-1 ring-marron-tierra/10">
-            <Search className="size-4 shrink-0 text-marron-cafe/40" strokeWidth={1.75} />
-            <input
-              type="text"
-              value={filtroUsuarios}
-              onChange={(e) => setFiltroUsuarios(e.target.value)}
-              placeholder="Buscar por nombre o email…"
-              className="w-full bg-transparent text-sm text-marron-cafe placeholder:text-marron-cafe/40 focus:outline-none"
-            />
-          </div>
-
-          {errorEstado && (
-            <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">
-              {errorEstado}
-            </p>
-          )}
-
-          {usuariosFiltrados === null ? (
-            <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-              {Array.from({ length: 5 }, (_, i) => (
-                <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-              {usuariosFiltrados.map((u) => (
-                <div key={u.id} className="border-b border-marron-tierra/10 last:border-b-0">
-                  <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                    <button
-                      type="button"
-                      onClick={() => setExpandidoId((id) => (id === u.id ? null : u.id))}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-marron-cafe">{u.fullName}</p>
-                        <p className="truncate text-xs text-marron-cafe/50">{u.email}</p>
-                      </div>
-                    </button>
-                    <div className="flex shrink-0 items-center gap-2.5">
-                      <span
-                        className={`text-xs font-medium ${u.isActive ? 'text-verde-bosque' : 'text-marron-cafe/40'}`}
-                      >
-                        {cambiandoEstadoId === u.id ? 'Guardando…' : u.isActive ? 'Activo' : 'Inactivo'}
-                      </span>
-                      <span title={u.id === propio?.id ? 'No podés desactivarte a vos mismo' : undefined}>
-                        <Switch
-                          checked={u.isActive}
-                          onChange={() => alternarActivo(u)}
-                          disabled={!puedeActivarDesactivar || u.id === propio?.id || cambiandoEstadoId === u.id}
-                          label={u.isActive ? `Desactivar a ${u.fullName}` : `Reactivar a ${u.fullName}`}
-                        />
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setExpandidoId((id) => (id === u.id ? null : u.id))}
-                        className="p-0.5"
-                      >
-                        {expandidoId === u.id ? (
-                          <ChevronUp className="size-4 text-marron-cafe/40" strokeWidth={2} />
-                        ) : (
-                          <ChevronDown className="size-4 text-marron-cafe/40" strokeWidth={2} />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  {expandidoId === u.id && roles && (
-                    <div className="bg-white/60">
-                      <UsuarioRoles usuario={u} roles={roles} />
-                    </div>
-                  )}
-                </div>
-              ))}
-              {usuariosFiltrados.length === 0 && (
-                <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
-                  {usuarios.length === 0 ? 'No hay usuarios todavía.' : 'Sin resultados para esa búsqueda.'}
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Roles — panel de referencia, angosto y fijo en desktop para
-            consultar qué otorga un rol sin perder de vista la lista de
-            usuarios. top-6 deja el mismo aire que el padding del <main>. */}
-        <section className="flex w-full flex-col gap-3 lg:sticky lg:top-6 lg:w-80 lg:shrink-0">
+      <section className="flex min-w-0 flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-marron-cafe">
-            Qué hace cada rol{roles && <span className="ml-2 text-sm font-medium text-marron-cafe/40">{roles.length}</span>}
+            Usuarios{usuarios && <span className="ml-2 text-sm font-medium text-marron-cafe/40">{usuarios.length}</span>}
           </h2>
+          {puedeCrear && (
+            <button
+              type="button"
+              onClick={() => setCreando(true)}
+              className="flex items-center gap-1.5 rounded-full bg-verde-lima px-4 py-2 text-sm font-medium text-marron-cafe transition-colors duration-200 hover:bg-verde-hoja"
+            >
+              <Plus className="size-4" strokeWidth={2.5} />
+              Nuevo usuario
+            </button>
+          )}
+        </div>
 
-          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 ring-1 ring-marron-tierra/10">
-            <Search className="size-4 shrink-0 text-marron-cafe/40" strokeWidth={1.75} />
-            <input
-              type="text"
-              value={filtroRoles}
-              onChange={(e) => setFiltroRoles(e.target.value)}
-              placeholder="Buscar rol…"
-              className="w-full bg-transparent text-sm text-marron-cafe placeholder:text-marron-cafe/40 focus:outline-none"
-            />
+        <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 ring-1 ring-marron-tierra/10">
+          <Search className="size-4 shrink-0 text-marron-cafe/40" strokeWidth={1.75} />
+          <input
+            type="text"
+            value={filtroUsuarios}
+            onChange={(e) => setFiltroUsuarios(e.target.value)}
+            placeholder="Buscar por nombre o email…"
+            className="w-full bg-transparent text-sm text-marron-cafe placeholder:text-marron-cafe/40 focus:outline-none"
+          />
+        </div>
+
+        {errorEstado && (
+          <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">
+            {errorEstado}
+          </p>
+        )}
+
+        {usuariosFiltrados === null ? (
+          <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ))}
           </div>
-
-          {rolesFiltrados === null ? (
-            <div className="flex flex-col gap-2">
-              <Skeleton className="h-20" />
-              <Skeleton className="h-20" />
-              <Skeleton className="h-20" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2 lg:max-h-[calc(100svh-14rem)] lg:overflow-y-auto lg:pr-1">
-              {rolesFiltrados.map((r) => (
-                <div key={r.id} className="rounded-2xl bg-marron-tierra/5 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-extrabold text-marron-cafe">{r.name}</p>
-                      <p className="truncate text-xs text-marron-cafe/40">{r.code}</p>
-                    </div>
-                    {r.isSystem && (
-                      <span className="shrink-0 rounded-full bg-azul-andino/15 px-2 py-0.5 text-[11px] font-medium text-azul-andino">
-                        Sistema
-                      </span>
+        ) : (
+          <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+            {usuariosFiltrados.map((u) => (
+              <div key={u.id} className="flex items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <p className="truncate font-semibold text-marron-cafe">{u.fullName}</p>
+                    {u.roles.length === 0 ? (
+                      <span className="text-[11px] text-marron-cafe/35">Sin rol</span>
+                    ) : (
+                      u.roles.map((r) => (
+                        <span
+                          key={r.id}
+                          className="shrink-0 rounded-full bg-verde-hoja/15 px-2 py-0.5 text-[11px] font-semibold text-verde-bosque"
+                        >
+                          {r.name}
+                        </span>
+                      ))
                     )}
                   </div>
-                  <p className="mt-1.5 text-xs text-marron-cafe/60 italic">
-                    {r.description || 'Sin descripción todavía.'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => alternarRol(r.id)}
-                    className="mt-2 text-xs font-semibold text-verde-bosque hover:text-verde-hoja"
+                  <p className="truncate text-xs text-marron-cafe/50">{u.email}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <span
+                    className={`text-xs font-medium ${u.isActive ? 'text-verde-bosque' : 'text-marron-cafe/40'}`}
                   >
-                    {rolExpandidoId === r.id ? 'Ocultar permisos' : 'Ver permisos'}
-                  </button>
-                  {rolExpandidoId === r.id && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {!permisosPorRol[r.id] ? (
-                        <span className="text-xs text-marron-cafe/40">Cargando…</span>
-                      ) : permisosPorRol[r.id].length === 0 ? (
-                        <span className="text-xs text-marron-cafe/40">Sin permisos asignados.</span>
-                      ) : (
-                        permisosPorRol[r.id].map((p) => {
-                          const esNegocio = MODULOS_NEGOCIO.includes(p.split(':')[0])
-                          return (
-                            <span
-                              key={p}
-                              className={`rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold ${
-                                esNegocio ? 'bg-verde-hoja/15 text-verde-bosque' : 'bg-azul-andino/10 text-azul-andino'
-                              }`}
-                            >
-                              {p}
-                            </span>
-                          )
-                        })
-                      )}
-                    </div>
+                    {cambiandoEstadoId === u.id ? 'Guardando…' : u.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                  <span title={u.id === propio?.id ? 'No podés desactivarte a vos mismo' : undefined}>
+                    <Switch
+                      checked={u.isActive}
+                      onChange={() => alternarActivo(u)}
+                      disabled={!puedeEditarUsuarios || u.id === propio?.id || cambiandoEstadoId === u.id}
+                      label={u.isActive ? `Desactivar a ${u.fullName}` : `Reactivar a ${u.fullName}`}
+                    />
+                  </span>
+                  {puedeEditarUsuarios && (
+                    <button
+                      type="button"
+                      onClick={() => setEditando(u)}
+                      title={`Editar ${u.fullName}`}
+                      className="rounded-full p-1 text-marron-cafe/40 hover:bg-marron-tierra/10 hover:text-marron-cafe"
+                    >
+                      <Pencil className="size-3.5" strokeWidth={1.75} />
+                    </button>
                   )}
                 </div>
-              ))}
-              {rolesFiltrados.length === 0 && (
-                <p className="px-2 py-4 text-center text-sm text-marron-cafe/50">Sin resultados.</p>
-              )}
-            </div>
-          )}
-        </section>
-      </div>
+              </div>
+            ))}
+            {usuariosFiltrados.length === 0 && (
+              <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
+                {usuarios.length === 0 ? 'No hay usuarios todavía.' : 'Sin resultados para esa búsqueda.'}
+              </p>
+            )}
+          </div>
+        )}
+      </section>
 
       <ConfirmModal
         abierto={Boolean(porDesactivar)}
@@ -315,6 +229,33 @@ export default function GestionUsuarios() {
         }}
         onCancelar={() => setPorDesactivar(null)}
       />
+
+      {creando && roles && (
+        <CrearUsuarioModal
+          roles={roles}
+          onCerrar={() => setCreando(false)}
+          onCreado={() => {
+            setCreando(false)
+            iamService.listarUsuarios().then(setUsuarios)
+          }}
+        />
+      )}
+
+      {editando && roles && (
+        <EditarUsuarioModal
+          usuario={editando}
+          roles={roles}
+          puedeCambiarRol={puedeCambiarRol}
+          onCerrar={() => setEditando(null)}
+          onGuardado={() => {
+            setEditando(null)
+            // Refetch en vez de mergear a mano: entre el nombre y el rol
+            // (que puede tocar 2+ asignaciones) es más simple pedir el
+            // estado real que reconstruirlo acá.
+            iamService.listarUsuarios().then(setUsuarios)
+          }}
+        />
+      )}
     </main>
   )
 }
