@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Send, Stamp, Gavel, Truck, Ban } from 'lucide-react'
+import { Send, Stamp, Gavel, Truck, Ban, SquareCheck, Square } from 'lucide-react'
 import { suppliersService } from '../../services/suppliersService'
 import { externalShipmentsService } from '../../services/externalShipmentsService'
 import { laboratoryReportsService } from '../../services/laboratoryReportsService'
@@ -88,18 +88,43 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
   const [cuantificacion, setCuantificacion] = useState('')
   const [cantidad, setCantidad] = useState('')
   const [unidad, setUnidad] = useState('G')
-  const [precioTotal, setPrecioTotal] = useState('')
   const [justificacion, setJustificacion] = useState('')
   const [fechaResultado, setFechaResultado] = useState('')
   // Precio unitario por ensayo — solo aplica mientras se arma el envío
   // (`!envio`); una vez creado, el precio de cada ítem viaja de solo
   // lectura en `envio.items[i].unitPrice` (ver `ensayosDelEnvio`).
   const [precios, setPrecios] = useState({})
+  // Qué ensayos van EN ESTE envío puntual — pedido explícito: `ensayos`
+  // (prop) trae TODOS los pendientes de externo de la solicitud, no solo
+  // los que se quieren mandar ahora; el resto queda para otro envío
+  // después, a otro laboratorio si hace falta. Arranca vacío (nada
+  // tildado) — pedido explícito, para no dar por hecho que este envío es
+  // "todos juntos" y forzar a elegir a propósito cada vez.
+  const [seleccionados, setSeleccionados] = useState(new Set())
+  const alternarSeleccion = (itemId) => {
+    setSeleccionados((prev) => {
+      const siguiente = new Set(prev)
+      if (siguiente.has(itemId)) siguiente.delete(itemId)
+      else siguiente.add(itemId)
+      return siguiente
+    })
+  }
 
   const ensayosDelEnvio = useMemo(() => {
     if (envio) return envio.items.map((i) => ({ id: i.itemId, nombre: i.testName, unitPrice: i.unitPrice }))
     return (ensayos ?? []).map((i) => ({ id: i.id, nombre: i.isCustom ? i.otherTestName : i.name }))
   }, [envio, ensayos])
+
+  // Precio total — ya no se tipea, se suma sola de los precios unitarios de
+  // los ensayos SELECCIONADOS. Con `envio` ya creado, la suma sale de
+  // `unitPrice` (lo que quedó guardado, ahí todos los items del envío ya
+  // están seleccionados por definición); mientras se arma, de `precios`.
+  const precioTotalCalculado = useMemo(() => {
+    const fuente = envio
+      ? envio.items.map((i) => i.unitPrice)
+      : ensayosDelEnvio.filter((e) => seleccionados.has(e.id)).map((e) => precios[e.id])
+    return fuente.reduce((acc, v) => acc + (Number(v) || 0), 0)
+  }, [envio, ensayosDelEnvio, precios, seleccionados])
 
   // Precarga el destino analítico con los ensayos que viajan — es un texto
   // libre en el papel, pero por defecto describe qué se manda.
@@ -111,7 +136,11 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
   }, [ensayosDelEnvio.length])
 
   const puedeCrear =
-    laboratorio !== null && destino.trim() !== '' && Number(cantidad) > 0 && ensayosDelEnvio.length > 0
+    laboratorio !== null &&
+    destino.trim() !== '' &&
+    Number(cantidad) > 0 &&
+    ensayosDelEnvio.length > 0 &&
+    (envio || seleccionados.size > 0)
 
   const ejecutar = async (accion, mensajeExito) => {
     setError(null)
@@ -139,10 +168,12 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
           ...(cuantificacion.trim() ? { quantification: cuantificacion.trim() } : {}),
           quantity: cantidad,
           unit: unidad,
-          ...(precioTotal ? { totalPrice: precioTotal } : {}),
+          ...(precioTotalCalculado > 0 ? { totalPrice: precioTotalCalculado.toFixed(2) } : {}),
           ...(justificacion.trim() ? { justification: justificacion.trim() } : {}),
           ...(fechaResultado ? { expectedResultDate: fechaResultado } : {}),
-          items: ensayosDelEnvio.map((e) => ({ itemId: e.id, ...(precios[e.id] ? { unitPrice: precios[e.id] } : {}) })),
+          items: ensayosDelEnvio
+            .filter((e) => seleccionados.has(e.id))
+            .map((e) => ({ itemId: e.id, ...(precios[e.id] ? { unitPrice: precios[e.id] } : {}) })),
         }),
       'Envío creado en borrador.',
     )
@@ -178,29 +209,69 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
 
       <SeccionFormulario numero={1} titulo="Muestra y ensayos">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            {ensayosDelEnvio.map((e) => (
-              <div key={e.id} className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-marron-tierra/5 px-2.5 py-0.5 text-xs text-marron-cafe/70">
-                  {e.nombre}
-                </span>
-                {envio ? (
-                  <span className="text-xs text-marron-cafe/50">
-                    {e.unitPrice != null ? `$${e.unitPrice}` : 'Sin precio unitario'}
-                  </span>
-                ) : (
-                  <FormInput
-                    label="Precio unitario ($)"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={precios[e.id] ?? ''}
-                    onChange={(ev) => setPrecios((prev) => ({ ...prev, [e.id]: ev.target.value }))}
-                    className="w-28"
-                  />
-                )}
-              </div>
-            ))}
+          {!envio && (
+            <p className="text-xs text-marron-cafe/50">
+              Tildá qué ensayos van en este envío — los que dejes afuera quedan pendientes para armar otro envío
+              después, a otro laboratorio si hace falta. A los tildados se les activa el precio unitario.
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {ensayosDelEnvio.map((e) => {
+              if (envio) {
+                return (
+                  <div key={e.id} className="flex items-center gap-2 rounded-full bg-marron-tierra/5 py-1 pr-1.5 pl-3">
+                    <span className="min-w-0 flex-1 truncate text-xs text-marron-cafe/70" title={e.nombre}>
+                      {e.nombre}
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-marron-cafe/60">
+                      {e.unitPrice != null ? `$${e.unitPrice}` : 'Sin precio'}
+                    </span>
+                  </div>
+                )
+              }
+              const tildado = seleccionados.has(e.id)
+              return (
+                <div
+                  key={e.id}
+                  className={`flex items-center gap-2 rounded-full border py-1 pr-1.5 pl-1 transition-colors duration-150 ${
+                    tildado ? 'border-verde-hoja/40 bg-verde-hoja/10' : 'border-marron-tierra/15 bg-white'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={tildado}
+                    onClick={() => alternarSeleccion(e.id)}
+                    title={tildado ? 'Va en este envío — clic para dejarlo afuera' : 'Queda afuera de este envío — clic para incluirlo'}
+                    className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      tildado ? 'text-verde-bosque' : 'text-marron-cafe/40'
+                    }`}
+                  >
+                    {tildado ? (
+                      <SquareCheck className="size-3.5 shrink-0" strokeWidth={2.25} />
+                    ) : (
+                      <Square className="size-3.5 shrink-0" strokeWidth={2.25} />
+                    )}
+                    <span className="min-w-0 truncate" title={e.nombre}>
+                      {e.nombre}
+                    </span>
+                  </button>
+                  {tildado && (
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-1 ring-1 ring-marron-tierra/15">
+                      <span className="text-xs text-marron-cafe/40">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        aria-label={`Precio unitario de ${e.nombre}`}
+                        value={precios[e.id] ?? ''}
+                        onChange={(ev) => setPrecios((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                        className="w-14 bg-transparent text-xs text-marron-cafe outline-none"
+                      />
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
           <p className="text-xs text-marron-cafe/50">
             Muestra total disponible: {solicitud.sample.quantity}{' '}
@@ -282,12 +353,10 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
 
           <FormInput
             label="Precio total ($)"
+            hint="Se suma solo, de los precios unitarios de cada ensayo."
             type="number"
-            min="0"
-            step="0.01"
-            value={envio ? (envio.totalPrice ?? '') : precioTotal}
-            onChange={(e) => setPrecioTotal(e.target.value)}
-            disabled={!!envio}
+            value={envio ? (envio.totalPrice ?? '') : precioTotalCalculado.toFixed(2)}
+            disabled
           />
 
           <FormInput
