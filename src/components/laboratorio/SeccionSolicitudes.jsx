@@ -298,7 +298,16 @@ export default function SeccionSolicitudes() {
       const pendientes = itemsActivos(detalle).filter(
         (i) => i.assignedExecutionMode === 'EXTERNAL' && !yaEnviados.has(i.id),
       )
-      return pendientes.length > 0 ? { s, detalle, ensayos: pendientes } : null
+      if (pendientes.length === 0) return null
+      // El backend no deja crear NINGÚN envío (ni siquiera con un
+      // subconjunto) mientras la solicitud tenga otros ensayos todavía sin
+      // pasar por "Asignar laboratorio" — assertNoPendingAssignments corre
+      // sobre TODOS los ensayos activos de la solicitud, no solo los que
+      // van en este envío puntual (ver external-shipments.service.ts). Acá
+      // se detecta ese caso de antemano para avisar, en vez de dejar que
+      // el 409 sea la primera noticia recién al clickear "Crear envío".
+      const sinAsignar = itemsActivos(detalle).filter((i) => !i.assignedExecutionMode)
+      return { s, detalle, ensayos: pendientes, sinAsignar }
     })
     .filter(Boolean)
 
@@ -378,11 +387,23 @@ export default function SeccionSolicitudes() {
               filas={porDespachar}
               expandido={filaDesplegada}
               onAlternarExpandir={alternarDesplegado}
-              renderAccion={({ detalle, ensayos }) =>
+              renderAdvertencia={({ sinAsignar }) =>
+                sinAsignar.length > 0 && (
+                  <p className="flex items-start gap-1.5 rounded-xl bg-marron-arcilla/12 px-3 py-2 text-xs font-medium text-marron-arcilla">
+                    <Info className="size-3.5 shrink-0 mt-0.5" strokeWidth={2} />
+                    Esta solicitud tiene {sinAsignar.length} ensayo{sinAsignar.length === 1 ? '' : 's'} más sin asignar
+                    laboratorio ({sinAsignar.map((i) => i.name).join(', ')}) — hay que asignarles modalidad primero,
+                    desde Pendientes, o el envío no se va a poder crear.
+                  </p>
+                )
+              }
+              renderAccion={({ detalle, ensayos, sinAsignar }) =>
                 puedeGestionarEnvios && (
                   <Button
                     variant="secondary"
                     className="gap-1.5 px-3 py-1.5 text-xs"
+                    disabled={sinAsignar.length > 0}
+                    title={sinAsignar.length > 0 ? 'Asigná laboratorio a todos los ensayos de esta solicitud primero' : undefined}
                     onClick={() => setEnvioAbierto({ solicitud: detalle, ensayos, envio: null })}
                   >
                     <Send className="size-3.5 shrink-0" strokeWidth={2} />
@@ -468,7 +489,7 @@ export default function SeccionSolicitudes() {
 // solicitud o por envío, todo agrupado en tablas. Los ensayos de cada fila
 // arrancan colapsados y se despliegan con el botón de la columna
 // "Ensayos", en vez de mostrarse todos de una.
-function TablaConEnsayos({ titulo, Icon, filas, idDeFila, expandido, onAlternarExpandir, renderAccion, columnaExtra }) {
+function TablaConEnsayos({ titulo, Icon, filas, idDeFila, expandido, onAlternarExpandir, renderAccion, columnaExtra, renderAdvertencia }) {
   if (filas.length === 0) return null
   const columnasFijas = 6 + (columnaExtra ? 1 : 0) // Muestra, Producto, Lote, Tipo, Estado, Ensayos [, extra]
   return (
@@ -501,6 +522,7 @@ function TablaConEnsayos({ titulo, Icon, filas, idDeFila, expandido, onAlternarE
               const { s, ensayos } = fila
               const filaId = idDeFila ? idDeFila(fila) : s.id
               const abierto = expandido.has(filaId)
+              const advertencia = renderAdvertencia?.(fila)
               return (
                 <Fragment key={filaId}>
                   <tr className="border-b border-marron-tierra/10 last:border-b-0 hover:bg-marron-tierra/5">
@@ -530,6 +552,13 @@ function TablaConEnsayos({ titulo, Icon, filas, idDeFila, expandido, onAlternarE
                     {columnaExtra && <td className="px-4 py-3">{columnaExtra.render(fila)}</td>}
                     <td className="px-4 py-3 text-right">{renderAccion(fila)}</td>
                   </tr>
+                  {advertencia && (
+                    <tr className="border-b border-marron-tierra/10 bg-marron-arcilla/5">
+                      <td colSpan={columnasFijas + 1} className="px-4 py-2">
+                        {advertencia}
+                      </td>
+                    </tr>
+                  )}
                   {abierto && (
                     <tr className="border-b border-marron-tierra/10 bg-white/50">
                       <td colSpan={columnasFijas + 1} className="px-4 py-2.5">
