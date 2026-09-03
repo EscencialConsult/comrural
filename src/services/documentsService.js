@@ -24,7 +24,7 @@ const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
 // confirm()). Reintentar es seguro: confirm es idempotente si el
 // documento ya quedó DISPONIBLE, y cualquier otro 409 (RECHAZADO, tipo
 // inválido, tamaño) no es este código y se relanza tal cual, sin reintentar.
-const ESPERAS_CONFIRMAR_MS = [300, 600, 1200, 2400]
+const ESPERAS_CONFIRMAR_MS = [1500, 3000, 6000, 9000, 12000, 15000, 15000]
 
 async function confirmarConReintento(documentId) {
   for (let intento = 0; intento <= ESPERAS_CONFIRMAR_MS.length; intento++) {

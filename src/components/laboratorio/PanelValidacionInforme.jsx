@@ -60,7 +60,7 @@ export default function PanelValidacionInforme({ informe, onDocumentoAdjuntado, 
         puedeGestionar ? (
           <SubidorDocumento
             etiqueta="Subir PDF del informe"
-            ayuda="Imprimí la planilla de arriba y subí acá ese mismo PDF firmado."
+            ayuda="Imprimí la planilla arriba y subí acá ese mismo PDF"
             onSubido={onDocumentoAdjuntado}
           />
         ) : (
