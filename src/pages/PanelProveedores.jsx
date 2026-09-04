@@ -7,6 +7,7 @@ import { suppliersService } from '../services/suppliersService'
 import { peopleService } from '../services/peopleService'
 import { organizationsService } from '../services/organizationsService'
 import { countriesService } from '../services/countriesService'
+import { listarTodo } from '../services/paginacion'
 import { telefonoValido, emailValido, ciValido, normalizarCi } from '../config/validaciones'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
@@ -583,10 +584,9 @@ function BuscadorPersona({ seleccionadoId, onSeleccionar }) {
 
   useEffect(() => {
     let cancelado = false
-    peopleService
-      .listar({ limit: 100 })
-      .then((resp) => {
-        if (!cancelado) setPersonas(resp.data)
+    listarTodo(peopleService.listar)
+      .then((personas) => {
+        if (!cancelado) setPersonas(personas)
       })
       .catch((err) => {
         if (!cancelado) setError(err.message)
@@ -654,10 +654,9 @@ function BuscadorOrganizacion({ seleccionadoId, onSeleccionar }) {
 
   useEffect(() => {
     let cancelado = false
-    organizationsService
-      .listar({ limit: 100 })
-      .then((resp) => {
-        if (!cancelado) setOrganizaciones(resp.data)
+    listarTodo(organizationsService.listar)
+      .then((organizaciones) => {
+        if (!cancelado) setOrganizaciones(organizaciones)
       })
       .catch((err) => {
         if (!cancelado) setError(err.message)

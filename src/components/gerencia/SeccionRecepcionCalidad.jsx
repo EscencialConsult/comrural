@@ -4,6 +4,7 @@ import { useCatalogoMaestro } from '../../hooks/useCatalogoMaestro'
 import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
+import { listarTodo } from '../../services/paginacion'
 import FormSelect from '../FormSelect.jsx'
 import SearchInput from '../SearchInput.jsx'
 import Button from '../Button.jsx'
@@ -53,8 +54,8 @@ export default function SeccionRecepcionCalidad() {
 
   useEffect(() => {
     let cancelado = false
-    productsService.listar({ limit: 100 }).then((resp) => !cancelado && setProductos(resp.data))
-    suppliersService.listar({ limit: 100 }).then((resp) => !cancelado && setProveedores(resp.data))
+    listarTodo(productsService.listar).then((productos) => !cancelado && setProductos(productos))
+    listarTodo(suppliersService.listar).then((proveedores) => !cancelado && setProveedores(proveedores))
     return () => {
       cancelado = true
     }

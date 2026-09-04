@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Receipt, X, CheckCircle2, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
+import { listarTodo } from '../services/paginacion'
+import { useLotesBuscables } from '../hooks/useLotesBuscables'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
@@ -12,7 +13,6 @@ import SearchInput from '../components/SearchInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import NotaRecepcionMateriaPrima from '../components/formularios/NotaRecepcionMateriaPrima.jsx'
-import Paginacion from '../components/Paginacion.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 
 // Formulario 3 (Nota de Recepción, P-ADM-03/R-11) — a propósito FUERA del
@@ -36,8 +36,6 @@ const TONO_ESTADO_LOTE = {
   CANCELADO: 'neutro',
 }
 
-const TAMANIO_PAGINA = 10
-
 // Mismo criterio que PanelAlmacenRecepcion.jsx: solo se marca algo cuando
 // la recepción está genuinamente cerrada — es la señal de "esta nota ya
 // tiene todos los datos finales", no una obligación para poder abrirla
@@ -54,18 +52,15 @@ export default function PanelCalidadRemito() {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('lots:read')
 
-  const [lotes, setLotes] = useState(null)
+  const { lotes, busqueda, setBusqueda, cursor, cargandoMas, errorCarga, cargarMas } = useLotesBuscables({ puedeVer })
   const [productos, setProductos] = useState(null)
   const [proveedores, setProveedores] = useState(null)
-  const [errorCarga, setErrorCarga] = useState(null)
   const [lotAbierto, setLotAbierto] = useState(null)
 
-  const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState('')
   const [productoId, setProductoId] = useState('')
   const [proveedorId, setProveedorId] = useState('')
   const [fecha, setFecha] = useState('')
-  const [pagina, setPagina] = useState(0)
 
   const hayFiltrosActivos = busqueda !== '' || estado !== '' || productoId !== '' || proveedorId !== '' || fecha !== ''
   const limpiarFiltros = () => {
@@ -74,7 +69,6 @@ export default function PanelCalidadRemito() {
     setProductoId('')
     setProveedorId('')
     setFecha('')
-    setPagina(0)
   }
 
   const [resumenes, setResumenes] = useState({})
@@ -82,14 +76,13 @@ export default function PanelCalidadRemito() {
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp, proveedoresResp]) => {
+    Promise.all([listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
+      .then(([productos, proveedores]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM'))
-        setProductos(productosResp.data)
-        setProveedores(proveedoresResp.data)
+        setProductos(productos)
+        setProveedores(proveedores)
       })
-      .catch((err) => !cancelado && setErrorCarga(err.message))
+      .catch(() => {})
     return () => {
       cancelado = true
     }
@@ -102,30 +95,28 @@ export default function PanelCalidadRemito() {
     return s.person ? `${s.person.firstNames} ${s.person.lastNames}` : s.organization ? s.organization.tradeName || s.organization.legalName : '—'
   }
 
+  // busqueda (código) ya filtra del lado del servidor (ver
+  // useLotesBuscables) — acá solo quedan los filtros que el backend todavía
+  // no soporta.
   const filtrados = useMemo(() => {
     if (!lotes) return []
-    const q = busqueda.trim().toLowerCase()
     return lotes.filter((l) => {
       if (estado && l.currentStatus !== estado) return false
       if (productoId && l.productId !== productoId) return false
       if (proveedorId && l.supplierId !== proveedorId) return false
       if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
-      if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
       return true
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotes, busqueda, estado, productoId, proveedorId, fecha, productos])
-
-  const paginados = filtrados.slice(pagina * TAMANIO_PAGINA, (pagina + 1) * TAMANIO_PAGINA)
+  }, [lotes, estado, productoId, proveedorId, fecha])
 
   useEffect(() => {
     let cancelado = false
-    Promise.allSettled(paginados.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
+    Promise.allSettled(filtrados.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
       if (cancelado) return
       setResumenes((prev) => {
         const siguiente = { ...prev }
         resultados.forEach((r, i) => {
-          siguiente[paginados[i].id] = r.status === 'fulfilled' ? r.value : 'error'
+          siguiente[filtrados[i].id] = r.status === 'fulfilled' ? r.value : 'error'
         })
         return siguiente
       })
@@ -134,7 +125,7 @@ export default function PanelCalidadRemito() {
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagina, lotes, busqueda, estado, productoId, proveedorId])
+  }, [lotes, estado, productoId, proveedorId, fecha])
 
   const volverALista = () => setLotAbierto(null)
 
@@ -177,22 +168,12 @@ export default function PanelCalidadRemito() {
             <div className="col-span-2 sm:col-span-1">
               <SearchInput
                 label="Buscar"
-                placeholder="Código o producto…"
+                placeholder="Código de lote…"
                 value={busqueda}
-                onChange={(e) => {
-                  setBusqueda(e.target.value)
-                  setPagina(0)
-                }}
+                onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
-            <FormSelect
-              label="Producto"
-              value={productoId}
-              onChange={(e) => {
-                setProductoId(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Producto" value={productoId} onChange={(e) => setProductoId(e.target.value)}>
               <option value="">Todos</option>
               {productos?.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -200,14 +181,7 @@ export default function PanelCalidadRemito() {
                 </option>
               ))}
             </FormSelect>
-            <FormSelect
-              label="Proveedor"
-              value={proveedorId}
-              onChange={(e) => {
-                setProveedorId(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Proveedor" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
               <option value="">Todos</option>
               {proveedores?.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -219,19 +193,9 @@ export default function PanelCalidadRemito() {
               label="Fecha de recepción"
               type="date"
               value={fecha}
-              onChange={(e) => {
-                setFecha(e.target.value)
-                setPagina(0)
-              }}
+              onChange={(e) => setFecha(e.target.value)}
             />
-            <FormSelect
-              label="Estado"
-              value={estado}
-              onChange={(e) => {
-                setEstado(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)}>
               <option value="">Todos</option>
               {Object.keys(TONO_ESTADO_LOTE).map((e) => (
                 <option key={e} value={e}>
@@ -273,7 +237,7 @@ export default function PanelCalidadRemito() {
                 </tr>
               </thead>
               <tbody>
-                {paginados.map((l) => {
+                {filtrados.map((l) => {
                   const resumen = resumenes[l.id]
                   const etapa = etapaDe(resumen)
                   return (
@@ -315,7 +279,7 @@ export default function PanelCalidadRemito() {
                     </tr>
                   )
                 })}
-                {paginados.length === 0 && (
+                {filtrados.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-sm text-marron-cafe/50">
                       No hay lotes de materia prima que coincidan con el filtro.
@@ -326,14 +290,13 @@ export default function PanelCalidadRemito() {
             </table>
           </div>
 
-          <Paginacion
-            pagina={pagina}
-            totalItems={filtrados.length}
-            tamanioPagina={TAMANIO_PAGINA}
-            cantidadMostrada={paginados.length}
-            etiqueta="lotes"
-            onCambiarPagina={setPagina}
-          />
+          {cursor && (
+            <div className="flex justify-center">
+              <Button variant="secondary" className="px-4 py-2 text-sm" disabled={cargandoMas} onClick={cargarMas}>
+                {cargandoMas ? 'Cargando…' : 'Cargar más'}
+              </Button>
+            </div>
+          )}
         </>
       )}
     </main>

@@ -3,6 +3,7 @@ import { Plus, ClipboardCheck, CheckCircle2 } from 'lucide-react'
 import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { controlProcesoAService } from '../../services/controlProcesoAService'
+import { listarTodo } from '../../services/paginacion'
 import { useAuth } from '../../context/AuthContext.jsx'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
@@ -35,11 +36,11 @@ export default function SeccionControlProceso() {
 
   useEffect(() => {
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp]) => {
+    Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar)])
+      .then(([lotesResp, productos]) => {
         if (cancelado) return
         setLotes(lotesResp.data.filter((l) => l.nature === 'PM'))
-        setProductos(productosResp.data)
+        setProductos(productos)
       })
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {

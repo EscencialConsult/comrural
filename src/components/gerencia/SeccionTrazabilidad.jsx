@@ -5,6 +5,7 @@ import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
 import { lotTraceabilityService } from '../../services/lotTraceabilityService'
+import { listarTodo } from '../../services/paginacion'
 import SearchInput from '../SearchInput.jsx'
 import Badge from '../Badge.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -96,8 +97,8 @@ export default function SeccionTrazabilidad() {
 
   useEffect(() => {
     let cancelado = false
-    productsService.listar({ limit: 100 }).then((resp) => !cancelado && setProductos(resp.data))
-    suppliersService.listar({ limit: 100 }).then((resp) => !cancelado && setProveedores(resp.data))
+    listarTodo(productsService.listar).then((productos) => !cancelado && setProductos(productos))
+    listarTodo(suppliersService.listar).then((proveedores) => !cancelado && setProveedores(proveedores))
     return () => {
       cancelado = true
     }

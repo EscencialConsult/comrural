@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ClipboardList, X, Circle, Pencil, CheckCircle2, XCircle, Play, Signature, Receipt, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import { inspectionsService } from '../services/inspectionsService'
+import { listarTodo } from '../services/paginacion'
+import { useLotesBuscables } from '../hooks/useLotesBuscables'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
@@ -13,7 +14,6 @@ import SearchInput from '../components/SearchInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import IndicadorEtapas from '../components/IndicadorEtapas.jsx'
-import Paginacion from '../components/Paginacion.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 import FormularioInspeccionMateriaPrima from '../components/formularios/FormularioInspeccionMateriaPrima.jsx'
 import NotaRecepcionMateriaPrima from '../components/formularios/NotaRecepcionMateriaPrima.jsx'
@@ -41,8 +41,6 @@ const TONO_ESTADO_LOTE = {
   RECHAZADO: 'negativo',
   CANCELADO: 'neutro',
 }
-
-const TAMANIO_PAGINA = 10
 
 // Etapa real del lote para la columna "Estado" — a pedido de Facundo,
 // reemplaza a la columna "Inspección" suelta y a mostrar `lot.currentStatus`
@@ -177,10 +175,18 @@ export default function PanelCalidadRecepcion() {
   const puedeAprobar = permisos.has('quality-resolutions:approve')
   const puedeEmitir = permisos.has('quality-resolutions:create')
 
-  const [lotes, setLotes] = useState(null)
+  const {
+    lotes,
+    busqueda,
+    setBusqueda,
+    cursor,
+    cargandoMas,
+    errorCarga,
+    cargarMas,
+    recargar: recargarLotes,
+  } = useLotesBuscables({ puedeVer })
   const [productos, setProductos] = useState(null)
   const [proveedores, setProveedores] = useState(null)
-  const [errorCarga, setErrorCarga] = useState(null)
   // Al tocar un lote se abre el formulario de inspección EN LA MISMA
   // pantalla — no navega a una URL nueva.
   const [lotAbierto, setLotAbierto] = useState(null)
@@ -190,12 +196,10 @@ export default function PanelCalidadRecepcion() {
   // a la vez.
   const [remitoAbierto, setRemitoAbierto] = useState(null)
 
-  const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState('')
   const [productoId, setProductoId] = useState('')
   const [proveedorId, setProveedorId] = useState('')
   const [fecha, setFecha] = useState('')
-  const [pagina, setPagina] = useState(0)
 
   const hayFiltrosActivos = busqueda !== '' || estado !== '' || productoId !== '' || proveedorId !== '' || fecha !== ''
   const limpiarFiltros = () => {
@@ -204,32 +208,20 @@ export default function PanelCalidadRecepcion() {
     setProductoId('')
     setProveedorId('')
     setFecha('')
-    setPagina(0)
   }
 
   const [resumenes, setResumenes] = useState({}) // lotId -> vista consolidada (o 'error')
 
-  const recargarLotes = () => {
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp, proveedoresResp]) => {
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM'))
-        setProductos(productosResp.data)
-        setProveedores(proveedoresResp.data)
-      })
-      .catch((err) => setErrorCarga(err.message))
-  }
-
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp, proveedoresResp]) => {
+    Promise.all([listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
+      .then(([productos, proveedores]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM'))
-        setProductos(productosResp.data)
-        setProveedores(proveedoresResp.data)
+        setProductos(productos)
+        setProveedores(proveedores)
       })
-      .catch((err) => !cancelado && setErrorCarga(err.message))
+      .catch(() => {})
     return () => {
       cancelado = true
     }
@@ -242,9 +234,11 @@ export default function PanelCalidadRecepcion() {
     return s.person ? `${s.person.firstNames} ${s.person.lastNames}` : s.organization ? s.organization.tradeName || s.organization.legalName : '—'
   }
 
+  // busqueda (código) ya filtra del lado del servidor (ver
+  // useLotesBuscables) — acá solo quedan los filtros que el backend todavía
+  // no soporta.
   const filtrados = useMemo(() => {
     if (!lotes) return []
-    const q = busqueda.trim().toLowerCase()
     return lotes
       .filter((l) => {
         if (estado && l.currentStatus !== estado) return false
@@ -253,28 +247,22 @@ export default function PanelCalidadRecepcion() {
         // scheduledReceptionAt es el único dato de fecha que trae un lote —
         // se compara solo la parte de fecha (no la hora), en hora local.
         if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
-        if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
         return true
       })
       .sort(compararPorFechaRecepcion)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotes, busqueda, estado, productoId, proveedorId, fecha, productos])
+  }, [lotes, estado, productoId, proveedorId, fecha])
 
-  const paginados = filtrados.slice(pagina * TAMANIO_PAGINA, (pagina + 1) * TAMANIO_PAGINA)
-
-  // Enriquecimiento acotado a la página visible (10 lotes) — no existe un
-  // endpoint de listado con resumen (raw-material-receptions.md §8 lo dice
-  // explícito), así que se pide la vista consolidada por lote en paralelo,
-  // solo para las filas que se están mostrando. Si el volumen real crece
-  // mucho, esto hay que pedírselo al backend como endpoint nuevo.
+  // Enriquecimiento acotado a lo visible — no existe un endpoint de listado
+  // con resumen (raw-material-receptions.md §8 lo dice explícito), así que
+  // se pide la vista consolidada por lote en paralelo.
   useEffect(() => {
     let cancelado = false
-    Promise.allSettled(paginados.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
+    Promise.allSettled(filtrados.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
       if (cancelado) return
       setResumenes((prev) => {
         const siguiente = { ...prev }
         resultados.forEach((r, i) => {
-          siguiente[paginados[i].id] = r.status === 'fulfilled' ? r.value : 'error'
+          siguiente[filtrados[i].id] = r.status === 'fulfilled' ? r.value : 'error'
         })
         return siguiente
       })
@@ -283,7 +271,7 @@ export default function PanelCalidadRecepcion() {
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagina, lotes, busqueda, estado, productoId, proveedorId])
+  }, [lotes, estado, productoId, proveedorId, fecha])
 
   // Segundo nivel de enriquecimiento, solo para las casillas de etapa: el
   // resumen consolidado ya trae `inspection.status`, pero no `form.items` +
@@ -301,7 +289,7 @@ export default function PanelCalidadRecepcion() {
   const pedidosDetalle = useRef(new Set())
 
   useEffect(() => {
-    const aPedir = paginados.filter((l) => {
+    const aPedir = filtrados.filter((l) => {
       const resumen = resumenes[l.id]
       const insp = resumen && resumen !== 'error' ? resumen.inspection : null
       if (!insp?.id) return false
@@ -327,7 +315,7 @@ export default function PanelCalidadRecepcion() {
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagina, busqueda, estado, productoId, proveedorId, resumenes])
+  }, [filtrados, resumenes])
 
   const volverALista = () => {
     setLotAbierto(null)
@@ -392,22 +380,12 @@ export default function PanelCalidadRecepcion() {
             <div className="col-span-2 sm:col-span-1">
               <SearchInput
                 label="Buscar"
-                placeholder="Código o producto…"
+                placeholder="Código de lote…"
                 value={busqueda}
-                onChange={(e) => {
-                  setBusqueda(e.target.value)
-                  setPagina(0)
-                }}
+                onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
-            <FormSelect
-              label="Producto"
-              value={productoId}
-              onChange={(e) => {
-                setProductoId(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Producto" value={productoId} onChange={(e) => setProductoId(e.target.value)}>
               <option value="">Todos</option>
               {productos?.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -415,14 +393,7 @@ export default function PanelCalidadRecepcion() {
                 </option>
               ))}
             </FormSelect>
-            <FormSelect
-              label="Proveedor"
-              value={proveedorId}
-              onChange={(e) => {
-                setProveedorId(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Proveedor" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
               <option value="">Todos</option>
               {proveedores?.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -434,19 +405,9 @@ export default function PanelCalidadRecepcion() {
               label="Fecha de recepción"
               type="date"
               value={fecha}
-              onChange={(e) => {
-                setFecha(e.target.value)
-                setPagina(0)
-              }}
+              onChange={(e) => setFecha(e.target.value)}
             />
-            <FormSelect
-              label="Estado"
-              value={estado}
-              onChange={(e) => {
-                setEstado(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)}>
               <option value="">Todos</option>
               {Object.keys(TONO_ESTADO_LOTE).map((e) => (
                 <option key={e} value={e}>
@@ -509,7 +470,7 @@ export default function PanelCalidadRecepcion() {
                 </tr>
               </thead>
               <tbody>
-                {paginados.map((l) => {
+                {filtrados.map((l) => {
                   const resumen = resumenes[l.id]
                   const inspectionStatus = resumen && resumen !== 'error' ? resumen.summary.inspectionStatus : undefined
                   return (
@@ -719,7 +680,7 @@ export default function PanelCalidadRecepcion() {
                     </tr>
                   )
                 })}
-                {paginados.length === 0 && (
+                {filtrados.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-sm text-marron-cafe/50">
                       No hay lotes de materia prima que coincidan con el filtro.
@@ -730,14 +691,13 @@ export default function PanelCalidadRecepcion() {
             </table>
           </div>
 
-          <Paginacion
-            pagina={pagina}
-            totalItems={filtrados.length}
-            tamanioPagina={TAMANIO_PAGINA}
-            cantidadMostrada={paginados.length}
-            etiqueta="lotes"
-            onCambiarPagina={setPagina}
-          />
+          {cursor && (
+            <div className="flex justify-center">
+              <Button variant="secondary" className="px-4 py-2 text-sm" disabled={cargandoMas} onClick={cargarMas}>
+                {cargandoMas ? 'Cargando…' : 'Cargar más'}
+              </Button>
+            </div>
+          )}
         </>
       )}
     </main>

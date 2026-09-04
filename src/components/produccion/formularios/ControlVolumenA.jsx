@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { lotsService } from '../../../services/lotsService'
 import { productsService } from '../../../services/productsService'
 import { shiftsService } from '../../../services/shiftsService'
 import { productionAreaAService } from '../../../services/productionAreaAService'
+import { listarTodo } from '../../../services/paginacion'
 import { useSolicitud } from '../../../hooks/useSolicitud'
 import { toast } from '../../../lib/toast'
 import Badge from '../../Badge.jsx'
@@ -13,6 +13,7 @@ import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
 import FirmasResponsables from '../../formularios/FirmasResponsables.jsx'
 import FormInput from '../../FormInput.jsx'
 import FormSelect from '../../FormSelect.jsx'
+import ComboboxLote from '../../formularios/ComboboxLote.jsx'
 import Skeleton from '../../Skeleton.jsx'
 import EmptyState from '../../EmptyState.jsx'
 
@@ -59,7 +60,6 @@ const ESTADOS_CANDIDATOS = ['ACEPTADO_RECEPCION', 'LAVADO']
 // lote×turno×fecha operativa: acá se da de alta una entrada por vez, y
 // abajo se lista el historial ya cargado de ese lote.
 export default function ControlVolumenA({ loteInicialId }) {
-  const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
   const [turnos, setTurnos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -69,11 +69,10 @@ export default function ControlVolumenA({ loteInicialId }) {
 
   useEffect(() => {
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), shiftsService.listar()])
-      .then(([lotesResp, productosResp, turnosResp]) => {
+    Promise.all([listarTodo(productsService.listar), shiftsService.listar()])
+      .then(([productos, turnosResp]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_CANDIDATOS.includes(l.currentStatus)))
-        setProductos(productosResp.data)
+        setProductos(productos)
         setTurnos(turnosResp)
       })
       .catch((err) => !cancelado && setErrorCarga(err.message))
@@ -153,7 +152,7 @@ export default function ControlVolumenA({ loteInicialId }) {
       {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
 
       <SeccionFormulario numero={1} titulo="Cabecera">
-        {!lotes || !turnos ? (
+        {!productos || !turnos ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Skeleton className="h-16" />
             <Skeleton className="h-16" />
@@ -161,14 +160,13 @@ export default function ControlVolumenA({ loteInicialId }) {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FormSelect label="Lote MP" value={form.lotId} onChange={(e) => actualizar('lotId')(e.target.value)}>
-              <option value="">Seleccionar…</option>
-              {lotes.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.code} · {productoNombre(l.productId)}
-                </option>
-              ))}
-            </FormSelect>
+            <ComboboxLote
+              label="Lote MP"
+              value={form.lotId}
+              onChange={actualizar('lotId')}
+              estados={ESTADOS_CANDIDATOS}
+              productoNombre={productoNombre}
+            />
 
             <FormSelect label="Turno" value={form.shiftId} onChange={(e) => actualizar('shiftId')(e.target.value)}>
               <option value="">Seleccionar…</option>

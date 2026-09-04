@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Send, Stamp, Gavel, Truck, Ban, SquareCheck, Square } from 'lucide-react'
 import { suppliersService } from '../../services/suppliersService'
 import { externalShipmentsService } from '../../services/externalShipmentsService'
+import { listarTodo } from '../../services/paginacion'
 import { laboratoryReportsService } from '../../services/laboratoryReportsService'
 import { UNIDADES_SUBMUESTRA } from '../../config/laboratoriosDestino'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -68,11 +69,10 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
 
   useEffect(() => {
     let cancelado = false
-    suppliersService
-      .listar({ type: 'LABORATORY', isActive: true, limit: 100 })
-      .then((resp) => {
+    listarTodo(suppliersService.listar, { type: 'LABORATORY', isActive: true })
+      .then((proveedores) => {
         if (cancelado) return
-        setLaboratorios(resp.data.map((s) => ({ id: s.id, nombre: nombreProveedor(s), detalle: '' })))
+        setLaboratorios(proveedores.map((s) => ({ id: s.id, nombre: nombreProveedor(s), detalle: '' })))
       })
       .catch((err) => !cancelado && setError(`No se pudo cargar el catálogo de laboratorios: ${err.message}`))
       .finally(() => !cancelado && setCargandoLabs(false))

@@ -6,6 +6,7 @@ import { useCatalogoMaestro } from '../hooks/useCatalogoMaestro'
 import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
+import { listarTodo } from '../services/paginacion'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormDateTimeInput from '../components/FormDateTimeInput.jsx'
@@ -99,18 +100,16 @@ export default function PanelCompras() {
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    productsService
-      .listar({ limit: 100 })
-      .then((resp) => {
-        if (!cancelado) setProductos(resp.data)
+    listarTodo(productsService.listar)
+      .then((productos) => {
+        if (!cancelado) setProductos(productos)
       })
       .catch(() => {
         if (!cancelado) setProductosError(true)
       })
-    suppliersService
-      .listar({ limit: 100 })
-      .then((resp) => {
-        if (!cancelado) setProveedores(resp.data)
+    listarTodo(suppliersService.listar)
+      .then((proveedores) => {
+        if (!cancelado) setProveedores(proveedores)
       })
       .catch(() => {
         if (!cancelado) setProveedoresError(true)

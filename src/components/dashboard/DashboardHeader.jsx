@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   Search,
   Bell,
-  MessagesSquare,
   CloudSun,
   CloudOff,
   LogOut,
@@ -50,8 +49,7 @@ function normalizar(texto) {
 // número real, no un simple punto — pide status=unread aparte porque la
 // lista visible (`notificaciones`) trae "todas", paginada de a
 // LIMITE_NOTIFICACIONES, y no alcanza para saber el total de no leídas.
-// Mensajes sigue siendo solo un indicador (no <button>) —
-// no hay sistema de mensajería. El buscador SÍ funciona: busca por nombre
+// El buscador SÍ funciona: busca por nombre
 // entre Resumen, los 8 módulos y Configuración (los mismos ítems del
 // sidebar) y navega al elegido — no hay todavía un índice de contenido real
 // para buscar dentro de cada módulo. Cerrar sesión sí es real.
@@ -362,10 +360,6 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
         )}
       </div>
 
-      <span title="Mensajes — próximamente" className="hidden shrink-0 text-marron-cafe/40 md:inline-block">
-        <MessagesSquare className="size-5" strokeWidth={1.75} />
-      </span>
-
       <div className="hidden shrink-0 items-center gap-2 md:flex md:pl-2">
         <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-verde-bosque/15">
           {usuario?.avatar_url ? (
@@ -389,9 +383,9 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
         <LogOut className="size-5" strokeWidth={1.75} />
       </button>
 
-      {/* Mobile: el avatar solo agrupa notificaciones/mensajes/cerrar
+      {/* Mobile: el avatar solo agrupa notificaciones/cerrar
           sesión detrás de un único botón — libera el ancho que antes se
-          repartía entre 4 elementos sueltos, así el clima tiene lugar para
+          repartía entre elementos sueltos, así el clima tiene lugar para
           seguir mostrándose en pantallas chicas. */}
       <div className="relative shrink-0 md:hidden">
         <button
@@ -461,11 +455,6 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
                   />
                 </div>
               )}
-
-              <span className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-marron-cafe/40">
-                <MessagesSquare className="size-4 shrink-0" strokeWidth={1.75} />
-                Mensajes — próximamente
-              </span>
 
               <div className="my-1 border-t border-marron-tierra/10" />
 

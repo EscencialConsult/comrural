@@ -3,6 +3,7 @@ import { FlaskConical, PackageCheck, Clock, CheckCircle2, Scale, ClipboardCheck,
 import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { analysisExecutionsService } from '../../services/analysisExecutionsService'
+import { listarTodo } from '../../services/paginacion'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import ModalRecibirMuestra from '../calidad/ModalRecibirMuestra.jsx'
@@ -80,9 +81,8 @@ export default function SeccionPendientes() {
 
   useEffect(() => {
     let cancelado = false
-    analysisRequestsService
-      .listar({ limit: 100 })
-      .then((resp) => !cancelado && setSolicitudes(resp.data))
+    listarTodo(analysisRequestsService.listar)
+      .then((solicitudes) => !cancelado && setSolicitudes(solicitudes))
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true

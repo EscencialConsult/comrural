@@ -4,6 +4,7 @@ import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { productionAreaAService } from '../../services/productionAreaAService'
 import { shiftsService } from '../../services/shiftsService'
+import { listarTodo } from '../../services/paginacion'
 import StatCard from '../dashboard/StatCard.jsx'
 import Badge from '../Badge.jsx'
 import FormSelect from '../FormSelect.jsx'
@@ -53,9 +54,9 @@ export default function DashboardProduccion() {
     let cancelado = false
 
     async function cargar() {
-      const [lotesResp, productosResp, turnosResp, indicadoresResp] = await Promise.all([
+      const [lotesResp, productos, turnosResp, indicadoresResp] = await Promise.all([
         lotsService.listar({ limit: 100 }),
-        productsService.listar({ limit: 100 }),
+        listarTodo(productsService.listar),
         shiftsService.listar(),
         productionAreaAService.indicadores(),
       ])
@@ -67,7 +68,7 @@ export default function DashboardProduccion() {
 
       if (cancelado) return
 
-      const productoNombre = (id) => productosResp.data.find((p) => p.id === id)?.name ?? '—'
+      const productoNombre = (id) => productos.find((p) => p.id === id)?.name ?? '—'
       const turno = (id) => turnosResp.find((t) => t.id === id) ?? null
 
       const nuevasFilas = lotesAreaA.map((lote, i) => {

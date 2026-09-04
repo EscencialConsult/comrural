@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, TriangleAlert } from 'lucide-react'
-import { lotsService } from '../../../services/lotsService'
 import { productsService } from '../../../services/productsService'
 import { productionAreaAService } from '../../../services/productionAreaAService'
+import { listarTodo } from '../../../services/paginacion'
 import { useSolicitud } from '../../../hooks/useSolicitud'
 import { toast } from '../../../lib/toast'
 import Badge from '../../Badge.jsx'
@@ -11,7 +11,7 @@ import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
 import FirmasResponsables from '../../formularios/FirmasResponsables.jsx'
 import FormInput from '../../FormInput.jsx'
-import FormSelect from '../../FormSelect.jsx'
+import ComboboxLote from '../../formularios/ComboboxLote.jsx'
 import Skeleton from '../../Skeleton.jsx'
 import EmptyState from '../../EmptyState.jsx'
 
@@ -37,7 +37,6 @@ const ESTADOS_CANDIDATOS = ['ACEPTADO_RECEPCION', 'LAVADO']
 // pero el dato que se manda es un único promedio por secador, ya calculado
 // fuera del sistema por el responsable de control.
 export default function ControlTemperaturaHumedad() {
-  const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [loteId, setLoteId] = useState('')
@@ -48,12 +47,8 @@ export default function ControlTemperaturaHumedad() {
 
   useEffect(() => {
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp]) => {
-        if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_CANDIDATOS.includes(l.currentStatus)))
-        setProductos(productosResp.data)
-      })
+    listarTodo(productsService.listar)
+      .then((productos) => !cancelado && setProductos(productos))
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true
@@ -113,17 +108,16 @@ export default function ControlTemperaturaHumedad() {
       {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
 
       <SeccionFormulario numero={1} titulo="Lote">
-        {!lotes ? (
+        {!productos ? (
           <Skeleton className="h-16" />
         ) : (
-          <FormSelect label="Lote MP" value={loteId} onChange={(e) => setLoteId(e.target.value)}>
-            <option value="">Seleccionar…</option>
-            {lotes.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.code} · {productoNombre(l.productId)}
-              </option>
-            ))}
-          </FormSelect>
+          <ComboboxLote
+            label="Lote MP"
+            value={loteId}
+            onChange={setLoteId}
+            estados={ESTADOS_CANDIDATOS}
+            productoNombre={productoNombre}
+          />
         )}
       </SeccionFormulario>
 

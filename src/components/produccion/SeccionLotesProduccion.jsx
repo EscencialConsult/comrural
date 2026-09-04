@@ -3,6 +3,7 @@ import { PackageCheck, PlayCircle, Eye } from 'lucide-react'
 import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
+import { listarTodo } from '../../services/paginacion'
 import Button from '../Button.jsx'
 import EmptyState from '../EmptyState.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -40,12 +41,12 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
 
   useEffect(() => {
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp, proveedoresResp]) => {
+    Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
+      .then(([lotesResp, productos, proveedores]) => {
         if (cancelado) return
         setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && l.currentStatus === 'ACEPTADO_RECEPCION'))
-        setProductos(productosResp.data)
-        setProveedores(proveedoresResp.data)
+        setProductos(productos)
+        setProveedores(proveedores)
       })
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {

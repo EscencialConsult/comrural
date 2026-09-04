@@ -17,3 +17,30 @@
 export function siguienteCursor({ hasMore, nextCursor }) {
   return hasMore ? nextCursor : null
 }
+
+// Trae TODAS las páginas de un catálogo chico (productos, proveedores,
+// personas, organizaciones — nunca lotes/solicitudes de análisis: esos
+// crecen sin techo real y necesitan paginación de verdad del lado del
+// usuario, no cargarlos todos de una). Antes cada pantalla pedía una sola
+// página
+// con `limit: 100` y se quedaba ahí — si el catálogo pasaba de 100 filas, el
+// resto quedaba invisible sin ningún error (200 OK, solo una porción), mismo
+// bug que ya se había encontrado y corregido en PanelFormularios.jsx. Acá se
+// sigue el cursor hasta agotar `hasMore` para traer todo siempre, sin que
+// cada pantalla tenga que acordarse del loop.
+//
+// `listarFn` es cualquier `service.listar` con la forma
+// `({cursor, limit, ...resto}) => Promise<{data, hasMore, nextCursor}>`.
+// `params` son los filtros fijos a mandar en cada página (ej. `{ type:
+// 'LABORATORY' }`), nunca cursor/limit — esos los controla el loop.
+export async function listarTodo(listarFn, params = {}) {
+  let cursor
+  let acumulado = []
+  for (;;) {
+    const resp = await listarFn({ ...params, limit: 100, cursor })
+    acumulado = acumulado.concat(resp.data)
+    cursor = siguienteCursor(resp)
+    if (!cursor) break
+  }
+  return acumulado
+}

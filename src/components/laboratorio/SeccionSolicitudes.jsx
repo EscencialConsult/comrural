@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { analysisExecutionsService } from '../../services/analysisExecutionsService'
 import { externalShipmentsService } from '../../services/externalShipmentsService'
+import { listarTodo } from '../../services/paginacion'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -97,7 +98,7 @@ export default function SeccionSolicitudes() {
 
   const cargar = useCallback(async () => {
     try {
-      const resp = await analysisRequestsService.listar({ limit: 100 })
+      const solicitudes = await listarTodo(analysisRequestsService.listar)
       // Al recargar la lista, limpiar el caché de detalles y envíos para que
       // el useEffect siguiente vuelva a pedirlos todos. Sin esto, si el
       // componente se desmonta y remonta (p.ej. al cambiar de pestaña),
@@ -108,7 +109,7 @@ export default function SeccionSolicitudes() {
       setDetallePorSolicitud({})
       setEnviosPorSolicitud({})
       setEjecucionesPorSolicitud({})
-      setSolicitudes(resp.data.filter((s) => s.status !== 'PENDIENTE_MUESTRA' && s.status !== 'RECHAZADA'))
+      setSolicitudes(solicitudes.filter((s) => s.status !== 'PENDIENTE_MUESTRA' && s.status !== 'RECHAZADA'))
     } catch (err) {
       setErrorCarga(err.message)
     }

@@ -6,6 +6,7 @@ import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptio
 import { inspectionsService } from '../../services/inspectionsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
+import { listarTodo } from '../../services/paginacion'
 import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
@@ -284,10 +285,10 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    Promise.allSettled([productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })]).then(
+    Promise.allSettled([listarTodo(productsService.listar), listarTodo(suppliersService.listar)]).then(
       ([productos, proveedores]) => {
         if (cancelado) return
-        const datos = (r) => (r.status === 'fulfilled' ? (r.value.data ?? []) : [])
+        const datos = (r) => (r.status === 'fulfilled' ? (r.value ?? []) : [])
         setListados({
           productos: datos(productos).map((p) => ({ id: p.id, nombre: p.name, detalle: p.code })),
           proveedores: datos(proveedores).map((s) => ({
