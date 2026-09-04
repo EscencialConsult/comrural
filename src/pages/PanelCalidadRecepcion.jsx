@@ -428,7 +428,123 @@ export default function PanelCalidadRecepcion() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+          {/* Tarjetas en mobile — la tabla de abajo obliga a scrollear
+              horizontal en pantallas angostas (min-w-[1050px]), acá se
+              repite la misma info apilada, con los 3 botones de acción en
+              fila propia (envuelven si hace falta, en vez de flex-nowrap). */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filtrados.map((l) => {
+              const resumen = resumenes[l.id]
+              const inspectionStatus = resumen && resumen !== 'error' ? resumen.summary.inspectionStatus : undefined
+              const estadoVistoBueno = estadoVistoBuenoDe(resumen)
+              const ESTILO_VISTO_BUENO = {
+                sin_resolucion: 'border-marron-tierra/30 text-marron-cafe/50 hover:bg-marron-tierra/10',
+                pendiente: 'border-oro-quinua text-oro-quinua hover:bg-oro-quinua/10',
+                aprobado: 'border-verde-bosque text-verde-bosque hover:bg-verde-bosque/10',
+              }
+              const TITULO_VISTO_BUENO = {
+                sin_resolucion: 'Emitir resolución de Calidad',
+                pendiente: 'Dar el visto bueno (visto bueno gerencial)',
+                aprobado: 'Visto bueno ya registrado',
+              }
+              return (
+                <div key={l.id} className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</p>
+                      <p className="truncate text-sm text-marron-cafe">{productoNombre(l.productId)}</p>
+                      <p className="truncate text-xs text-marron-cafe/60">{proveedorNombre(l.supplierId)}</p>
+                    </div>
+                    {resumen === 'error' ? (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">—</span>
+                    ) : resumen ? (
+                      resumen.warehouseReceipt ? (
+                        <Badge
+                          tono={resumen.warehouseReceipt.status === 'FINALIZADA' ? 'positivo' : 'alerta'}
+                          className="inline-flex shrink-0 items-center gap-1"
+                        >
+                          {resumen.warehouseReceipt.status === 'FINALIZADA' ? (
+                            <CheckCircle2 className="size-3" strokeWidth={2.5} />
+                          ) : (
+                            <Pencil className="size-3" strokeWidth={2.5} />
+                          )}
+                          {resumen.warehouseReceipt.status}
+                        </Badge>
+                      ) : (
+                        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-marron-cafe/50">
+                          <Circle className="size-3 shrink-0" strokeWidth={2.5} />
+                          Sin iniciar
+                        </span>
+                      )
+                    ) : (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">Cargando…</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 border-t border-marron-tierra/10 pt-2">
+                    <span className="text-xs text-marron-cafe/60">
+                      {l.scheduledReceptionAt
+                        ? new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                        : <span className="text-marron-cafe/40">Sin fecha</span>}
+                    </span>
+                    {resumen && resumen !== 'error' && (
+                      <IndicadorEtapas etapas={etapasFormularioDe(resumen, detallesInspeccion[l.id])} />
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      className={`flex-1 justify-center gap-1.5 border-2 px-3 py-1.5 text-xs whitespace-nowrap ${
+                        !inspectionStatus
+                          ? 'border-rojo-pasankalla!'
+                          : inspectionStatus === 'INICIADA'
+                            ? 'border-oro-quinua!'
+                            : 'border-verde-bosque! text-verde-bosque!'
+                      }`}
+                      onClick={() => setLotAbierto(l.id)}
+                    >
+                      {!inspectionStatus ? (
+                        <Play className="size-3.5 shrink-0" strokeWidth={2.25} />
+                      ) : inspectionStatus === 'INICIADA' ? (
+                        <Pencil className="size-3.5 shrink-0" strokeWidth={2.25} />
+                      ) : (
+                        <CheckCircle2 className="size-3.5 shrink-0" strokeWidth={2.25} />
+                      )}
+                      {!inspectionStatus ? 'Iniciar' : inspectionStatus === 'INICIADA' ? 'Continuar' : 'Ver'}
+                    </Button>
+                    <button
+                      type="button"
+                      title="Nota de recepción (imprimible)"
+                      aria-label="Ver nota de recepción"
+                      onClick={() => setRemitoAbierto(l.id)}
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-marron-tierra/20 text-marron-cafe/60 transition-colors duration-150 hover:border-marron-tierra/35 hover:text-marron-cafe"
+                    >
+                      <Receipt className="size-4" strokeWidth={2} />
+                    </button>
+                    {estadoVistoBueno && (puedeEmitir || puedeAprobar) && (
+                      <button
+                        type="button"
+                        title={TITULO_VISTO_BUENO[estadoVistoBueno]}
+                        aria-label={TITULO_VISTO_BUENO[estadoVistoBueno]}
+                        onClick={() => setLotAbierto(l.id)}
+                        className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-150 ${ESTILO_VISTO_BUENO[estadoVistoBueno]}`}
+                      >
+                        <ShieldCheck className="size-4" strokeWidth={2.75} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {filtrados.length === 0 && (
+              <p className="rounded-2xl bg-marron-tierra/5 px-4 py-6 text-center text-sm text-marron-cafe/50">
+                No hay lotes de materia prima que coincidan con el filtro.
+              </p>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-3xl bg-marron-tierra/5 md:block">
             <table className="w-full min-w-[1050px] table-fixed text-left text-sm">
               {/* Anchos fijos a propósito. Fecha de recepción subió un poco
                   para que el encabezado no parta en dos líneas; Estado

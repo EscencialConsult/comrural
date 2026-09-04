@@ -504,7 +504,68 @@ function TablaConEnsayos({ titulo, Icon, filas, idDeFila, expandido, onAlternarE
           {filas.length} solicitud{filas.length === 1 ? '' : 'es'}
         </span>
       </div>
-      <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+      {/* Tarjetas en mobile — la tabla de abajo obliga a scrollear
+          horizontal en pantallas angostas (min-w-[760px]). */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {filas.map((fila) => {
+          const { s, ensayos } = fila
+          const filaId = idDeFila ? idDeFila(fila) : s.id
+          const abierto = expandido.has(filaId)
+          const advertencia = renderAdvertencia?.(fila)
+          return (
+            <div key={filaId} className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs font-semibold text-marron-cafe/70">{s.sample.code}</p>
+                  <p className="truncate text-sm text-marron-cafe">{s.product.name}</p>
+                  <p className="font-mono text-xs text-marron-cafe/60">{s.lot.code}</p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <Badge tono={s.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{s.effectiveType}</Badge>
+                  <Badge tono={TONO_ESTADO_SOLICITUD[s.status] ?? 'neutro'}>{s.status.replace(/_/g, ' ')}</Badge>
+                </div>
+              </div>
+
+              {columnaExtra && (
+                <div className="border-t border-marron-tierra/10 pt-2 text-xs text-marron-cafe/60">
+                  {columnaExtra.titulo}: {columnaExtra.render(fila)}
+                </div>
+              )}
+
+              {advertencia && <div className="rounded-xl bg-marron-arcilla/5 p-2">{advertencia}</div>}
+
+              <button
+                type="button"
+                onClick={() => onAlternarExpandir(filaId)}
+                className="flex items-center gap-1 text-xs font-semibold text-marron-cafe/60 hover:text-marron-cafe"
+              >
+                {abierto ? (
+                  <ChevronDown className="size-3.5 shrink-0" strokeWidth={2.25} />
+                ) : (
+                  <ChevronRight className="size-3.5 shrink-0" strokeWidth={2.25} />
+                )}
+                {ensayos.length} ensayo{ensayos.length === 1 ? '' : 's'}
+              </button>
+              {abierto && (
+                <div className="flex flex-wrap gap-1.5 rounded-xl bg-white/50 p-2">
+                  {ensayos.map((e) => (
+                    <span
+                      key={e.id}
+                      className="rounded-full bg-white px-2.5 py-0.5 text-xs text-marron-cafe/70 ring-1 ring-marron-tierra/10"
+                    >
+                      {e.isCustom ? e.otherTestName : e.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end border-t border-marron-tierra/10 pt-2">{renderAccion(fila)}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-3xl bg-marron-tierra/5 md:block">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead>
             <tr className="border-b border-marron-tierra/15 bg-marron-tierra/10 text-xs font-bold uppercase tracking-wide text-marron-cafe/70">

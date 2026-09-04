@@ -74,7 +74,13 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
         if (cancelado) return
         setLaboratorios(proveedores.map((s) => ({ id: s.id, nombre: nombreProveedor(s), detalle: '' })))
       })
-      .catch((err) => !cancelado && setError(`No se pudo cargar el catálogo de laboratorios: ${err.message}`))
+      .catch((err) => {
+        if (cancelado) return
+        // El detalle real (útil para diagnosticar) queda en consola, no en
+        // pantalla — a quien usa esto no le sirve un mensaje de backend.
+        console.error('No se pudo cargar el catálogo de laboratorios:', err)
+        setError('No se pudo cargar el catálogo de laboratorios. Probá de nuevo en un momento.')
+      })
       .finally(() => !cancelado && setCargandoLabs(false))
     return () => {
       cancelado = true

@@ -329,7 +329,61 @@ export default function PanelAlmacenRecepcion() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+          {/* Tarjetas en mobile — la tabla de abajo obliga a scrollear
+              horizontal en pantallas angostas (min-w-[820px]), acá se
+              repite la misma info apilada. */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filtrados.map((l) => {
+              const resumen = resumenes[l.id]
+              const wrStatus = resumen && resumen !== 'error' ? resumen.warehouseReceipt?.status : undefined
+              return (
+                <div key={l.id} className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</p>
+                    <p className="truncate text-sm text-marron-cafe">{productoNombre(l.productId)}</p>
+                    <p className="truncate text-xs text-marron-cafe/60">{proveedorNombre(l.supplierId)}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-marron-tierra/10 pt-2">
+                    <span className="text-xs text-marron-cafe/60">
+                      {l.scheduledReceptionAt ? (
+                        new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                      ) : (
+                        <span className="text-marron-cafe/40">Sin fecha</span>
+                      )}
+                    </span>
+                    {resumen && resumen !== 'error' && <IndicadorEtapas etapas={etapasFormularioDe(resumen)} />}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className={`w-full justify-center gap-1.5 border-2 px-3 py-1.5 text-xs ${
+                      !wrStatus
+                        ? 'border-rojo-pasankalla!'
+                        : wrStatus === 'INICIADA'
+                          ? 'border-oro-quinua!'
+                          : 'border-verde-bosque! text-verde-bosque!'
+                    }`}
+                    onClick={() => setLotAbierto(l.id)}
+                  >
+                    {!wrStatus ? (
+                      <Play className="size-3.5 shrink-0" strokeWidth={2.25} />
+                    ) : wrStatus === 'INICIADA' ? (
+                      <Pencil className="size-3.5 shrink-0" strokeWidth={2.25} />
+                    ) : (
+                      <CheckCircle2 className="size-3.5 shrink-0" strokeWidth={2.25} />
+                    )}
+                    {!wrStatus ? 'Iniciar' : wrStatus === 'INICIADA' ? 'Continuar' : 'Ver'}
+                  </Button>
+                </div>
+              )
+            })}
+            {filtrados.length === 0 && (
+              <p className="rounded-2xl bg-marron-tierra/5 px-4 py-6 text-center text-sm text-marron-cafe/50">
+                No hay lotes de materia prima que coincidan con el filtro.
+              </p>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-3xl bg-marron-tierra/5 md:block">
             <table className="w-full min-w-[820px] table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[8%]" />

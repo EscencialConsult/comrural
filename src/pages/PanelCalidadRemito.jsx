@@ -216,7 +216,58 @@ export default function PanelCalidadRemito() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+          {/* Tarjetas en mobile (hidden md:block/md:hidden) — la tabla de
+              abajo obliga a scrollear horizontal en pantallas angostas
+              (min-w-[820px]), acá se repite la misma info apilada. */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filtrados.map((l) => {
+              const resumen = resumenes[l.id]
+              const etapa = etapaDe(resumen)
+              return (
+                <div key={l.id} className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</p>
+                      <p className="truncate text-sm text-marron-cafe">{productoNombre(l.productId)}</p>
+                      <p className="truncate text-xs text-marron-cafe/60">{proveedorNombre(l.supplierId)}</p>
+                    </div>
+                    {resumen === 'error' ? (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">—</span>
+                    ) : resumen && etapa ? (
+                      <Badge tono={etapa.tono} className="inline-flex shrink-0 items-center gap-1">
+                        <etapa.Icon className="size-3" strokeWidth={2.5} />
+                        {etapa.texto}
+                      </Badge>
+                    ) : resumen ? (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">Sin recepción todavía</span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">Cargando…</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-marron-tierra/10 pt-2">
+                    <span className="text-xs text-marron-cafe/60">
+                      {l.scheduledReceptionAt ? (
+                        new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                      ) : (
+                        <span className="text-marron-cafe/40">Sin fecha</span>
+                      )}
+                    </span>
+                    <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setLotAbierto(l.id)}>
+                      <Receipt className="size-3.5 shrink-0" strokeWidth={2} />
+                      Ver remito
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+            {filtrados.length === 0 && (
+              <p className="rounded-2xl bg-marron-tierra/5 px-4 py-6 text-center text-sm text-marron-cafe/50">
+                No hay lotes de materia prima que coincidan con el filtro.
+              </p>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-3xl bg-marron-tierra/5 md:block">
             <table className="w-full min-w-[820px] table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[9%]" />

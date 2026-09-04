@@ -269,7 +269,41 @@ export default function ControlVolumenA({ loteInicialId }) {
         ) : historial.length === 0 ? (
           <EmptyState Icon={Plus} titulo="Todavía no hay entradas para este lote" />
         ) : (
-          <div className="overflow-x-auto rounded-2xl bg-white/70">
+          <>
+            {/* Tarjetas en mobile — la tabla de abajo obliga a scrollear
+                horizontal en pantallas angostas (min-w-[720px]). */}
+            <div className="flex flex-col gap-2 md:hidden">
+              {historial.map((h) => (
+                <div key={h.id} className="flex flex-col gap-2 rounded-2xl bg-white/70 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-marron-cafe">{h.entryDate}</p>
+                      <p className="text-xs text-marron-cafe/60">{turnoNombre(h.shiftId)}</p>
+                    </div>
+                    <Badge tono={h.closedAt ? 'positivo' : 'alerta'}>{h.closedAt ? 'Cerrada' : 'Abierta'}</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-marron-tierra/15 pt-2 text-xs">
+                    <span className="text-marron-cafe/60">
+                      Utilizados: <span className="font-semibold text-marron-cafe">{h.usedKg.toFixed(3)} kg</span>
+                    </span>
+                    <span className="text-marron-cafe/60">
+                      Lavados: <span className="font-semibold text-marron-cafe">{h.washedKg.toFixed(3)} kg</span>
+                    </span>
+                    <span className="text-marron-cafe/60">
+                      Merma: <span className="font-semibold text-marron-cafe">{h.mermaKg.toFixed(3)} kg</span>
+                    </span>
+                    <span className="text-marron-cafe/60">
+                      DIF:{' '}
+                      <span className={`font-semibold ${h.difKg < 0 ? 'text-rojo-pasankalla' : 'text-verde-bosque'}`}>
+                        {h.difKg.toFixed(3)} kg
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-2xl bg-white/70 md:block">
             <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-verde-hoja/35 text-left text-xs font-bold uppercase tracking-wide text-verde-bosque">
@@ -300,7 +334,8 @@ export default function ControlVolumenA({ loteInicialId }) {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </SeccionFormulario>
     </div>

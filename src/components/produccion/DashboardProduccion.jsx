@@ -187,7 +187,38 @@ export default function DashboardProduccion() {
       {filasFiltradas.length === 0 ? (
         <EmptyState Icon={ClipboardList} titulo="Ningún lote coincide con el filtro" />
       ) : (
-        <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+        <>
+          {/* Tarjetas en mobile — la tabla de abajo obliga a scrollear
+              horizontal en pantallas angostas (min-w-[720px]). */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filasFiltradas.map((f) => (
+              <div key={f.id} className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-semibold text-marron-cafe/70">{f.code}</p>
+                    <p className="truncate text-sm text-marron-cafe">{f.product}</p>
+                  </div>
+                  <Badge tono={TONO_ESTADO_LOTE[f.currentStatus] ?? 'neutro'} className="shrink-0">
+                    {f.currentStatus.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-marron-tierra/10 pt-2 text-xs">
+                  <span className="text-marron-cafe/70">{f.turnoNombre}</span>
+                  <span className="text-marron-cafe">
+                    {f.usedKg.toLocaleString('es-BO')} kg / {f.washedKg.toLocaleString('es-BO')} kg
+                  </span>
+                  {f.alertaSecado && (
+                    <span className="flex items-center gap-1 font-semibold text-marron-arcilla">
+                      <Thermometer className="size-3.5" strokeWidth={1.75} />
+                      Alerta de secado
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-3xl bg-marron-tierra/5 md:block">
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-marron-tierra/10 text-left text-xs font-semibold tracking-wide text-marron-cafe/50 uppercase">
@@ -225,7 +256,8 @@ export default function DashboardProduccion() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   )
