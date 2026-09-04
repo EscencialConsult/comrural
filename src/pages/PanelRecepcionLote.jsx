@@ -15,7 +15,7 @@ import Skeleton from '../components/Skeleton.jsx'
 // Calidad y Laboratorio · Proceso 1 (recepción e inspección de materia
 // prima) — ver comrural_erp_backend/docs/raw-material-receptions.md,
 // docs/warehouse-receipts.md, docs/inspections.md y docs/quality-resolutions.md,
-// los 4 leídos completos. Pantalla independiente de PanelLotes.jsx a
+// los 4 leídos completos. Pantalla independiente de PanelCompras.jsx a
 // propósito: el rol `calidad` NO tiene `lots:read` (ver
 // 0019_business_modules_permissions.sql — solo `almacen` recibe esa capa
 // técnica) así que el gate de acceso acá es `raw-material-receptions:read`,
@@ -30,6 +30,7 @@ const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   PENDIENTE_LIBERACION: 'alerta',
   RETENIDO: 'negativo',
@@ -313,10 +314,12 @@ function SeccionResolucion({
       </div>
 
       {/* Emitir la resolución (paso 1 del ciclo) ya no se hace desde acá —
-          pedido explícito: ese paso queda solo en Calidad
-          (PanelAprobacionResolucion.jsx). Esta pantalla (alcanzable desde
-          Compras → Lotes) se queda con corregir/aprobar una resolución que
-          YA existe, y con este aviso mientras no exista ninguna. */}
+          pedido explícito: ese paso queda solo en Calidad, como la última
+          etapa del propio formulario de inspección (ver
+          FormularioInspeccionMateriaPrima.jsx, SeccionResolucionCalidad.jsx).
+          Esta pantalla (alcanzable desde Gerencia → Recepción y calidad) se
+          queda con corregir/aprobar una resolución que YA existe, y con
+          este aviso mientras no exista ninguna. */}
       {!qualityResolution ? (
         <p className="text-sm text-marron-cafe/50">Todavía no se emitió una resolución para este lote — se emite desde Calidad.</p>
       ) : (

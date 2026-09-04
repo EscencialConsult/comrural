@@ -40,6 +40,13 @@ export default function GestionUsuarios() {
 
   const [usuarios, setUsuarios] = useState(null)
   const [roles, setRoles] = useState(null)
+  // Roles asignados, por usuario — GET /iam/users NO los trae (fila cruda
+  // de la tabla users, sin joins, ver UsersManagementService.list): hay que
+  // pedirlos aparte, uno por usuario (GET /iam/users/:id/roles), acotado a
+  // los que ya se cargaron. Mismo criterio que el resto de la app para
+  // vistas sin endpoint de agregados (ver rawMaterialReceptionsService en
+  // PanelAlmacen.jsx).
+  const [rolesPorUsuario, setRolesPorUsuario] = useState({})
   const [filtroUsuarios, setFiltroUsuarios] = useState('')
   const [cambiandoEstadoId, setCambiandoEstadoId] = useState(null)
   const [porDesactivar, setPorDesactivar] = useState(null)
@@ -63,6 +70,36 @@ export default function GestionUsuarios() {
       cancelado = true
     }
   }, [puedeGestionar])
+
+  // Roles por usuario — un pedido por cada uno recién cargado, en paralelo.
+  const refrescarRolesDeUsuario = (userId) =>
+    iamService
+      .getRolesDeUsuario(userId)
+      .then((data) => setRolesPorUsuario((prev) => ({ ...prev, [userId]: data })))
+      .catch(() => {}) // se queda "Sin rol" (fallback de abajo) si falla puntualmente
+
+  useEffect(() => {
+    if (!usuarios) return
+    const aPedir = usuarios.filter((u) => !(u.id in rolesPorUsuario))
+    if (aPedir.length === 0) return
+    let cancelado = false
+    Promise.allSettled(aPedir.map((u) => iamService.getRolesDeUsuario(u.id))).then((resultados) => {
+      if (cancelado) return
+      setRolesPorUsuario((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[aPedir[i].id] = r.status === 'fulfilled' ? r.value : []
+        })
+        return siguiente
+      })
+    })
+    return () => {
+      cancelado = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo re-corre
+    // cuando cambia `usuarios` (alta/baja de personas) — no en cada
+    // actualización de `rolesPorUsuario`, que es lo que este efecto escribe.
+  }, [usuarios])
 
   const aplicarCambioEstado = async (u, isActive) => {
     setErrorEstado(null)
@@ -157,20 +194,25 @@ export default function GestionUsuarios() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-            {usuariosFiltrados.map((u) => (
+            {usuariosFiltrados.map((u) => {
+              // undefined mientras se está pidiendo (ver el efecto de
+              // arriba) — se trata igual que "sin rol" en vez de esperar,
+              // el badge se corrige solo apenas llega la respuesta.
+              const rolesDe = (rolesPorUsuario[u.id] ?? []).filter((a) => a.effective)
+              return (
               <div key={u.id} className="flex items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                     <p className="truncate font-semibold text-marron-cafe">{u.fullName}</p>
-                    {u.roles.length === 0 ? (
+                    {rolesDe.length === 0 ? (
                       <span className="text-[11px] text-marron-cafe/35">Sin rol</span>
                     ) : (
-                      u.roles.map((r) => (
+                      rolesDe.map((a) => (
                         <span
-                          key={r.id}
+                          key={a.id}
                           className="shrink-0 rounded-full bg-verde-hoja/15 px-2 py-0.5 text-[11px] font-semibold text-verde-bosque"
                         >
-                          {r.name}
+                          {a.role.name}
                         </span>
                       ))
                     )}
@@ -203,7 +245,8 @@ export default function GestionUsuarios() {
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
             {usuariosFiltrados.length === 0 && (
               <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">
                 {usuarios.length === 0 ? 'No hay usuarios todavía.' : 'Sin resultados para esa búsqueda.'}
@@ -248,6 +291,12 @@ export default function GestionUsuarios() {
           puedeCambiarRol={puedeCambiarRol}
           onCerrar={() => setEditando(null)}
           onGuardado={() => {
+            // El usuario ya estaba en `rolesPorUsuario` desde antes de
+            // editar, así que el efecto de arriba no lo vuelve a pedir solo
+            // porque `usuarios` cambió — se refresca a mano acá, es el
+            // único caso en que el rol de alguien cambia sin que cambie la
+            // lista de usuarios en sí.
+            refrescarRolesDeUsuario(editando.id)
             setEditando(null)
             // Refetch en vez de mergear a mano: entre el nombre y el rol
             // (que puede tocar 2+ asignaciones) es más simple pedir el

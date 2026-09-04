@@ -30,6 +30,7 @@ const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   PENDIENTE_LIBERACION: 'alerta',
   RETENIDO: 'negativo',

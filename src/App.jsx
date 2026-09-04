@@ -11,21 +11,22 @@ import Registro from './pages/Registro.jsx'
 import RecuperarContrasena from './pages/RecuperarContrasena.jsx'
 import Panel from './pages/Panel.jsx'
 import PanelModulo from './pages/PanelModulo.jsx'
+import PanelConfiguracion from './pages/PanelConfiguracion.jsx'
 import PanelCompras from './pages/PanelCompras.jsx'
 import PanelAlmacen from './pages/PanelAlmacen.jsx'
 import PanelAlmacenRecepcion from './pages/PanelAlmacenRecepcion.jsx'
 import PanelCalidad from './pages/PanelCalidad.jsx'
 import PanelProduccion from './pages/PanelProduccion.jsx'
 import PanelProduccionAreaA from './pages/PanelProduccionAreaA.jsx'
-import PanelProduccionAreaB from './pages/PanelProduccionAreaB.jsx'
+import PanelGerencia from './pages/PanelGerencia.jsx'
 import PanelLaboratorio from './pages/PanelLaboratorio.jsx'
 import PanelCalidadRecepcion from './pages/PanelCalidadRecepcion.jsx'
 import PanelCalidadRemito from './pages/PanelCalidadRemito.jsx'
 import PanelCalidadMuestras from './pages/PanelCalidadMuestras.jsx'
+import PanelCalidadControlProceso from './pages/PanelCalidadControlProceso.jsx'
 import PanelRecepcionLote from './pages/PanelRecepcionLote.jsx'
 import PanelInspeccionMateriaPrima from './pages/PanelInspeccionMateriaPrima.jsx'
 import PanelIngresoMateriaPrima from './pages/PanelIngresoMateriaPrima.jsx'
-import PanelAprobacionResolucion from './pages/PanelAprobacionResolucion.jsx'
 import GestionUsuarios from './pages/GestionUsuarios.jsx'
 import GestionRoles from './pages/GestionRoles.jsx'
 import PanelPaises from './pages/PanelPaises.jsx'
@@ -35,7 +36,6 @@ import PanelPersonas from './pages/PanelPersonas.jsx'
 import PanelOrganizaciones from './pages/PanelOrganizaciones.jsx'
 import PanelProveedores from './pages/PanelProveedores.jsx'
 import PanelProductos from './pages/PanelProductos.jsx'
-import PanelLotes from './pages/PanelLotes.jsx'
 import NotFound from './pages/NotFound.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
 
@@ -94,22 +94,22 @@ function App() {
         <Route path="/panel/organizaciones" element={<PanelOrganizaciones />} />
         <Route path="/panel/proveedores" element={<PanelProveedores />} />
         <Route path="/panel/productos" element={<PanelProductos />} />
-        <Route path="/panel/lotes" element={<PanelLotes />} />
         <Route path="/panel/compras" element={<PanelCompras />} />
         <Route path="/panel/almacen" element={<PanelAlmacen />} />
         <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
         <Route path="/panel/calidad" element={<PanelCalidad />} />
         <Route path="/panel/produccion" element={<PanelProduccion />} />
         <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
-        <Route path="/panel/produccion/area-b" element={<PanelProduccionAreaB />} />
+        <Route path="/panel/gerencia" element={<PanelGerencia />} />
         <Route path="/panel/laboratorio" element={<PanelLaboratorio />} />
         <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
         <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />
         <Route path="/panel/calidad/muestras" element={<PanelCalidadMuestras />} />
+        <Route path="/panel/calidad/control-proceso" element={<PanelCalidadControlProceso />} />
         <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
         <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
         <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />
-        <Route path="/panel/calidad/lotes/:lotId/aprobacion" element={<PanelAprobacionResolucion />} />
+        <Route path="/panel/configuracion" element={<PanelConfiguracion />} />
         <Route path="/panel/:moduloId" element={<PanelModulo />} />
       </Route>
 

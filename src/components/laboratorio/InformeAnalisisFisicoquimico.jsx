@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
-import { Printer, Save, CircleCheck } from 'lucide-react'
+import { Save, CircleCheck } from 'lucide-react'
 import { PARAMETROS_QUIMICO, PARAMETROS_FISICO, IMPUREZAS_CUANTIFICADAS, PARAMETROS_SENSORIAL } from '../../config/informeFisicoquimicoParametros'
-import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import BotonVolver from '../BotonVolver.jsx'
 import Button from '../Button.jsx'
 import FormInput from '../FormInput.jsx'
@@ -42,21 +41,9 @@ export default function InformeAnalisisFisicoquimico({
   onVolver,
   onGuardar,
   onFinalizar,
-  autoImprimir = false,
+  areaImprimibleRef,
 }) {
   const finalizada = estado === 'FINALIZADO'
-  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#ffffff' })
-
-  // Se llegó acá con la tarjeta ya en "Imprimir" (ver TarjetaCategoria.jsx)
-  // — ese clic ya cuenta como la intención de imprimir, no hace falta un
-  // segundo clic sobre el botón de acá adentro. Solo una vez por montaje
-  // (no en cada re-render): `generarPdf` es estable entre renders (viene
-  // de un hook con su propia ref), pero igual se guarda explícito para no
-  // depender de esa garantía.
-  useEffect(() => {
-    if (autoImprimir) generarPdf()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Autocompleta "Fecha inicio de ensayo" con la fecha de la máquina al
   // abrir el informe, a pedido explícito — sigue editable (el backend no
@@ -77,16 +64,6 @@ export default function InformeAnalisisFisicoquimico({
       <div className="flex flex-wrap items-center gap-3">
         <BotonVolver onClick={onVolver} ariaLabel="Volver a categorías" />
         <h2 className="text-lg font-bold text-marron-cafe">Informe de análisis — Fisicoquímico</h2>
-        {errorPdf && <span className="text-xs font-medium text-rojo-pasankalla">{errorPdf}</span>}
-        <button
-          type="button"
-          onClick={generarPdf}
-          disabled={generandoPdf}
-          className="ml-auto flex items-center gap-1.5 rounded-full bg-marron-tierra/10 px-3 py-1.5 text-xs font-semibold text-marron-cafe transition-colors duration-150 hover:bg-marron-tierra/20 disabled:opacity-50"
-        >
-          <Printer className="size-3.5" strokeWidth={2} />
-          {generandoPdf ? 'Generando PDF…' : 'Imprimir'}
-        </button>
       </div>
 
       <p className="rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs text-marron-cafe/70">

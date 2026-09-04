@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ClipboardList, X, Circle, Pencil, CheckCircle2, XCircle, Play, Signature, Receipt, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
@@ -29,11 +28,12 @@ import { compararPorFechaRecepcion } from '../utils/fecha'
 // Al tocar un lote se abre el formulario de inspección DIRECTO, inline, sin
 // navegar — la pantalla intermedia de estado (PanelRecepcionLote.jsx) sigue
 // viva para quien la necesite completa (recepción + inspección + resolución
-// juntas), hoy solo enlazada desde PanelLotes.jsx (Compras).
+// juntas), hoy solo enlazada desde PanelCompras.jsx (Compras).
 const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   PENDIENTE_LIBERACION: 'alerta',
   RETENIDO: 'negativo',
@@ -76,10 +76,10 @@ function etapaDe(resumen) {
 }
 
 // Estado del ícono de "visto bueno" en la columna Formulario — las mismas
-// dos etapas que ya vive el ciclo de Resolución de Calidad
-// (PanelAprobacionResolucion.jsx/PanelRecepcionLote.jsx), resumidas para un
-// solo símbolo: gris = inspección finalizada pero sin resolución emitida
-// todavía, dorado = resolución emitida y pendiente del visto bueno
+// dos etapas que ya vive el ciclo de Resolución de Calidad (última etapa de
+// FormularioInspeccionMateriaPrima.jsx/PanelRecepcionLote.jsx), resumidas
+// para un solo símbolo: gris = inspección finalizada pero sin resolución
+// emitida todavía, dorado = resolución emitida y pendiente del visto bueno
 // gerencial, verde = visto bueno ya dado. Antes de que la inspección esté
 // FINALIZADA no hay nada que mostrar acá — sigue devolviendo null.
 function estadoVistoBuenoDe(resumen) {
@@ -173,7 +173,6 @@ function etapasFormularioDe(resumen, detalleInsp) {
 
 export default function PanelCalidadRecepcion() {
   const { permisos } = useAuth()
-  const navigate = useNavigate()
   const puedeVer = permisos.has('lots:read')
   const puedeAprobar = permisos.has('quality-resolutions:approve')
   const puedeEmitir = permisos.has('quality-resolutions:create')
@@ -671,20 +670,25 @@ export default function PanelCalidadRecepcion() {
                           >
                             <Receipt className="size-4" strokeWidth={2} />
                           </button>
-                          {/* Ciclo de Resolución de Calidad (PanelAprobacionResolucion.jsx)
-                              — antes esto solo se podía hacer desde Compras →
-                              Lotes → PanelRecepcionLote.jsx; ahora el mismo
-                              ícono lleva a las dos etapas sin salir de
-                              Calidad. Un solo símbolo, tres estados por
-                              color: gris (sin resolución emitida todavía) →
-                              dorado (emitida, falta el visto bueno gerencial)
-                              → verde (visto bueno ya dado). Solo se muestra a
-                              quien podría hacer algo en algún momento del
-                              ciclo (`puedeEmitir`/`puedeAprobar`) — si en el
+                          {/* Ciclo de Resolución de Calidad — pedido
+                              explícito: dejó de ser una pantalla aparte
+                              (antes PanelAprobacionResolucion.jsx, solo
+                              alcanzable desde este ícono); ahora es la
+                              última etapa del propio formulario de
+                              inspección (ver FormularioInspeccionMateriaPrima.jsx,
+                              SeccionResolucionCalidad.jsx) — este ícono abre
+                              ESE MISMO formulario, igual que el botón
+                              "Ver"/"Continuar" de al lado. Un solo símbolo,
+                              tres estados por color: gris (sin resolución
+                              emitida todavía) → dorado (emitida, falta el
+                              visto bueno gerencial) → verde (visto bueno ya
+                              dado). Solo se muestra a quien podría hacer
+                              algo en algún momento del ciclo
+                              (`puedeEmitir`/`puedeAprobar`) — si en el
                               momento puntual no le toca a esta persona (ej.
                               quien emitió no puede después aprobar su propia
-                              resolución), la pantalla de destino ya lo
-                              explica, no hace falta duplicar esa lógica acá. */}
+                              resolución), esa etapa ya lo explica, no hace
+                              falta duplicar esa lógica acá. */}
                           {(() => {
                             const estado = estadoVistoBuenoDe(resumen)
                             if (!estado || !(puedeEmitir || puedeAprobar)) return null
@@ -703,7 +707,7 @@ export default function PanelCalidadRecepcion() {
                                 type="button"
                                 title={TITULO[estado]}
                                 aria-label={TITULO[estado]}
-                                onClick={() => navigate(`/panel/calidad/lotes/${l.id}/aprobacion`)}
+                                onClick={() => setLotAbierto(l.id)}
                                 className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-150 ${ESTILO[estado]}`}
                               >
                                 <ShieldCheck className="size-4" strokeWidth={2.75} />

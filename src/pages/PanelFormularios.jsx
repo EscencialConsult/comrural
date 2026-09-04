@@ -11,6 +11,8 @@ import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import FormInput from '../components/FormInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import Button from '../components/Button.jsx'
+import IconButton from '../components/IconButton.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 import Skeleton from '../components/Skeleton.jsx'
 import { DocumentSheet, DocumentFooter } from '../components/documento/DocumentSheet.jsx'
 import { DocumentHeader } from '../components/documento/DocumentHeader.jsx'
@@ -131,12 +133,10 @@ export default function PanelFormularios() {
           </div>
 
           {errorCarga ? (
-            <div className="flex flex-col items-start gap-2 rounded-2xl bg-rojo-pasankalla/10 px-4 py-3.5 text-sm">
-              <p className="font-medium text-rojo-pasankalla">No se pudo cargar el catálogo: {errorCarga}</p>
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={cargarPrimeraPagina}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorBanner
+              mensaje={`No se pudo cargar el catálogo: ${errorCarga}`}
+              onReintentar={cargarPrimeraPagina}
+            />
           ) : formularios === null ? (
             <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
               {Array.from({ length: 4 }, (_, i) => (
@@ -153,7 +153,7 @@ export default function PanelFormularios() {
                     key={f.id}
                     type="button"
                     onClick={() => abrirDetalle(f.id)}
-                    className="flex w-full items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-colors duration-150 hover:bg-marron-tierra/5"
+                    className="flex w-full items-center justify-between gap-3 border-b border-marron-tierra/10 px-4 py-3.5 text-left last:border-b-0 transition-all duration-200 hover:bg-marron-tierra/5 hover:translate-x-1 hover:border-l-2 hover:border-l-verde-lima"
                   >
                     <div className="flex items-center gap-3">
                       <span className="rounded-full bg-marron-tierra/10 px-2.5 py-1 font-mono text-xs font-semibold text-marron-cafe/70">
@@ -201,19 +201,17 @@ export default function PanelFormularios() {
           <button
             type="button"
             onClick={() => setVista({ modo: 'lista', formId: null })}
-            className="flex items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
+            className="group flex items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
           >
-            <ChevronLeft className="size-4" strokeWidth={1.75} />
+            <ChevronLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" strokeWidth={1.75} />
             Volver al listado
           </button>
 
           {errorDetalle ? (
-            <div className="flex flex-col items-start gap-2 text-sm">
-              <p className="font-medium text-rojo-pasankalla">No se pudo cargar: {errorDetalle}</p>
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => abrirDetalle(vista.formId)}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorBanner
+              mensaje={`No se pudo cargar: ${errorDetalle}`}
+              onReintentar={() => abrirDetalle(vista.formId)}
+            />
           ) : formularioDetalle === null ? (
             <div className="flex flex-col gap-3">
               <Skeleton className="h-7 w-52" />
@@ -589,12 +587,11 @@ function FormularioDocumento({ form, areas, areasError, areaNombre, puedeEditar,
 
         <div className="px-5 pb-5">
           {error ? (
-            <div className="mt-4 flex flex-col items-start gap-2 rounded-2xl bg-rojo-pasankalla/10 px-4 py-3.5 text-sm">
-              <p className="font-medium text-rojo-pasankalla">No se pudo cargar: {error}</p>
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={cargar}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorBanner
+              className="mt-4"
+              mensaje={`No se pudo cargar: ${error}`}
+              onReintentar={cargar}
+            />
           ) : items === null ? (
             <div className="mt-4 flex flex-col gap-2">
               <Skeleton className="h-10" />
@@ -968,15 +965,15 @@ function CampoDocumentoFila({ item, puedeGestionar, deshabilitado, labelValue, o
           <td colSpan={puedeGestionar ? 3 : 2} className="border border-marron-tierra/20 bg-[#fff5f5] px-3 py-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-marron-cafe/70">
-                Motivo de la baja de "{item.label}" (se aplica recién al guardar):
+                Motivo de la baja de &ldquo;{item.label}&rdquo; (se aplica recién al guardar):
               </span>
-              <input
+              <FormInput
                 value={motivoBaja}
                 onChange={(e) => onMotivoChange(e.target.value)}
                 maxLength={500}
                 disabled={deshabilitado}
                 placeholder="Mínimo 5 caracteres"
-                className="min-w-[220px] flex-1 rounded-lg border border-marron-tierra/20 bg-white px-2 py-1.5 text-xs text-marron-cafe outline-none focus-visible:border-rojo-pasankalla"
+                className="min-w-[220px] flex-1 py-1.5 text-xs"
               />
             </div>
           </td>
@@ -986,25 +983,7 @@ function CampoDocumentoFila({ item, puedeGestionar, deshabilitado, labelValue, o
   )
 }
 
-// Botón de ícono chico para acciones de fila — no existía un componente
-// así en el resto del panel (los botones de acción eran siempre de texto,
-// ver Button.jsx), así que se define acá en vez de forzar Button a cubrir
-// un caso visual que no es el suyo.
-function IconButton({ children, tono = 'normal', className = '', ...props }) {
-  const tonos = {
-    normal: 'text-marron-cafe/60 hover:bg-marron-tierra/10 hover:text-marron-cafe',
-    peligro: 'text-rojo-pasankalla/70 hover:bg-rojo-pasankalla/10 hover:text-rojo-pasankalla',
-  }
-  return (
-    <button
-      type="button"
-      {...props}
-      className={`rounded-full p-1.5 transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40 ${tonos[tono]} ${className}`}
-    >
-      {children}
-    </button>
-  )
-}
+// IconButton ahora vive en src/components/IconButton.jsx — importado arriba.
 
 const DATA_TYPE_OPTIONS = Object.keys(DATA_TYPE_LABEL)
 
@@ -1255,21 +1234,21 @@ function ItemAltaForm({ formId, seccionFija, siguienteOrden, seccionesExistentes
           {opciones.map((op, i) => (
             <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="flex flex-1 gap-2">
-                <input
+                <FormInput
                   value={op.value}
                   onChange={(e) =>
                     setOpciones((prev) => prev.map((o, idx) => (idx === i ? { ...o, value: e.target.value } : o)))
                   }
                   placeholder="valor"
-                  className="min-w-0 flex-1 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
+                  className="flex-1"
                 />
-                <input
+                <FormInput
                   value={op.label}
                   onChange={(e) =>
                     setOpciones((prev) => prev.map((o, idx) => (idx === i ? { ...o, label: e.target.value } : o)))
                   }
                   placeholder="etiqueta visible"
-                  className="min-w-0 flex-1 rounded-xl border border-marron-tierra/20 bg-white px-3 py-2 text-sm text-marron-cafe outline-none focus-visible:border-verde-lima"
+                  className="flex-1"
                 />
               </div>
               {opciones.length > 1 && (

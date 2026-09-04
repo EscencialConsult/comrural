@@ -22,10 +22,18 @@ import ModalDetalleMuestra from './ModalDetalleMuestra.jsx'
 // aceptado en el resto del proyecto para volúmenes chicos (ver
 // PanelAlmacen.jsx, comentario sobre rawMaterialReceptionsService).
 
-// Solo lotes en ACEPTADO_RECEPCION pueden tener una muestra nueva — el
+// Lotes en ACEPTADO_RECEPCION o LAVADO pueden tener una muestra nueva — el
 // backend lo valida con 409 en cualquier otro estado (SamplesService.create,
 // ver comrural_erp_backend/src/laboratory/samples/services/samples.service.ts).
-const ESTADO_HABILITA_MUESTREO = 'ACEPTADO_RECEPCION'
+// LAVADO se sumó en 0035 (Producción cerrando el lavado de Área A no debe
+// bloquear que Calidad tome su propia muestra sobre el mismo lote).
+const ESTADOS_HABILITAN_MUESTREO = ['ACEPTADO_RECEPCION', 'LAVADO']
+
+// Muestras cuya nature no es la toma manual de Calidad — se etiquetan para
+// no confundirlas con las 'MP' (ver docs/laboratory.md, sección "samples
+// (alterada)"). 'PROCESO' es la que production-area-a auto-crea al cerrar
+// el lavado de un lote.
+const LABEL_NATURE = { PROCESO: 'Proceso', PT: 'Producto terminado' }
 
 // Una muestra no puede tener una solicitud nueva mientras ya tenga una sin
 // cerrar (analysis_requests_one_active_per_sample_idx, backend) — se usa
@@ -100,7 +108,7 @@ export default function SeccionMuestras() {
   }
 
   const lotesCandidatos = useMemo(
-    () => (lotes ?? []).filter((l) => l.currentStatus === ESTADO_HABILITA_MUESTREO),
+    () => (lotes ?? []).filter((l) => ESTADOS_HABILITAN_MUESTREO.includes(l.currentStatus)),
     [lotes],
   )
 
@@ -184,6 +192,9 @@ export default function SeccionMuestras() {
                     className="flex w-full flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3 text-left transition-colors duration-150 last:border-b-0 hover:bg-marron-tierra/10"
                   >
                     <span className="font-mono text-xs text-marron-cafe/70">{m.code}</span>
+                    {m.nature && m.nature !== 'MP' && (
+                      <Badge tono="info">{LABEL_NATURE[m.nature] ?? m.nature}</Badge>
+                    )}
                     <span className="text-xs text-marron-cafe/60">
                       {m.quantity} {m.unit === 'OTRA' ? m.otherUnit : m.unit}
                     </span>

@@ -23,8 +23,7 @@ import TablaRechazo from './TablaRechazo.jsx'
 import TablaMediciones from './TablaMediciones.jsx'
 import CampoObservaciones from './CampoObservaciones.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
-import AvisoFaltante from './AvisoFaltante.jsx'
-import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
+import SeccionResolucionCalidad from './SeccionResolucionCalidad.jsx'
 import { ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS, COLUMNAS_RECHAZO } from './codigosCriticosInspeccion.js'
 
 // Registro I-CAL-29/R-01 — "Inspección de Materia Prima", maquetado según el
@@ -38,7 +37,7 @@ import { ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS, COLUMNAS_RECHAZO } from
 // lote ahí se abre el formulario directo, sin pasar por la pantalla
 // intermedia de estado (PanelRecepcionLote.jsx) que existía antes. Ese
 // hub sigue vivo para quien lo necesite completo (Compras, desde
-// PanelLotes.jsx), pero ya no es el único camino hacia acá.
+// PanelCompras.jsx), pero ya no es el único camino hacia acá.
 //
 // Diferencia de fondo con FormularioInspeccion.jsx, que ya existía: aquel
 // es un renderer GENÉRICO — recorre form.items y dibuja un control por
@@ -168,6 +167,33 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
   useEffect(() => {
     setPasoActual(0)
   }, [lotId])
+
+  // Si se entra a un lote cuya inspección ya está FINALIZADA (típicamente
+  // desde el ícono de "visto bueno" de PanelCalidadRecepcion.jsx), no tiene
+  // sentido arrancar en "Datos generales" con el resto del asistente oculto
+  // (AsistenteDeEtapas no renderiza etapas por delante del paso actual) —
+  // "Resolución y visto bueno" (más abajo, siempre la última etapa cuando
+  // existe) quedaría escondida detrás de 4-5 clics en "Siguiente" sobre
+  // secciones ya completas y de solo lectura. En vez de duplicar acá la
+  // cuenta de cuántas etapas hay (condiciones/rechazo/grano son
+  // condicionales, ver `etapas` más abajo) para saltar directo al índice
+  // exacto, arranca con TODO colapsado (pasoActual más allá del final): un
+  // clic en la última pastilla ("Resolución y visto bueno") la expande.
+  // `pasoInicialAplicadoRef` evita repetir el salto en cada `recargar()`
+  // (p. ej. al volver de emitir la resolución), que sí necesita que el
+  // usuario se quede donde está.
+  const pasoInicialAplicadoRef = useRef(null)
+  useEffect(() => {
+    if (!recepcion || !detalle) return
+    if (pasoInicialAplicadoRef.current === lotId) return
+    pasoInicialAplicadoRef.current = lotId
+    if (
+      detalle.inspection.status === 'FINALIZADA' &&
+      (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve'))
+    ) {
+      setPasoActual(Number.MAX_SAFE_INTEGER)
+    }
+  }, [recepcion, detalle, lotId, permisos])
 
   // PDF real, no un screenshot de window.print() — Facundo lo pidió
   // explícito: el botón "Imprimir" abría el diálogo nativo del navegador,
@@ -355,12 +381,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
     [valores],
   )
 
-  // Pedido de alta de un maestro que falta. Hoy es un stub local de la
-  // maqueta (ver components/formularios/solicitudesDeAlta.js): el aviso no le
-  // llega a nadie todavía porque falta definir quién carga cada maestro. La
-  // interacción queda igual para cuando exista el endpoint de verdad.
-  const solicitarAlta = ({ tipo, detalle }) => solicitarAltaDeMaestro({ tipo, detalle })
-
   if (!puedeVer) return <AccesoDenegado mensaje="No tenés acceso a la inspección de materia prima." />
 
   if (errorCarga) {
@@ -454,7 +474,7 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
   }
 
   const { form, inspection } = detalle
-  const { qualityResolution, warehouseReceipt } = recepcion
+  const { qualityResolution, warehouseReceipt, summary } = recepcion
 
   // Cada sección se filtra al tipo de dato que su maquetación sabe dibujar.
   // No es defensa teórica: el formulario real tiene ítems TEXT sueltos en
@@ -556,10 +576,22 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
         }
       }
     }
-    if (cambios.length === 0) return
+    // startedAt se manda junto con las respuestas en el mismo "Guardar" —
+    // mismo criterio que FormularioIngresoMateriaPrima.jsx (Almacén): se
+    // combinan fecha+hora locales y se interpretan en hora local del
+    // navegador.
+    const startedAtIso =
+      generales.fecha && generales.horaInicio ? new Date(`${generales.fecha}T${generales.horaInicio}`).toISOString() : null
+
+    if (cambios.length === 0 && !startedAtIso) return
     try {
-      await ejecutar(() => inspectionsService.guardarRespuestas(inspection.id, cambios))
-      setConfirmacion('Respuestas guardadas.')
+      await ejecutar(() =>
+        Promise.all([
+          cambios.length > 0 ? inspectionsService.guardarRespuestas(inspection.id, cambios) : Promise.resolve(),
+          startedAtIso ? inspectionsService.actualizar(inspection.id, { startedAt: startedAtIso }) : Promise.resolve(),
+        ]),
+      )
+      setConfirmacion('Cambios guardados.')
       setAvisoGuardarPrimero(false)
       // `recargar()` no reseeda `tocados` (el `useEffect` que lo hace está
       // atado a `formId`, que no cambia al guardar) — sin esto, "Finalizar"
@@ -581,7 +613,20 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
       await ejecutar(() => inspectionsService.completar(inspection.id, {}))
       setConfirmandoFinal(false)
       toast.success('Inspección finalizada.')
-      onVolver?.()
+      recargar()
+      // Avanza a la etapa de Resolución/visto bueno en vez de volver al
+      // listado — recién entra en `etapas` una vez que `recargar()`
+      // refresque `inspection.status` a FINALIZADA, pero siempre queda
+      // inmediatamente después de "Observaciones y Firmas" (el paso
+      // actual, acá), sea cual sea su índice real. Si esta persona no
+      // tiene ningún permiso sobre la resolución, esa etapa ni se agrega
+      // (ver `etapas` más abajo) — ahí no hay a dónde avanzar, así que se
+      // mantiene el volver al listado de siempre.
+      if (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve')) {
+        setPasoActual((p) => p + 1)
+      } else {
+        onVolver?.()
+      }
     } catch {
       // se deja `confirmandoFinal` abierto para reintentar sin perder el
       // contexto de qué se estaba por confirmar
@@ -625,12 +670,14 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
       titulo: 'Datos generales',
       completa: true,
       contenido: (
-        // El aviso de "falta un dato" vive acá y no en el encabezado: los
-        // campos que pueden quedarse sin opción (producto, proveedor, lote)
-        // son justo los de esta sección, así que la salida tiene que estar
-        // donde aparece el problema, no a media pantalla de distancia.
-        <SeccionFormulario numero={1} titulo="Datos generales" acciones={<AvisoFaltante onEnviar={solicitarAlta} />}>
-          <DatosGeneralesLote valores={generales} opciones={listados} />
+        <SeccionFormulario numero={1} titulo="Datos generales">
+          <DatosGeneralesLote
+            valores={generales}
+            opciones={listados}
+            soloLectura={soloLectura}
+            onCambiarFecha={(v) => setGenerales((g) => ({ ...g, fecha: v }))}
+            onCambiarHoraInicio={(v) => setGenerales((g) => ({ ...g, horaInicio: v }))}
+          />
         </SeccionFormulario>
       ),
     },
@@ -787,6 +834,30 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
         </>
       ),
     },
+    // Emitir la resolución de Calidad + el visto bueno gerencial — antes
+    // una pantalla propia (PanelAprobacionResolucion.jsx), solo alcanzable
+    // desde un botón aparte. Pedido explícito: que sea un paso más de este
+    // mismo formulario en vez de un trámite a parte. Recién existe una vez
+    // que la inspección está FINALIZADA (antes no hay nada que resolver), y
+    // solo si esta persona podría hacer algo en algún momento del ciclo —
+    // mismo gate que tenía el botón que reemplaza (ver PanelCalidadRecepcion.jsx).
+    inspection.status === 'FINALIZADA' &&
+      (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve')) && {
+        id: 'resolucion',
+        titulo: 'Resolución y visto bueno de Calidad',
+        completa: true,
+        contenido: (
+          <SeccionFormulario titulo="Resolución y visto bueno de Calidad">
+            <SeccionResolucionCalidad
+              inspection={inspection}
+              qualityResolution={qualityResolution}
+              summary={summary}
+              permisos={permisos}
+              onCambio={recargar}
+            />
+          </SeccionFormulario>
+        ),
+      },
   ].filter(Boolean)
 
   return (

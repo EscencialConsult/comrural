@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Scale, FlaskConical, ShieldCheck, CheckCircle2, Package, Info, Loader2 } from 'lucide-react'
 import { ORDEN_CATEGORIAS, CATEGORIA_LABEL, CATEGORIA_ICON, CATEGORIA_ESTILO } from '../../config/analisisCategorias'
 import { UNIDADES_SUBMUESTRA, aGramos } from '../../config/laboratoriosDestino'
@@ -55,65 +55,39 @@ export default function FormularioAsignarLaboratorio({
 
   const nombreItem = (item) => (item.isCustom ? item.otherTestName : item.name)
 
-  // Marca de trabajo (no persiste): qué ensayos están tildados AHORA para
-  // asignarlos juntos. Arranca vacío — a pedido explícito, para forzar una
-  // elección consciente en vez de asumir "todo lo que pidió Calidad".
-  const [marcados, setMarcados] = useState(() => new Set())
-
-  // Ensayos con la asignación en vuelo ahora mismo (mientras dura el POST
-  // .../assign-modality) — solo para el feedback visual de "se está
-  // asignando" en la lista y los botones.
+  // Ensayos con la asignación en vuelo ahora mismo (mientras dura su POST
+  // .../assign-modality) — para el spinner de esa fila puntual. Ya no hay
+  // "marcar varios y elegir después": a pedido explícito, cada ensayo tiene
+  // sus propios 2 botones (Interno/Externo) y se asigna al toque, uno por
+  // uno — la selección múltiple anterior obligaba a un paso de más cuando
+  // la mayoría de las veces se decide ensayo por ensayo de todos modos.
   const [asignandoIds, setAsignandoIds] = useState(() => new Set())
 
-  // Si la solicitud se recarga (después de asignar), se sacan de la marca
-  // los ensayos que ya no existen.
-  useEffect(() => {
-    setMarcados((prev) => new Set(itemsActivos.filter((i) => prev.has(i.id)).map((i) => i.id)))
-  }, [itemsActivos])
-
-  const todosMarcados = marcados.size === itemsActivos.length && itemsActivos.length > 0
-  const alternarTodos = () => setMarcados(todosMarcados ? new Set() : new Set(itemsActivos.map((i) => i.id)))
-
-  const alternarMarcado = (itemId) => {
-    setMarcados((prev) => {
-      const siguiente = new Set(prev)
-      if (siguiente.has(itemId)) siguiente.delete(itemId)
-      else siguiente.add(itemId)
-      return siguiente
-    })
-  }
-
   // Un ensayo sin planilla interna en el catálogo (internalReportType null)
-  // no puede procesarse internamente — no habría dónde volcar su resultado.
-  // El backend lo rechaza con 409; acá se anticipa deshabilitando la opción.
-  const marcadosSinPlantilla = useMemo(
-    () => itemsActivos.filter((i) => marcados.has(i.id) && !i.internalReportType),
-    [itemsActivos, marcados],
-  )
-  const puedeAsignarInterno = marcados.size > 0 && marcadosSinPlantilla.length === 0
+  // no puede procesarse internamente — no habría dónde volcar su resultado
+  // (el backend lo rechaza con 409). Para esos, el botón "Interno" queda
+  // deshabilitado y se avisa con una nota — "Externo" sigue exigiendo su
+  // propio clic igual que cualquier otro ensayo, no se pre-marca como ya
+  // elegido (pedido explícito, tras revisión: que no parezca ya asignado
+  // sin haberlo tocado).
+  const soloExterno = (item) => !item.internalReportType
 
-  const asignar = async (executionMode) => {
-    if (marcados.size === 0) return
+  const asignarUno = async (item, executionMode) => {
+    if (item.assignedExecutionMode === executionMode || asignandoIds.has(item.id)) return
     setError(null)
-    setGuardando(true)
-    const ids = Array.from(marcados)
-    setAsignandoIds(new Set(ids))
+    setAsignandoIds((prev) => new Set(prev).add(item.id))
     try {
-      const assignments = ids.map((itemId) => ({ itemId, executionMode }))
-      const actualizada = await analysisRequestsService.asignarModalidad(solicitud.id, assignments)
+      const actualizada = await analysisRequestsService.asignarModalidad(solicitud.id, [{ itemId: item.id, executionMode }])
       setSolicitud(actualizada)
       onActualizada?.(actualizada)
-      // Ya quedaron asignados — se desmarcan para dejar la selección lista
-      // para el próximo grupo de ensayos.
-      setMarcados(new Set())
-      toast.success(
-        `${assignments.length} ensayo${assignments.length === 1 ? '' : 's'} asignado${assignments.length === 1 ? '' : 's'} a laboratorio ${executionMode === 'INTERNAL' ? 'interno' : 'externo'}.`,
-      )
     } catch (err) {
       setError(err.message)
     } finally {
-      setGuardando(false)
-      setAsignandoIds(new Set())
+      setAsignandoIds((prev) => {
+        const siguiente = new Set(prev)
+        siguiente.delete(item.id)
+        return siguiente
+      })
     }
   }
 
@@ -225,25 +199,16 @@ export default function FormularioAsignarLaboratorio({
       {!soloLectura && paso === 'modalidad' && (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-marron-cafe/60">Marcá los ensayos y elegí dónde se procesan.</p>
-            <div className="flex shrink-0 items-center gap-3">
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                  faltanAsignar === 0 && itemsActivos.length > 0
-                    ? 'bg-verde-hoja/15 text-verde-bosque'
-                    : 'bg-marron-arcilla/15 text-marron-arcilla'
-                }`}
-              >
-                {totalAsignados}/{itemsActivos.length} asignados
-              </span>
-              <button
-                type="button"
-                onClick={alternarTodos}
-                className="text-xs font-medium text-verde-bosque underline decoration-verde-bosque/40 underline-offset-2 transition-colors duration-150 hover:text-marron-cafe"
-              >
-                {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
-              </button>
-            </div>
+            <p className="text-sm text-marron-cafe/60">Elegí, ensayo por ensayo, dónde se procesa.</p>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                faltanAsignar === 0 && itemsActivos.length > 0
+                  ? 'bg-verde-hoja/15 text-verde-bosque'
+                  : 'bg-marron-arcilla/15 text-marron-arcilla'
+              }`}
+            >
+              {totalAsignados}/{itemsActivos.length} asignados
+            </span>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -258,44 +223,61 @@ export default function FormularioAsignarLaboratorio({
                     </div>
                     <p className="text-xs font-bold uppercase tracking-wide text-marron-cafe/70">{CATEGORIA_LABEL[cat]}</p>
                   </div>
-                  <ul className="flex flex-col gap-1">
+                  <ul className="flex flex-col gap-2">
                     {items.map((item) => {
-                      const marcado = marcados.has(item.id)
                       const asignando = asignandoIds.has(item.id)
+                      // Sin planilla interna en el catálogo: "Interno" queda
+                      // deshabilitado (no hay dónde volcar el resultado), y
+                      // se avisa con la nota de abajo — pero "Externo" NO se
+                      // pre-resalta, sigue exigiendo su propio clic como
+                      // cualquier otro ensayo (pedido explícito: que no
+                      // parezca ya asignado sin haberlo tocado).
+                      const forzadoExterno = soloExterno(item)
+                      const activoInterno = item.assignedExecutionMode === 'INTERNAL'
+                      const activoExterno = item.assignedExecutionMode === 'EXTERNAL'
                       return (
-                        <li key={item.id}>
-                          <label
-                            className={`flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 transition-colors duration-150 ${
-                              asignando ? 'animate-pulse bg-verde-lima/25' : marcado ? 'bg-verde-lima/15' : 'hover:bg-white/70'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={marcado}
-                              disabled={asignando}
-                              onChange={() => alternarMarcado(item.id)}
-                              className="size-4 shrink-0 accent-verde-lima"
-                            />
-                            <span className="flex-1 text-sm text-marron-cafe">{nombreItem(item)}</span>
-                            {asignando && (
-                              <span className="flex shrink-0 items-center gap-1 rounded-full bg-verde-hoja/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-verde-bosque">
-                                <Loader2 className="size-3 animate-spin" strokeWidth={2.5} />
-                                Asignando…
-                              </span>
-                            )}
-                            {!asignando && item.assignedExecutionMode === 'INTERNAL' && (
-                              <span className="badge-in flex shrink-0 items-center gap-1 rounded-full bg-verde-hoja/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-verde-bosque">
-                                <FlaskConical className="size-3" strokeWidth={2.5} />
+                        <li key={item.id} className="flex flex-col gap-1 rounded-xl bg-white/50 p-2">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="min-w-0 flex-1 text-sm text-marron-cafe">{nombreItem(item)}</span>
+                            {asignando && <Loader2 className="size-3.5 shrink-0 animate-spin text-verde-bosque" strokeWidth={2.5} />}
+                            <div className="flex shrink-0 gap-1">
+                              <button
+                                type="button"
+                                disabled={forzadoExterno || asignando}
+                                onClick={() => asignarUno(item, 'INTERNAL')}
+                                title={forzadoExterno ? 'Sin planilla interna en el catálogo — solo puede procesarse externamente.' : undefined}
+                                className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-bold transition-colors duration-150 disabled:pointer-events-none ${
+                                  activoInterno
+                                    ? 'border-verde-bosque bg-verde-bosque text-white shadow-sm'
+                                    : forzadoExterno
+                                      ? 'border-dashed border-marron-tierra/15 text-marron-cafe/25'
+                                      : 'border-verde-bosque/30 text-verde-bosque hover:bg-verde-hoja/15'
+                                }`}
+                              >
+                                <FlaskConical className="size-3" strokeWidth={2.25} />
                                 Interno
-                              </span>
-                            )}
-                            {!asignando && item.assignedExecutionMode === 'EXTERNAL' && (
-                              <span className="badge-in flex shrink-0 items-center gap-1 rounded-full bg-oro-quinua/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-oro-quinua">
-                                <ShieldCheck className="size-3" strokeWidth={2.5} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={asignando}
+                                onClick={() => asignarUno(item, 'EXTERNAL')}
+                                className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-bold transition-colors duration-150 disabled:pointer-events-none ${
+                                  activoExterno
+                                    ? 'border-oro-quinua bg-oro-quinua text-marron-cafe shadow-sm'
+                                    : 'border-oro-quinua/40 text-oro-quinua hover:bg-oro-quinua/15'
+                                }`}
+                              >
+                                <ShieldCheck className="size-3" strokeWidth={2.25} />
                                 Externo
-                              </span>
-                            )}
-                          </label>
+                              </button>
+                            </div>
+                          </div>
+                          {forzadoExterno && (
+                            <p className="flex items-start gap-1 text-[11px] text-marron-arcilla">
+                              <Info className="mt-0.5 size-3 shrink-0" strokeWidth={2} />
+                              Sin planilla interna en el catálogo.
+                            </p>
+                          )}
                         </li>
                       )
                     })}
@@ -303,57 +285,6 @@ export default function FormularioAsignarLaboratorio({
                 </div>
               )
             })}
-          </div>
-
-          <div className="flex flex-col gap-2.5 rounded-2xl bg-marron-tierra/5 p-4">
-            <p className="text-xs font-medium text-marron-cafe/50">
-              {marcados.size > 0
-                ? `${marcados.size} ensayo${marcados.size === 1 ? '' : 's'} marcado${marcados.size === 1 ? '' : 's'} — elegí dónde se procesan`
-                : 'Marcá ensayos arriba para poder asignarlos'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={!puedeAsignarInterno || guardando}
-                onClick={() => asignar('INTERNAL')}
-                className="flex items-center gap-1.5 rounded-full border border-verde-bosque/30 px-3.5 py-1.5 text-xs font-medium text-verde-bosque transition-colors duration-150 hover:bg-verde-hoja/15 disabled:pointer-events-none disabled:opacity-40"
-              >
-                {guardando ? (
-                  <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
-                ) : (
-                  <FlaskConical className="size-3.5" strokeWidth={2} />
-                )}
-                {guardando ? 'Asignando…' : 'Laboratorio interno'}
-              </button>
-              <button
-                type="button"
-                disabled={marcados.size === 0 || guardando}
-                onClick={() => asignar('EXTERNAL')}
-                className="flex items-center gap-1.5 rounded-full border border-oro-quinua/40 px-3.5 py-1.5 text-xs font-medium text-oro-quinua transition-colors duration-150 hover:bg-oro-quinua/15 disabled:pointer-events-none disabled:opacity-40"
-              >
-                {guardando ? (
-                  <Loader2 className="size-3.5 animate-spin" strokeWidth={2} />
-                ) : (
-                  <ShieldCheck className="size-3.5" strokeWidth={2} />
-                )}
-                {guardando ? 'Asignando…' : 'Laboratorio externo'}
-              </button>
-            </div>
-
-            {/* Por qué "interno" puede estar deshabilitado con ensayos
-                marcados: el catálogo no le asignó ninguna planilla interna a
-                esos ensayos, así que el laboratorio no tiene dónde volcar su
-                resultado. */}
-            {marcadosSinPlantilla.length > 0 && (
-              <p className="flex items-start gap-1.5 text-xs text-marron-arcilla">
-                <Info className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} />
-                <span>
-                  {marcadosSinPlantilla.map(nombreItem).join(', ')} no tiene
-                  {marcadosSinPlantilla.length === 1 ? '' : 'n'} planilla interna en el catálogo — solo puede
-                  {marcadosSinPlantilla.length === 1 ? '' : 'n'} procesarse externamente.
-                </span>
-              </p>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -394,7 +325,20 @@ export default function FormularioAsignarLaboratorio({
                 </span>
               ))}
             </div>
-            <div className="grid grid-cols-[1fr_auto] gap-3">
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-2xl border border-marron-tierra/10 p-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-marron-tierra/10 text-marron-cafe/60">
+                <Scale className="size-4.5" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-marron-cafe">Peso de la muestra</p>
+                <p className="text-xs text-marron-cafe/50">Cuánto se aparta para el trabajo interno.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
               <FormInput
                 label="Cantidad preparada"
                 type="number"
@@ -403,8 +347,14 @@ export default function FormularioAsignarLaboratorio({
                 placeholder="0"
                 value={cantidadInterna}
                 onChange={(e) => setCantidadInterna(e.target.value)}
+                className="min-w-[8rem] flex-1"
               />
-              <FormSelect label="Unidad" value={unidadInterna} onChange={(e) => setUnidadInterna(e.target.value)}>
+              <FormSelect
+                label="Unidad"
+                value={unidadInterna}
+                onChange={(e) => setUnidadInterna(e.target.value)}
+                className="w-24 shrink-0"
+              >
                 {UNIDADES_SUBMUESTRA.map((u) => (
                   <option key={u} value={u}>
                     {u}
@@ -412,16 +362,26 @@ export default function FormularioAsignarLaboratorio({
                 ))}
               </FormSelect>
             </div>
-          </div>
 
-          {muestraTotalGramos !== null && internaGramos !== null && (
-            <p className={`flex items-center gap-1.5 text-xs font-medium ${excedeMuestra ? 'text-rojo-pasankalla' : 'text-marron-cafe/45'}`}>
-              <Package className="size-3.5 shrink-0" strokeWidth={1.75} />
-              {excedeMuestra
-                ? `Lo preparado (${internaGramos} g) supera la muestra total (${solicitud.sample.quantity} ${unidadMuestra}).`
-                : `${internaGramos} g de ${solicitud.sample.quantity} ${unidadMuestra} disponibles.`}
-            </p>
-          )}
+            {muestraTotalGramos !== null && (
+              <div className="flex flex-col gap-1.5">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-marron-tierra/10">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${excedeMuestra ? 'bg-rojo-pasankalla' : 'bg-verde-bosque'}`}
+                    style={{ width: `${Math.min(100, ((internaGramos ?? 0) / muestraTotalGramos) * 100)}%` }}
+                  />
+                </div>
+                <p className={`flex items-center gap-1.5 text-xs font-medium ${excedeMuestra ? 'text-rojo-pasankalla' : 'text-marron-cafe/45'}`}>
+                  <Package className="size-3.5 shrink-0" strokeWidth={1.75} />
+                  {excedeMuestra
+                    ? `Lo preparado (${internaGramos} g) supera la muestra total (${solicitud.sample.quantity} ${unidadMuestra}).`
+                    : internaGramos !== null
+                      ? `${internaGramos} g de ${solicitud.sample.quantity} ${unidadMuestra} disponibles.`
+                      : `Muestra total disponible: ${solicitud.sample.quantity} ${unidadMuestra}.`}
+                </p>
+              </div>
+            )}
+          </div>
 
           {externos.length > 0 && (
             <p className="flex items-start gap-1.5 rounded-xl bg-oro-quinua/10 px-3 py-2 text-xs text-marron-cafe/70">

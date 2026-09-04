@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
-import { Printer, Save, CircleCheck } from 'lucide-react'
+import { Save, CircleCheck } from 'lucide-react'
 import { PARAMETROS_MICROBIOLOGICO } from '../../config/informeMicrobiologicoParametros'
-import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import BotonVolver from '../BotonVolver.jsx'
 import Button from '../Button.jsx'
 import FormInput from '../FormInput.jsx'
@@ -37,10 +36,9 @@ export default function InformeAnalisisMicrobiologico({
   onVolver,
   onGuardar,
   onFinalizar,
-  autoImprimir = false,
+  areaImprimibleRef,
 }) {
   const finalizada = estado === 'FINALIZADO'
-  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#ffffff' })
 
   useEffect(() => {
     if (!finalizada && valores['fecha-inicio-analisis'] === undefined) {
@@ -51,29 +49,11 @@ export default function InformeAnalisisMicrobiologico({
     // remonta el componente entero) — no en cada cambio de `valores`.
   }, [])
 
-  // Mismo criterio que InformeAnalisisFisicoquimico.jsx: la tarjeta ya
-  // finalizada dice "Imprimir" (ver TarjetaCategoria.jsx), ese clic ya
-  // dispara el PDF apenas se monta esta planilla de solo lectura.
-  useEffect(() => {
-    if (autoImprimir) generarPdf()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <BotonVolver onClick={onVolver} ariaLabel="Volver a categorías" />
         <h2 className="text-lg font-bold text-marron-cafe">Informe de análisis — Microbiológico</h2>
-        {errorPdf && <span className="text-xs font-medium text-rojo-pasankalla">{errorPdf}</span>}
-        <button
-          type="button"
-          onClick={generarPdf}
-          disabled={generandoPdf}
-          className="ml-auto flex items-center gap-1.5 rounded-full bg-marron-tierra/10 px-3 py-1.5 text-xs font-semibold text-marron-cafe transition-colors duration-150 hover:bg-marron-tierra/20 disabled:opacity-50"
-        >
-          <Printer className="size-3.5" strokeWidth={2} />
-          {generandoPdf ? 'Generando PDF…' : 'Imprimir'}
-        </button>
       </div>
 
       <p className="rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs text-marron-cafe/70">

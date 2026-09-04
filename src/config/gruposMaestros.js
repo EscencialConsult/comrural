@@ -4,10 +4,10 @@ import {
   Building2,
   Handshake,
   Boxes,
-  Layers,
   ShoppingCart,
   SlidersHorizontal,
   ClipboardList,
+  ClipboardCheck,
   LayoutGrid,
   FlaskConical,
   Warehouse,
@@ -55,7 +55,25 @@ export const GRUPOS_MAESTROS = [
         Icon: Handshake,
       },
       { id: 'productos', nombre: 'Productos', ruta: '/panel/productos', permiso: 'products:read', Icon: Boxes },
-      { id: 'lotes', nombre: 'Lotes', ruta: '/panel/lotes', permiso: 'lots:read', Icon: Layers },
+    ],
+  },
+  {
+    // Igual que 'configuracion': no es un módulo de negocio de modulos.json,
+    // así que DashboardSidebar.jsx lo resuelve aparte (subitemsUsuarios,
+    // mismo criterio que subitemsConfiguracion) en vez de por el
+    // modulos.map() genérico. Entra acá solo para que esta sea la ÚNICA
+    // fuente de "padre + hermanas" — así GrupoTabs.jsx (las pastillas
+    // arriba de la pantalla) funciona gratis, sin un caso especial más.
+    id: 'usuarios',
+    padre: { nombre: 'Usuarios', ruta: '/panel/usuarios', permiso: 'iam:read', Icon: Users },
+    items: [
+      {
+        id: 'roles',
+        nombre: 'Roles y permisos',
+        ruta: '/panel/usuarios/roles',
+        permiso: 'iam:read',
+        Icon: ShieldCheck,
+      },
     ],
   },
   {
@@ -81,15 +99,30 @@ export const GRUPOS_MAESTROS = [
     id: 'configuracion',
     padre: { nombre: 'Configuración', ruta: '/panel/configuracion', Icon: SlidersHorizontal },
     items: [
-      { id: 'paises', nombre: 'Países', ruta: '/panel/paises', permiso: 'countries:read', Icon: Globe },
+      {
+        id: 'paises',
+        nombre: 'Países',
+        ruta: '/panel/paises',
+        permiso: 'countries:read',
+        Icon: Globe,
+        descripcion: 'Catálogo de países usados en direcciones, teléfonos y datos de proveedores.',
+      },
       {
         id: 'formularios',
         nombre: 'Formularios',
         ruta: '/panel/formularios',
         permiso: 'forms:read',
         Icon: ClipboardList,
+        descripcion: 'Plantillas de formulario y sus campos — la base de los registros dinámicos del sistema.',
       },
-      { id: 'areas', nombre: 'Áreas', ruta: '/panel/areas', permiso: 'areas:read', Icon: LayoutGrid },
+      {
+        id: 'areas',
+        nombre: 'Áreas',
+        ruta: '/panel/areas',
+        permiso: 'areas:read',
+        Icon: LayoutGrid,
+        descripcion: 'Áreas de planta a las que se asocian formularios y registros de producción.',
+      },
     ],
   },
   {
@@ -142,17 +175,32 @@ export const GRUPOS_MAESTROS = [
         permiso: 'samples:read',
         Icon: TestTubes,
       },
+      // Control de proceso de Área A (control-proceso-a) — lo llena un
+      // inspector de Calidad sobre el lavado que registra Producción, pero
+      // el permiso real es propio (control-proceso-a:read, agregado en
+      // 0035), no lots:read — pedido explícito: vive en Calidad, no dentro
+      // del grupo Producción, ver comrural_erp_backend/docs/control-proceso-a.md.
+      {
+        id: 'control-proceso',
+        nombre: 'Control de Proceso',
+        ruta: '/panel/calidad/control-proceso',
+        permiso: 'control-proceso-a:read',
+        Icon: ClipboardCheck,
+      },
     ],
   },
   {
     id: 'produccion',
     // Mismo criterio que Calidad/Almacén: "Producción" (el padre) es el
-    // Inicio del área — solo dashboard/analytics — y las dos hermanas son
-    // las áreas FÍSICAS reales de la planta, no pantallas por tipo de
-    // dato. Adentro de cada una vive su propia fila de subpestañas locales
-    // (PillTabs, ver SeccionAreaA.jsx/SeccionAreaB.jsx) con los formularios
-    // de esa área — esas subpestañas NO son rutas, viven en un solo nivel
-    // más abajo que esto.
+    // Inicio del área — solo dashboard/analytics — y "Área A" es la única
+    // área física conectada al backend real (production-area-a). "Área B"
+    // se sacó por completo (pedido explícito) — era 100% mockup, sin ningún
+    // módulo de backend detrás; no queda ni la ruta, ni la pantalla, ni sus
+    // 5 formularios, ver comrural_erp_backend/docs/production-area-a.md.
+    // Adentro de "Área A" vive su propia fila de subpestañas locales
+    // (PillTabs, ver SeccionAreaA.jsx) con los formularios de esa área —
+    // esas subpestañas NO son rutas, viven en un solo nivel más abajo que
+    // esto.
     padre: { nombre: 'Producción', ruta: '/panel/produccion', permiso: 'produccion:read', Icon: Factory },
     items: [
       {
@@ -161,13 +209,6 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/produccion/area-a',
         permiso: 'produccion:read',
         Icon: Warehouse,
-      },
-      {
-        id: 'area-b',
-        nombre: 'Área B',
-        ruta: '/panel/produccion/area-b',
-        permiso: 'produccion:read',
-        Icon: Factory,
       },
     ],
   },

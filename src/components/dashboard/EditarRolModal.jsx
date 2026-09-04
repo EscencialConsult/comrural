@@ -22,7 +22,12 @@ export default function EditarRolModal({ rol, catalogoPorModulo, onCerrar, onGua
       .then((detalle) => {
         if (cancelado) return
         setDescripcion(detalle.description ?? '')
-        setSeleccion(new Set(detalle.permissionIds))
+        const clavesAsignadas = new Set(detalle.permissions)
+        const idsAsignados = Object.values(catalogoPorModulo)
+          .flatMap((grupo) => grupo.permisos)
+          .filter((p) => clavesAsignadas.has(`${p.module}:${p.action}`))
+          .map((p) => p.id)
+        setSeleccion(new Set(idsAsignados))
         setCargando(false)
       })
       .catch((err) => {

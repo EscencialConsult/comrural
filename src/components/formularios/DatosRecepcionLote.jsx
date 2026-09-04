@@ -10,14 +10,18 @@ import CampoFechaHora from './CampoFechaHora.jsx'
 // navegar a la recepción de otro lote; pedido explícito: el lote
 // designado queda fijo, no editable desde acá.
 //
-// Fecha y horas vuelven a `disabled` fijo — corrección post-revisión: se
-// habían hecho editables con el botón "hoy" de CampoFechaHora para igualar
-// el diseño de DatosGeneralesLote.jsx, pero `startedAt`/`completedAt` los
-// sella el propio backend y no aceptan `PATCH` (confirmado contra
-// warehouse-receipts.md) — era un callejón sin salida, se podía tocar,
-// nunca se guardaba. Mismo criterio ahora en los dos formularios: se
-// muestran, no se editan.
-export default function DatosRecepcionLote({ valores }) {
+// Fecha/hora de inicio SÍ son editables ahora (pedido explícito). El botón
+// "Iniciar" de la lista de Almacén no crea nada — solo ABRE este
+// formulario (recién "Finalizar recepción" al final del asistente hace el
+// POST real). Por eso `FormularioIngresoMateriaPrima.jsx` captura el
+// momento actual del lado del cliente apenas se abre (mismo instante que
+// "Iniciar"), lo deja editable acá, y al "Finalizar recepción" lo manda por
+// PATCH justo después del POST — así lo que se ve en pantalla es lo mismo
+// que termina guardado, sin depender de que el POST y el click de "Iniciar"
+// coincidan en el tiempo. Hora final sigue fija: la sella el backend al
+// cerrar (`complete: true`) y no hay pedido de editarla.
+export default function DatosRecepcionLote({ valores, soloLectura, onCambiarFecha, onCambiarHoraInicio }) {
+  const inicioEditable = !soloLectura && Boolean(valores.fecha)
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
       <SelectorDeBase
@@ -36,9 +40,9 @@ export default function DatosRecepcionLote({ valores }) {
           tipo="date"
           label="Fecha de recepción"
           valor={valores.fecha}
-          onChange={() => {}}
-          disabled
-          hint={valores.fecha ? undefined : 'Se completa al iniciar la recepción'}
+          onChange={inicioEditable ? onCambiarFecha : () => {}}
+          disabled={!inicioEditable}
+          hint={valores.fecha ? undefined : 'Se guarda al presionar "Finalizar recepción" — se puede ajustar antes'}
         />
       </div>
 
@@ -58,9 +62,9 @@ export default function DatosRecepcionLote({ valores }) {
           tipo="time"
           label="Hora inicio"
           valor={valores.horaInicio}
-          onChange={() => {}}
-          disabled
-          hint={valores.horaInicio ? undefined : 'Se completa al iniciar la recepción'}
+          onChange={inicioEditable ? onCambiarHoraInicio : () => {}}
+          disabled={!inicioEditable}
+          hint={valores.horaInicio ? undefined : 'Se guarda al presionar "Finalizar recepción" — se puede ajustar antes'}
         />
       </div>
       <div className="sm:col-span-2">

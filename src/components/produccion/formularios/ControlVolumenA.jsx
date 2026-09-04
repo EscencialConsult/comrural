@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Download, Plus, Trash2 } from 'lucide-react'
-import { produccionService } from '../../../services/produccionService'
-import { useGenerarPdf } from '../../../hooks/useGenerarPdf'
+import { Plus } from 'lucide-react'
+import { lotsService } from '../../../services/lotsService'
+import { productsService } from '../../../services/productsService'
+import { shiftsService } from '../../../services/shiftsService'
+import { productionAreaAService } from '../../../services/productionAreaAService'
 import { useSolicitud } from '../../../hooks/useSolicitud'
 import { toast } from '../../../lib/toast'
 import Badge from '../../Badge.jsx'
@@ -12,335 +14,297 @@ import FirmasResponsables from '../../formularios/FirmasResponsables.jsx'
 import FormInput from '../../FormInput.jsx'
 import FormSelect from '../../FormSelect.jsx'
 import Skeleton from '../../Skeleton.jsx'
-
-const TIPOS_QUINUA = ['Blanca', 'Negra', 'Roja']
-const TURNOS = [1, 2, 3]
+import EmptyState from '../../EmptyState.jsx'
 
 const RESPONSABLES = [
   { rol: 'Llena', puesto: 'Encargado de grupo' },
   { rol: 'Verifica', puesto: 'Supervisor de Producción' },
 ]
 
-// Sección "Subproductos/Mermas" del papel (a-e) — nombres reales según RP-09:
-// "producto bueno = quinua lavada; subproductos = para trillar y menuda;
-// merma = paja húmeda, piedra y saponina" → 3 de merma + 2 de subproducto,
-// mismo orden a-e que usa el formulario real.
+// Sección "Subproductos/Mermas" del papel (a-e) — nombres reales según RP-09,
+// mismos que la versión mock anterior. `merma_kg` = suma de las 5 (SUG-01
+// del backend, ver comrural_erp_backend/docs/production-area-a.md §3).
 const COLUMNAS_MERMA = [
-  { key: 'a', label: 'a) Paja húmeda' },
-  { key: 'b', label: 'b) Piedra' },
-  { key: 'c', label: 'c) Saponina' },
-  { key: 'd', label: 'd) Para trillar' },
-  { key: 'e', label: 'e) Menuda' },
+  { key: 'trillarKg', label: 'Para trillar' },
+  { key: 'menudaKg', label: 'Menuda' },
+  { key: 'pajaKg', label: 'Paja húmeda' },
+  { key: 'piedraKg', label: 'Piedra' },
+  { key: 'saponinaKg', label: 'Saponina' },
 ]
 
-const CABECERA_VACIA = { tipoQuinua: '', loteMpId: '', numeroSacos: null, totalKg: null }
-
-let siguienteFilaId = 1
-function filaVacia() {
-  return {
-    id: siguienteFilaId++,
-    fecha: new Date().toLocaleDateString('en-CA'),
-    turno: 1,
-    bolsasRecibidas: null,
-    bolsasUtilizadas: null,
-    sacosLavadosBolsas: null,
-    sacosLavadosKg: null,
-    a: null,
-    b: null,
-    c: null,
-    d: null,
-    e: null,
-    observaciones: '',
-  }
+const FORM_VACIO = {
+  lotId: '',
+  shiftId: '',
+  entryDate: new Date().toLocaleDateString('en-CA'),
+  usedBags: null,
+  usedKg: null,
+  washedBags: null,
+  washedKg: null,
+  trillarKg: null,
+  menudaKg: null,
+  pajaKg: null,
+  piedraKg: null,
+  saponinaKg: null,
 }
 
-// Formulario 2 del relevamiento — registro central de Área A. Balance
-// pedido (RP-10): Utilizados(A) + DIF = Lavados(B) + Merma(a+b+c+d+e), con
-// DIF = "ganancia de peso por humedad en el lavado" (se espera positiva).
-// Acá DIF se CALCULA como el residuo de esa ecuación por turno (no es un
-// dato que se tipee aparte) y se marca en rojo si da negativo — sería una
-// pérdida de peso inesperada, no la ganancia por humedad que describe la
-// regla.
-export default function ControlVolumenA() {
-  const [lotesMp, setLotesMp] = useState(null)
-  const [cabecera, setCabecera] = useState(CABECERA_VACIA)
-  const [filas, setFilas] = useState([filaVacia()])
-  const { areaImprimibleRef, generandoPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
+// Estados de lote donde tiene sentido seguir cargando entradas de lavado —
+// mismo criterio que SamplesService.create ampliado en 0035 (ver
+// docs/production-area-a.md §3): un lote puede recibir varios turnos antes
+// de completar el total almacenado y pasar a LAVADO.
+const ESTADOS_CANDIDATOS = ['ACEPTADO_RECEPCION', 'LAVADO']
+
+// Formulario 2 del relevamiento — registro real de Área A
+// (production-area-a). A diferencia de la versión mock anterior (una tabla
+// con muchas filas/turnos a la vez), el backend modela UNA fila por
+// lote×turno×fecha operativa: acá se da de alta una entrada por vez, y
+// abajo se lista el historial ya cargado de ese lote.
+export default function ControlVolumenA({ loteInicialId }) {
+  const [lotes, setLotes] = useState(null)
+  const [productos, setProductos] = useState(null)
+  const [turnos, setTurnos] = useState(null)
+  const [errorCarga, setErrorCarga] = useState(null)
+  const [form, setForm] = useState({ ...FORM_VACIO, lotId: loteInicialId ?? '' })
+  const [historial, setHistorial] = useState(null)
   const { enviando, ejecutar } = useSolicitud()
 
   useEffect(() => {
     let cancelado = false
-    produccionService.listarLotesMp().then((data) => !cancelado && setLotesMp(data))
+    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), shiftsService.listar()])
+      .then(([lotesResp, productosResp, turnosResp]) => {
+        if (cancelado) return
+        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_CANDIDATOS.includes(l.currentStatus)))
+        setProductos(productosResp.data)
+        setTurnos(turnosResp)
+      })
+      .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true
     }
   }, [])
 
-  const actualizarCabecera = (campo) => (valor) => setCabecera((c) => ({ ...c, [campo]: valor }))
-  const actualizarFila = (id, campo) => (valor) =>
-    setFilas((fs) => fs.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)))
-  const agregarFila = () => setFilas((fs) => [...fs, filaVacia()])
-  const quitarFila = (id) => setFilas((fs) => fs.filter((f) => f.id !== id))
+  useEffect(() => {
+    if (!form.lotId) {
+      setHistorial(null)
+      return
+    }
+    let cancelado = false
+    productionAreaAService
+      .listarPorLote(form.lotId)
+      .then((data) => !cancelado && setHistorial(data))
+      .catch((err) => !cancelado && setErrorCarga(err.message))
+    return () => {
+      cancelado = true
+    }
+  }, [form.lotId])
 
-  const pesoPromedioKg =
-    cabecera.numeroSacos > 0 && cabecera.totalKg != null ? cabecera.totalKg / cabecera.numeroSacos : null
+  const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
+  const turnoNombre = (id) => turnos?.find((t) => t.id === id)?.name ?? '—'
 
-  const filasConCalculo = filas.map((f) => {
-    const saldoBolsas = (f.bolsasRecibidas ?? 0) - (f.bolsasUtilizadas ?? 0)
-    const merma = COLUMNAS_MERMA.reduce((acc, { key }) => acc + (f[key] ?? 0), 0)
-    const utilizadosKg = pesoPromedioKg != null ? (f.bolsasUtilizadas ?? 0) * pesoPromedioKg : null
-    const dif = utilizadosKg != null ? (f.sacosLavadosKg ?? 0) + merma - utilizadosKg : null
-    return { ...f, saldoBolsas, merma, dif }
-  })
+  const actualizar = (campo) => (valor) => setForm((f) => ({ ...f, [campo]: valor }))
 
-  const totales = filasConCalculo.reduce(
-    (acc, f) => ({
-      bolsasRecibidas: acc.bolsasRecibidas + (f.bolsasRecibidas ?? 0),
-      bolsasUtilizadas: acc.bolsasUtilizadas + (f.bolsasUtilizadas ?? 0),
-      sacosLavadosKg: acc.sacosLavadosKg + (f.sacosLavadosKg ?? 0),
-      merma: acc.merma + f.merma,
-      dif: acc.dif + (f.dif ?? 0),
-    }),
-    { bolsasRecibidas: 0, bolsasUtilizadas: 0, sacosLavadosKg: 0, merma: 0, dif: 0 },
-  )
+  const merma = COLUMNAS_MERMA.reduce((acc, { key }) => acc + (form[key] ?? 0), 0)
+  const dif =
+    form.washedKg != null && form.usedKg != null ? form.washedKg + merma - form.usedKg : null
 
-  // RP-07: "el registro es por turno; un lote se cierra cuando la suma de
-  // los turnos completa el total ingresado" — comparado contra "No. Sacos"
-  // de la cabecera, que es el total del lote a procesar.
-  const loteCerrado = cabecera.numeroSacos > 0 && totales.bolsasUtilizadas >= cabecera.numeroSacos
+  const camposCompletos =
+    form.lotId &&
+    form.shiftId &&
+    form.entryDate &&
+    form.usedBags != null &&
+    form.usedKg != null &&
+    form.washedBags != null &&
+    form.washedKg != null &&
+    COLUMNAS_MERMA.every(({ key }) => form[key] != null)
 
   const registrar = async () => {
     try {
-      await ejecutar(() => produccionService.registrarVolumenA({ cabecera, filas: filasConCalculo }))
-      toast.success('Registro de Volumen A guardado.')
-    } catch {
-      toast.error('No se pudo guardar el registro.')
+      const dto = {
+        lotId: form.lotId,
+        shiftId: form.shiftId,
+        entryDate: form.entryDate,
+        usedBags: form.usedBags,
+        usedKg: form.usedKg,
+        washedBags: form.washedBags,
+        washedKg: form.washedKg,
+        trillarKg: form.trillarKg,
+        menudaKg: form.menudaKg,
+        pajaKg: form.pajaKg,
+        piedraKg: form.piedraKg,
+        saponinaKg: form.saponinaKg,
+      }
+      const creada = await ejecutar(() => productionAreaAService.crear(dto))
+      toast.success('Entrada de Volumen A registrada.')
+      setHistorial((h) => [creada, ...(Array.isArray(h) ? h : [])])
+      setForm({ ...FORM_VACIO, lotId: form.lotId })
+    } catch (err) {
+      toast.error(err.message ?? 'No se pudo guardar el registro.')
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div ref={areaImprimibleRef} className="flex flex-col gap-6">
-        <CabeceraFormulario
-          antetitulo="Registro"
-          titulo="Control de Volumen de Producción — Área A"
-          codigo="P-PRO-01/R-24"
-          version="02"
-          acciones={
-            <div className="flex items-center gap-2">
-              {cabecera.numeroSacos > 0 && (
-                <Badge tono={loteCerrado ? 'liberado' : 'info'}>{loteCerrado ? 'Lote cerrado' : 'En proceso'}</Badge>
-              )}
-              <Button variant="secondary" onClick={generarPdf} disabled={generandoPdf} className="px-4 py-2 text-xs">
-                <Download className="mr-1.5 size-3.5" strokeWidth={1.75} />
-                {generandoPdf ? 'Generando PDF…' : 'Exportar PDF'}
-              </Button>
-            </div>
-          }
-        />
+      <CabeceraFormulario
+        antetitulo="Registro"
+        titulo="Control de Volumen de Producción — Área A"
+        codigo="P-PRO-01/R-24"
+        version="02"
+      />
 
-        <SeccionFormulario numero={1} titulo="Cabecera">
-          {!lotesMp ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <FormSelect
-                label="Tipo de quinua"
-                value={cabecera.tipoQuinua}
-                onChange={(e) => actualizarCabecera('tipoQuinua')(e.target.value)}
-              >
-                <option value="">Seleccionar…</option>
-                {TIPOS_QUINUA.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </FormSelect>
+      {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
 
-              <FormSelect
-                label="Lote MP"
-                value={cabecera.loteMpId}
-                onChange={(e) => actualizarCabecera('loteMpId')(e.target.value)}
-              >
-                <option value="">Seleccionar…</option>
-                {lotesMp.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.code} · {l.product}
-                  </option>
-                ))}
-              </FormSelect>
+      <SeccionFormulario numero={1} titulo="Cabecera">
+        {!lotes || !turnos ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+            <Skeleton className="h-16" />
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormSelect label="Lote MP" value={form.lotId} onChange={(e) => actualizar('lotId')(e.target.value)}>
+              <option value="">Seleccionar…</option>
+              {lotes.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.code} · {productoNombre(l.productId)}
+                </option>
+              ))}
+            </FormSelect>
 
-              <FormInput
-                label="No. Sacos"
-                type="number"
-                min="0"
-                value={cabecera.numeroSacos ?? ''}
-                onChange={(e) => actualizarCabecera('numeroSacos')(e.target.value === '' ? null : Number(e.target.value))}
-              />
+            <FormSelect label="Turno" value={form.shiftId} onChange={(e) => actualizar('shiftId')(e.target.value)}>
+              <option value="">Seleccionar…</option>
+              {turnos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </FormSelect>
 
-              <FormInput
-                label="Total Kg"
-                type="number"
-                min="0"
-                value={cabecera.totalKg ?? ''}
-                onChange={(e) => actualizarCabecera('totalKg')(e.target.value === '' ? null : Number(e.target.value))}
-                hint={pesoPromedioKg != null ? `Promedio: ${pesoPromedioKg.toFixed(1)} kg/saco` : undefined}
-              />
-            </div>
+            <FormInput
+              label="Fecha operativa"
+              type="date"
+              value={form.entryDate}
+              onChange={(e) => actualizar('entryDate')(e.target.value)}
+            />
+          </div>
+        )}
+      </SeccionFormulario>
+
+      <SeccionFormulario numero={2} titulo="Volumen del turno">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormInput
+            label="Bolsas utilizadas"
+            type="number"
+            min="0"
+            value={form.usedBags ?? ''}
+            onChange={(e) => actualizar('usedBags')(e.target.value === '' ? null : Number(e.target.value))}
+          />
+          <FormInput
+            label="Kg utilizados"
+            type="number"
+            min="0"
+            step="0.001"
+            value={form.usedKg ?? ''}
+            onChange={(e) => actualizar('usedKg')(e.target.value === '' ? null : Number(e.target.value))}
+          />
+          <FormInput
+            label="Sacos lavados (bolsas)"
+            type="number"
+            min="0"
+            value={form.washedBags ?? ''}
+            onChange={(e) => actualizar('washedBags')(e.target.value === '' ? null : Number(e.target.value))}
+          />
+          <FormInput
+            label="Sacos lavados (Kg)"
+            type="number"
+            min="0"
+            step="0.001"
+            value={form.washedKg ?? ''}
+            onChange={(e) => actualizar('washedKg')(e.target.value === '' ? null : Number(e.target.value))}
+          />
+        </div>
+      </SeccionFormulario>
+
+      <SeccionFormulario
+        numero={3}
+        titulo="Subproductos y merma"
+        nota="DIF = Lavados + Merma − Utilizados (puede ser negativo — ganancia/pérdida de peso por humedad)."
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {COLUMNAS_MERMA.map(({ key, label }) => (
+            <FormInput
+              key={key}
+              label={label}
+              type="number"
+              min="0"
+              step="0.001"
+              value={form[key] ?? ''}
+              onChange={(e) => actualizar(key)(e.target.value === '' ? null : Number(e.target.value))}
+            />
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-marron-cafe">
+          <span>Merma total: {merma.toFixed(3)} kg</span>
+          {dif != null && (
+            <span className={`font-semibold ${dif < 0 ? 'text-rojo-pasankalla' : 'text-verde-bosque'}`}>
+              DIF: {dif.toFixed(3)} kg
+            </span>
           )}
-        </SeccionFormulario>
+        </div>
+      </SeccionFormulario>
 
-        <SeccionFormulario
-          numero={2}
-          titulo="Filas por turno"
-          nota="DIF = ganancia de peso por humedad en el lavado. Balance: Utilizados + DIF = Lavados + Merma."
-          acciones={
-            <Button variant="secondary" onClick={agregarFila} className="px-3 py-1.5 text-xs">
-              <Plus className="mr-1 size-3.5" strokeWidth={2} />
-              Agregar turno
-            </Button>
-          }
-        >
+      <SeccionFormulario numero={4} titulo="Firmas">
+        <FirmasResponsables responsables={RESPONSABLES} />
+      </SeccionFormulario>
+
+      <div className="flex justify-end">
+        <Button onClick={registrar} disabled={enviando || !camposCompletos}>
+          <Plus className="mr-1.5 size-4" strokeWidth={2} />
+          {enviando ? 'Guardando…' : 'Registrar entrada'}
+        </Button>
+      </div>
+
+      <SeccionFormulario numero={5} titulo="Historial del lote">
+        {!form.lotId ? (
+          <p className="text-sm text-marron-cafe/50">Elegí un lote arriba para ver sus entradas registradas.</p>
+        ) : historial === null ? (
+          <Skeleton className="h-24" />
+        ) : historial.length === 0 ? (
+          <EmptyState Icon={Plus} titulo="Todavía no hay entradas para este lote" />
+        ) : (
           <div className="overflow-x-auto rounded-2xl bg-white/70">
-            <table className="w-full min-w-[1200px] border-collapse text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-verde-hoja/35 text-left text-xs font-bold uppercase tracking-wide text-verde-bosque">
                   <th className="px-3 py-2.5">Fecha</th>
                   <th className="px-3 py-2.5">Turno</th>
-                  <th className="px-3 py-2.5">Bolsas recibidas</th>
-                  <th className="px-3 py-2.5">Bolsas utilizadas</th>
-                  <th className="px-3 py-2.5">Saldo bolsas</th>
-                  <th className="px-3 py-2.5">Sacos lavados (bolsas)</th>
-                  <th className="px-3 py-2.5">Sacos lavados (Kg)</th>
-                  {COLUMNAS_MERMA.map((c) => (
-                    <th key={c.key} className="px-3 py-2.5">
-                      {c.label}
-                    </th>
-                  ))}
-                  <th className="px-3 py-2.5">DIF</th>
-                  <th className="px-3 py-2.5">Observaciones</th>
-                  <th className="px-3 py-2.5" />
+                  <th className="px-3 py-2.5">Utilizados (kg)</th>
+                  <th className="px-3 py-2.5">Lavados (kg)</th>
+                  <th className="px-3 py-2.5">Merma (kg)</th>
+                  <th className="px-3 py-2.5">DIF (kg)</th>
+                  <th className="px-3 py-2.5">Estado</th>
                 </tr>
               </thead>
               <tbody>
-                {filasConCalculo.map((f) => (
-                  <tr key={f.id} className="border-b border-marron-tierra/15 last:border-b-0">
-                    <td className="px-3 py-2">
-                      <input
-                        type="date"
-                        value={f.fecha}
-                        onChange={(e) => actualizarFila(f.id, 'fecha')(e.target.value)}
-                        className="w-36 rounded-lg border border-marron-tierra/20 bg-white px-2 py-1.5 text-xs text-marron-cafe outline-none focus-visible:border-verde-lima"
-                      />
+                {historial.map((h) => (
+                  <tr key={h.id} className="border-b border-marron-tierra/15 last:border-b-0">
+                    <td className="px-3 py-2">{h.entryDate}</td>
+                    <td className="px-3 py-2">{turnoNombre(h.shiftId)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{h.usedKg.toFixed(3)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{h.washedKg.toFixed(3)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{h.mermaKg.toFixed(3)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums font-semibold ${h.difKg < 0 ? 'text-rojo-pasankalla' : 'text-verde-bosque'}`}>
+                      {h.difKg.toFixed(3)}
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        value={f.turno}
-                        onChange={(e) => actualizarFila(f.id, 'turno')(Number(e.target.value))}
-                        className="w-20 rounded-lg border border-marron-tierra/20 bg-white px-2 py-1.5 text-xs text-marron-cafe outline-none focus-visible:border-verde-lima"
-                      >
-                        {TURNOS.map((t) => (
-                          <option key={t} value={t}>
-                            Turno {t}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <CeldaNumero valor={f.bolsasRecibidas} onChange={actualizarFila(f.id, 'bolsasRecibidas')} />
-                    <CeldaNumero valor={f.bolsasUtilizadas} onChange={actualizarFila(f.id, 'bolsasUtilizadas')} />
-                    <td className="px-3 py-2 text-center font-semibold text-marron-cafe/70">{f.saldoBolsas}</td>
-                    <CeldaNumero valor={f.sacosLavadosBolsas} onChange={actualizarFila(f.id, 'sacosLavadosBolsas')} />
-                    <CeldaNumero valor={f.sacosLavadosKg} onChange={actualizarFila(f.id, 'sacosLavadosKg')} decimales={1} />
-                    {COLUMNAS_MERMA.map((c) => (
-                      <CeldaNumero key={c.key} valor={f[c.key]} onChange={actualizarFila(f.id, c.key)} decimales={1} />
-                    ))}
-                    <td className="px-3 py-2 text-center">
-                      {f.dif != null ? (
-                        <span className={`font-semibold ${f.dif < 0 ? 'text-rojo-pasankalla' : 'text-verde-bosque'}`}>
-                          {f.dif.toFixed(1)} kg
-                        </span>
-                      ) : (
-                        <span className="text-marron-cafe/30">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={f.observaciones}
-                        onChange={(e) => actualizarFila(f.id, 'observaciones')(e.target.value)}
-                        placeholder="—"
-                        className="w-40 rounded-lg border border-marron-tierra/20 bg-white px-2 py-1.5 text-xs text-marron-cafe outline-none focus-visible:border-verde-lima"
-                      />
-                    </td>
-                    <td className="px-3 py-2 print:hidden">
-                      <button
-                        type="button"
-                        onClick={() => quitarFila(f.id)}
-                        aria-label="Quitar turno"
-                        className="flex size-7 items-center justify-center rounded-full text-marron-cafe/40 transition-colors duration-150 hover:bg-rojo-pasankalla/10 hover:text-rojo-pasankalla"
-                      >
-                        <Trash2 className="size-4" strokeWidth={1.75} />
-                      </button>
+                      <Badge tono={h.closedAt ? 'positivo' : 'alerta'}>{h.closedAt ? 'Cerrada' : 'Abierta'}</Badge>
                     </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-verde-hoja/35 text-xs font-bold text-marron-cafe">
-                  <td className="px-3 py-2.5" colSpan={2}>
-                    Totales
-                  </td>
-                  <td className="px-3 py-2.5">{totales.bolsasRecibidas}</td>
-                  <td className="px-3 py-2.5">{totales.bolsasUtilizadas}</td>
-                  <td className="px-3 py-2.5">{totales.bolsasRecibidas - totales.bolsasUtilizadas}</td>
-                  <td className="px-3 py-2.5" />
-                  <td className="px-3 py-2.5">{totales.sacosLavadosKg.toFixed(1)} kg</td>
-                  <td className="px-3 py-2.5" colSpan={5}>
-                    Merma total: {totales.merma.toFixed(1)} kg
-                  </td>
-                  <td className="px-3 py-2.5">{totales.dif.toFixed(1)} kg</td>
-                  <td className="px-3 py-2.5" colSpan={2} />
-                </tr>
-              </tfoot>
             </table>
           </div>
-        </SeccionFormulario>
-
-        <SeccionFormulario numero={3} titulo="Firmas">
-          <FirmasResponsables responsables={RESPONSABLES} />
-        </SeccionFormulario>
-      </div>
-
-      <div className="flex justify-end print:hidden">
-        <Button onClick={registrar} disabled={enviando}>
-          {enviando ? 'Guardando…' : 'Guardar registro'}
-        </Button>
-      </div>
+        )}
+      </SeccionFormulario>
     </div>
-  )
-}
-
-// Celda numérica compacta, propia de esta tabla (no un componente
-// compartido — el estilo/ancho está pensado solo para encajar entre las
-// ~13 columnas de esta grilla, no para reusarse en otro formulario).
-function CeldaNumero({ valor, onChange, decimales = 0 }) {
-  return (
-    <td className="px-3 py-2">
-      <input
-        type="number"
-        inputMode="decimal"
-        step={decimales > 0 ? 0.1 : 1}
-        min="0"
-        value={valor ?? ''}
-        onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
-        placeholder="—"
-        className="w-20 rounded-lg border border-marron-tierra/20 bg-white px-2 py-1.5 text-right text-xs tabular-nums text-marron-cafe outline-none focus-visible:border-verde-lima"
-      />
-    </td>
   )
 }

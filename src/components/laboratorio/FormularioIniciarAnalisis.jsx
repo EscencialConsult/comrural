@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FlaskConical } from 'lucide-react'
 import { laboratoryReportsService } from '../../services/laboratoryReportsService'
+import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import Badge from '../Badge.jsx'
 import BotonVolver from '../BotonVolver.jsx'
 import TarjetaCategoria from './TarjetaCategoria.jsx'
@@ -48,6 +49,10 @@ export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
   // recién al ABRIR una planilla, y solo se manda al servidor con
   // "Guardar"/"Enviar a validación".
   const [valoresLocal, setValoresLocal] = useState({})
+  // Compartido entre la planilla (dueña del área imprimible) y
+  // PanelValidacionInforme (dueño del botón que genera+sube+descarga) —
+  // por eso el hook vive acá, un nivel arriba de los dos.
+  const { areaImprimibleRef, generarPdfComoArchivo } = useGenerarPdf({ backgroundColor: '#ffffff' })
 
   const itemsInternos = useMemo(
     () => solicitud.items.filter((i) => i.status !== 'REMOVED' && i.assignedExecutionMode === 'INTERNAL'),
@@ -161,10 +166,12 @@ export default function FormularioIniciarAnalisis({ solicitud, onVolver }) {
           }}
           onGuardar={guardar}
           onFinalizar={enviarAValidacion}
+          areaImprimibleRef={areaImprimibleRef}
         />
         <PanelValidacionInforme
           informe={informe}
           validando={validando}
+          generarPdfComoArchivo={generarPdfComoArchivo}
           onDocumentoAdjuntado={async (documento) => {
             const actualizado = await laboratoryReportsService.adjuntarDocumento(informe.id, documento.id)
             setInformes((prev) => ({ ...prev, [tipoAbierto]: actualizado }))

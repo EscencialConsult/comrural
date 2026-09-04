@@ -1,27 +1,26 @@
 import { useState } from 'react'
-import { Layers, Truck, Thermometer, Scale, Gauge, Package } from 'lucide-react'
+import { Layers, Thermometer, Scale, Gauge } from 'lucide-react'
 import PillTabs from '../dashboard/PillTabs.jsx'
 import SeccionLotesProduccion from './SeccionLotesProduccion.jsx'
-import NotaEntregaMateriaPrima from './formularios/NotaEntregaMateriaPrima.jsx'
 import ControlTemperaturaHumedad from './formularios/ControlTemperaturaHumedad.jsx'
 import ControlVolumenA from './formularios/ControlVolumenA.jsx'
 import IndicadoresProduccion from './IndicadoresProduccion.jsx'
-import PlanillaOrdenesCompra from './formularios/PlanillaOrdenesCompra.jsx'
 
 // Subpestañas de Área A — "Lotes" es el punto de entrada (qué materia prima
-// ya está lista para arrancar), después el orden REAL del proceso físico
-// (pedido explícito, no el orden de numeración del papel): Nota de Entrega
-// → secado (Temperatura/Humedad) → balance de volumen del lote (Volumen A).
-// "Indicadores" y "Consulta externa" (Órdenes de Compra de Logística, que
-// alimentan justamente la entrega de MP) cierran la fila — informativas,
-// no forman parte de la secuencia de carga.
+// ya está lista para arrancar). "Nota de Entrega MP" se sacó (pedido
+// explícito): el backend (production-area-a) no modela esa entidad como
+// algo aparte, el intake (usedBags/usedKg) es parte de la misma fila que
+// "Volumen A" — ver comrural_erp_backend/docs/production-area-a.md §1.
+// "Volumen A" da de alta la entrada del turno, "Temperatura y Humedad" la
+// cierra con los promedios de secado (PATCH .../close). "Consulta externa"
+// (planilla de órdenes de compra de Logística) también se sacó — pedido
+// explícito, no había módulo real de órdenes de compra detrás y no estaba
+// planeado agregarlo.
 const SUBPESTAÑAS_AREA_A = [
   { id: 'lotes', nombre: 'Lotes', Icon: Layers },
-  { id: 'nota-entrega-mp', nombre: 'Nota de Entrega MP', Icon: Truck },
-  { id: 'temperatura-humedad', nombre: 'Temperatura y Humedad', Icon: Thermometer },
   { id: 'volumen-a', nombre: 'Volumen A', Icon: Scale },
+  { id: 'temperatura-humedad', nombre: 'Temperatura y Humedad', Icon: Thermometer },
   { id: 'indicadores', nombre: 'Indicadores', Icon: Gauge },
-  { id: 'consulta-externa', nombre: 'Consulta externa', Icon: Package },
 ]
 
 // Pestaña "Área A" de Producción (routeada, ver PanelProduccionAreaA.jsx) —
@@ -31,13 +30,13 @@ const SUBPESTAÑAS_AREA_A = [
 // fila de pastillas propia en vez de "abrir"/"volver" a pantalla completa.
 export default function SeccionAreaA() {
   const [subPestaña, setSubPestaña] = useState('lotes')
-  // Lote elegido en "Lotes" con "Iniciar producción" — salta a "Nota de
-  // Entrega MP" (primer paso real) con ese lote ya precargado.
+  // Lote elegido en "Lotes" con "Iniciar producción" — salta a "Volumen A"
+  // (primer paso real contra el backend) con ese lote ya precargado.
   const [loteParaIniciar, setLoteParaIniciar] = useState(null)
 
   const alIniciarProduccion = (loteId) => {
     setLoteParaIniciar(loteId)
-    setSubPestaña('nota-entrega-mp')
+    setSubPestaña('volumen-a')
   }
 
   return (
@@ -45,11 +44,9 @@ export default function SeccionAreaA() {
       <PillTabs pestañas={SUBPESTAÑAS_AREA_A} activa={subPestaña} onCambiar={setSubPestaña} />
 
       {subPestaña === 'lotes' && <SeccionLotesProduccion onIniciarProduccion={alIniciarProduccion} />}
-      {subPestaña === 'nota-entrega-mp' && <NotaEntregaMateriaPrima loteInicialId={loteParaIniciar} />}
+      {subPestaña === 'volumen-a' && <ControlVolumenA loteInicialId={loteParaIniciar} />}
       {subPestaña === 'temperatura-humedad' && <ControlTemperaturaHumedad />}
-      {subPestaña === 'volumen-a' && <ControlVolumenA />}
-      {subPestaña === 'indicadores' && <IndicadoresProduccion area="A" />}
-      {subPestaña === 'consulta-externa' && <PlanillaOrdenesCompra />}
+      {subPestaña === 'indicadores' && <IndicadoresProduccion />}
     </div>
   )
 }

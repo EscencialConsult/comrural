@@ -7,6 +7,7 @@ import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL } from '../../config/
 import { informesVigentes, REPORT_STATUS_LABEL, REPORT_STATUS_TONO, etiquetaInforme } from './SeccionInformeMuestra.jsx'
 import Modal from '../Modal.jsx'
 import Badge from '../Badge.jsx'
+import DatoCard from '../DatoCard.jsx'
 import Button from '../Button.jsx'
 import PillTabs from '../dashboard/PillTabs.jsx'
 import ScrollHorizontal from '../ScrollHorizontal.jsx'
@@ -29,6 +30,7 @@ const MOTIVO_RECLASIFICACION_LABEL = {
 
 const TONO_ESTADO_LOTE = {
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   LIBERADO: 'positivo',
   RECHAZADO: 'negativo',
@@ -78,22 +80,6 @@ function pasoRecepcion(solicitud) {
 function pasoAnalisis(solicitud) {
   if (!solicitud || !['EN_PROCESO', 'ANALIZADA'].includes(solicitud.status)) return { titulo: 'Análisis', estado: 'Pendiente', hecho: false }
   return { titulo: 'Análisis', estado: solicitud.status === 'ANALIZADA' ? 'Analizada' : 'En proceso', hecho: solicitud.status === 'ANALIZADA' }
-}
-
-// Tarjeta chica de dato — mismo lenguaje que StatCard.jsx (círculo con
-// ícono + texto), pero para valores de texto en vez de KPIs numéricos.
-function DatoCard({ Icon, etiqueta, children }) {
-  return (
-    <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-marron-tierra/10 bg-white/60 p-3">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-verde-hoja/10 text-verde-bosque">
-        <Icon className="size-4" strokeWidth={1.75} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">{etiqueta}</p>
-        <div className="truncate text-sm font-medium text-marron-cafe">{children}</div>
-      </div>
-    </div>
-  )
 }
 
 function Paso({ numero, titulo, estado, hecho, negativo, esUltimo }) {
@@ -276,9 +262,15 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                 hayan achicado — con esto el scroll queda CONTENIDO acá
                 (degradé + flecha visibles), en vez de arrastrar a todo el
                 modal a scrollear horizontal (ver overflow-x-hidden del
-                contenedor general, más arriba). */}
+                contenedor general, más arriba). `pt-1.5` acá adentro (no en
+                el `p-5` de afuera, que queda fuera del propio div que
+                scrollea): `overflow-x-auto` sin `overflow-y` explícito hace
+                que el navegador compute el eje vertical como no-visible
+                también, y sin este margen el `ring-4` del círculo (un
+                box-shadow que sobresale del borde) quedaba recortado por
+                arriba al no tener aire dentro de ese div. */}
             <ScrollHorizontal>
-              <div className="flex min-w-[280px] items-start">
+              <div className="flex min-w-[280px] items-start pt-1.5">
                 {pasos.map((p, i) => (
                   <Paso key={p.titulo} {...p} esUltimo={i === pasos.length - 1} />
                 ))}

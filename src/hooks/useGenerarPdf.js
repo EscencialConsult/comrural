@@ -47,11 +47,116 @@ import { useRef, useState } from 'react'
 // Uso:
 //   const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf()
 //   <div ref={areaImprimibleRef}>...</div>
-//   <button onClick={generarPdf} disabled={generandoPdf}>Imprimir</button>
+//   <button onClick={generarPdf}>Imprimir</button>
+//
+// `generarPdfComoArchivo(nombreArchivo)` arma el mismo PDF pero lo entrega
+// como `File` en vez de abrirlo en una pestaña — para flujos que necesitan
+// el archivo en sí (ej. subirlo a un documento) en vez de mostrarlo.
 export function useGenerarPdf({ backgroundColor = '#ffffff' } = {}) {
   const areaImprimibleRef = useRef(null)
   const [generandoPdf, setGenerandoPdf] = useState(false)
   const [errorPdf, setErrorPdf] = useState(null)
+
+  // Núcleo compartido: arma el PDF paginado a partir del área referenciada
+  // y devuelve el Blob — no abre pestaña ni dispara descarga, eso lo decide
+  // quien lo llama.
+  const construirPdfBlob = async () => {
+    // Deja que React termine de pintar el estado actual antes de
+    // capturar — sin este respiro el canvas se toma con el DOM todavía
+    // en el estado de un frame atrás.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
+    const nodo = areaImprimibleRef.current
+    if (!nodo) throw new Error('No se encontró el contenido para generar el PDF.')
+
+    const topNodo = nodo.getBoundingClientRect().top
+    const elementos = Array.from(nodo.querySelectorAll('*'))
+
+    // Controles/gráficos que el navegador renderiza como una sola unidad
+    // visual — no tiene sentido mirar sus hijos internos (las <option>
+    // de un <select>, los <path> de un ícono svg) para decidir si
+    // bloquean o no: si son ESTO, bloquean siempre.
+    const TAGS_ATOMICOS = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'IMG', 'SVG', 'CANVAS'])
+
+    // Texto suelto directamente adentro del elemento (no de un hijo) —
+    // ej. la palabra del label en `<label>Fecha{"  "}<input/></label>`.
+    // Si existe, ese elemento tiene que seguir bloqueando aunque tenga
+    // hijos-elemento: sin esto, el corte podía caer entre el texto del
+    // campo y su input, separándolos entre dos hojas.
+    const tieneTextoPropio = (el) =>
+      Array.from(el.childNodes).some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '')
+
+    const esBloqueante = (el) => {
+      // Una <td>/<th> con rowSpan (ej. la columna "Categoría" fusionada
+      // de TablaResultadosEnsayo.jsx) abarca TODAS las filas de esa
+      // tabla por diseño — cortarla a la mitad entre dos hojas es
+      // cosmético (la celda fusionada queda partida), no pérdida de
+      // datos como cortar una fila real.
+      if ((el.tagName === 'TD' || el.tagName === 'TH') && el.rowSpan > 1) return false
+      if (TAGS_ATOMICOS.has(el.tagName)) return true
+      if (el.children.length === 0) return true // hoja real (con o sin texto)
+      return tieneTextoPropio(el) // envuelve texto propio + elementos — bloquea igual
+    }
+
+    // Rectángulo [top, bottom] de cada elemento BLOQUEANTE, en px del DOM
+    // relativos al propio `nodo` — son los que un corte no puede
+    // atravesar. Los candidatos a corte, en cambio, salen de TODOS los
+    // elementos (bloqueantes o no): el borde inferior de un simple
+    // contenedor suele ser justo el hueco que se quiere aprovechar.
+    const rectsBloqueantes = elementos
+      .filter(esBloqueante)
+      .map((el) => {
+        const r = el.getBoundingClientRect()
+        return { top: r.top - topNodo, bottom: r.bottom - topNodo }
+      })
+      .filter((r) => r.bottom > r.top)
+
+    const EPS = 0.5 // margen en px para no rechazar un corte por redondeo
+    const cortesDom = [...new Set(elementos.map((el) => Math.round(el.getBoundingClientRect().bottom - topNodo)))]
+      .filter((y) => y > 0)
+      .filter((y) => rectsBloqueantes.every((r) => y <= r.top + EPS || y >= r.bottom - EPS))
+      .sort((a, b) => a - b)
+
+    const canvas = await html2canvas(nodo, { scale: 2, backgroundColor, useCORS: true })
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+    const anchoPagina = pdf.internal.pageSize.getWidth()
+    const altoPagina = pdf.internal.pageSize.getHeight()
+
+    // `nodo.scrollHeight` (DOM) y `canvas.height` (rasterizado a `scale:
+    // 2`) miden lo mismo a distinta resolución — este factor pasa
+    // cualquier medida DOM a su equivalente en px del canvas, sea cual
+    // sea el `scale` real que terminó usando html2canvas.
+    const canvasPxPorDomPx = nodo.scrollHeight > 0 ? canvas.height / nodo.scrollHeight : 1
+    const alturaPaginaPx = (altoPagina * canvas.width) / anchoPagina
+
+    const cortesPx = cortesDom.map((y) => y * canvasPxPorDomPx).filter((y) => y > 0 && y < canvas.height)
+    cortesPx.push(canvas.height) // el final del documento siempre es un corte válido
+    cortesPx.sort((a, b) => a - b)
+
+    let inicioPx = 0
+    let primeraHoja = true
+    while (inicioPx < canvas.height - 1) {
+      const limitePx = inicioPx + alturaPaginaPx
+      // el corte "seguro" más grande que todavía entra en esta hoja
+      const candidatos = cortesPx.filter((c) => c > inicioPx && c <= limitePx)
+      const cortePx = candidatos.length > 0 ? candidatos[candidatos.length - 1] : Math.min(limitePx, canvas.height)
+
+      const altoSlicePx = Math.max(1, Math.round(cortePx - inicioPx))
+      const sliceCanvas = document.createElement('canvas')
+      sliceCanvas.width = canvas.width
+      sliceCanvas.height = altoSlicePx
+      sliceCanvas.getContext('2d').drawImage(canvas, 0, inicioPx, canvas.width, altoSlicePx, 0, 0, canvas.width, altoSlicePx)
+      const imagenSlice = sliceCanvas.toDataURL('image/jpeg', 0.95)
+      const altoSliceMm = (altoSlicePx * anchoPagina) / canvas.width
+
+      if (!primeraHoja) pdf.addPage()
+      pdf.addImage(imagenSlice, 'JPEG', 0, 0, anchoPagina, altoSliceMm)
+      primeraHoja = false
+      inicioPx += altoSlicePx
+    }
+
+    return pdf.output('blob')
+  }
 
   const generarPdf = async () => {
     // Se abre la pestaña ANTES de esperar nada async — si se abre recién
@@ -61,107 +166,13 @@ export function useGenerarPdf({ backgroundColor = '#ffffff' } = {}) {
     setGenerandoPdf(true)
     setErrorPdf(null)
     try {
-      // Deja que React termine de pintar el estado actual antes de
-      // capturar — sin este respiro el canvas se toma con el DOM todavía
-      // en el estado de un frame atrás. `setTimeout`, no `requestAnimationFrame`:
+      const blob = await construirPdfBlob()
+      const url = URL.createObjectURL(blob)
       // `window.open()` de arriba enfoca la pestaña nueva, así que ESTA
       // pestaña (donde sigue corriendo esta función) queda en segundo
       // plano — y ahí los navegadores pausan rAF por completo (solo corre
-      // en pestañas visibles), dejando esta espera colgada para siempre
-      // hasta que alguien vuelva a esta pestaña a mano. Un timeout sigue
-      // disparando igual en segundo plano (como mucho, más lento).
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
-      const nodo = areaImprimibleRef.current
-      if (!nodo) throw new Error('No se encontró el contenido para imprimir.')
-
-      const topNodo = nodo.getBoundingClientRect().top
-      const elementos = Array.from(nodo.querySelectorAll('*'))
-
-      // Controles/gráficos que el navegador renderiza como una sola unidad
-      // visual — no tiene sentido mirar sus hijos internos (las <option>
-      // de un <select>, los <path> de un ícono svg) para decidir si
-      // bloquean o no: si son ESTO, bloquean siempre.
-      const TAGS_ATOMICOS = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'IMG', 'SVG', 'CANVAS'])
-
-      // Texto suelto directamente adentro del elemento (no de un hijo) —
-      // ej. la palabra del label en `<label>Fecha{"  "}<input/></label>`.
-      // Si existe, ese elemento tiene que seguir bloqueando aunque tenga
-      // hijos-elemento: sin esto, el corte podía caer entre el texto del
-      // campo y su input, separándolos entre dos hojas.
-      const tieneTextoPropio = (el) =>
-        Array.from(el.childNodes).some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '')
-
-      const esBloqueante = (el) => {
-        // Una <td>/<th> con rowSpan (ej. la columna "Categoría" fusionada
-        // de TablaResultadosEnsayo.jsx) abarca TODAS las filas de esa
-        // tabla por diseño — cortarla a la mitad entre dos hojas es
-        // cosmético (la celda fusionada queda partida), no pérdida de
-        // datos como cortar una fila real.
-        if ((el.tagName === 'TD' || el.tagName === 'TH') && el.rowSpan > 1) return false
-        if (TAGS_ATOMICOS.has(el.tagName)) return true
-        if (el.children.length === 0) return true // hoja real (con o sin texto)
-        return tieneTextoPropio(el) // envuelve texto propio + elementos — bloquea igual
-      }
-
-      // Rectángulo [top, bottom] de cada elemento BLOQUEANTE, en px del DOM
-      // relativos al propio `nodo` — son los que un corte no puede
-      // atravesar. Los candidatos a corte, en cambio, salen de TODOS los
-      // elementos (bloqueantes o no): el borde inferior de un simple
-      // contenedor suele ser justo el hueco que se quiere aprovechar.
-      const rectsBloqueantes = elementos
-        .filter(esBloqueante)
-        .map((el) => {
-          const r = el.getBoundingClientRect()
-          return { top: r.top - topNodo, bottom: r.bottom - topNodo }
-        })
-        .filter((r) => r.bottom > r.top)
-
-      const EPS = 0.5 // margen en px para no rechazar un corte por redondeo
-      const cortesDom = [...new Set(elementos.map((el) => Math.round(el.getBoundingClientRect().bottom - topNodo)))]
-        .filter((y) => y > 0)
-        .filter((y) => rectsBloqueantes.every((r) => y <= r.top + EPS || y >= r.bottom - EPS))
-        .sort((a, b) => a - b)
-
-      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor, useCORS: true })
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-      const anchoPagina = pdf.internal.pageSize.getWidth()
-      const altoPagina = pdf.internal.pageSize.getHeight()
-
-      // `nodo.scrollHeight` (DOM) y `canvas.height` (rasterizado a `scale:
-      // 2`) miden lo mismo a distinta resolución — este factor pasa
-      // cualquier medida DOM a su equivalente en px del canvas, sea cual
-      // sea el `scale` real que terminó usando html2canvas.
-      const canvasPxPorDomPx = nodo.scrollHeight > 0 ? canvas.height / nodo.scrollHeight : 1
-      const alturaPaginaPx = (altoPagina * canvas.width) / anchoPagina
-
-      const cortesPx = cortesDom.map((y) => y * canvasPxPorDomPx).filter((y) => y > 0 && y < canvas.height)
-      cortesPx.push(canvas.height) // el final del documento siempre es un corte válido
-      cortesPx.sort((a, b) => a - b)
-
-      let inicioPx = 0
-      let primeraHoja = true
-      while (inicioPx < canvas.height - 1) {
-        const limitePx = inicioPx + alturaPaginaPx
-        // el corte "seguro" más grande que todavía entra en esta hoja
-        const candidatos = cortesPx.filter((c) => c > inicioPx && c <= limitePx)
-        const cortePx = candidatos.length > 0 ? candidatos[candidatos.length - 1] : Math.min(limitePx, canvas.height)
-
-        const altoSlicePx = Math.max(1, Math.round(cortePx - inicioPx))
-        const sliceCanvas = document.createElement('canvas')
-        sliceCanvas.width = canvas.width
-        sliceCanvas.height = altoSlicePx
-        sliceCanvas.getContext('2d').drawImage(canvas, 0, inicioPx, canvas.width, altoSlicePx, 0, 0, canvas.width, altoSlicePx)
-        const imagenSlice = sliceCanvas.toDataURL('image/jpeg', 0.95)
-        const altoSliceMm = (altoSlicePx * anchoPagina) / canvas.width
-
-        if (!primeraHoja) pdf.addPage()
-        pdf.addImage(imagenSlice, 'JPEG', 0, 0, anchoPagina, altoSliceMm)
-        primeraHoja = false
-        inicioPx += altoSlicePx
-      }
-
-      const url = URL.createObjectURL(pdf.output('blob'))
+      // en pestañas visibles); `construirPdfBlob` usa `setTimeout` (no
+      // rAF) por eso, para seguir disparando igual en segundo plano.
       if (ventana) ventana.location.href = url
       else window.open(url, '_blank') // el navegador no bloqueó el popup — fallback igual, por las dudas
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
@@ -173,5 +184,23 @@ export function useGenerarPdf({ backgroundColor = '#ffffff' } = {}) {
     }
   }
 
-  return { areaImprimibleRef, generandoPdf, errorPdf, generarPdf }
+  // Arma el PDF y lo entrega como `File` en vez de mostrarlo — para
+  // flujos que necesitan el archivo en sí (ej. subirlo como documento).
+  // No abre pestaña: no hay problema de popup-blocker porque no hay
+  // ventana que abrir.
+  const generarPdfComoArchivo = async (nombreArchivo = 'informe.pdf') => {
+    setGenerandoPdf(true)
+    setErrorPdf(null)
+    try {
+      const blob = await construirPdfBlob()
+      return new File([blob], nombreArchivo, { type: 'application/pdf' })
+    } catch (err) {
+      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
+      throw err
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
+
+  return { areaImprimibleRef, generandoPdf, errorPdf, generarPdf, generarPdfComoArchivo }
 }
