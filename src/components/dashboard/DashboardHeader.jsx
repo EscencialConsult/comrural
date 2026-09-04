@@ -20,6 +20,8 @@ import { notificacionesService } from '../../services/notificacionesService'
 import { siguienteCursor } from '../../services/paginacion'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
+import { resolverRutaNotificacion } from '../../utils/resolverRutaNotificacion'
+import { useNotificacionesTiempoReal } from '../../hooks/useNotificacionesTiempoReal'
 
 const LIMITE_NOTIFICACIONES = 10
 
@@ -40,10 +42,15 @@ function normalizar(texto) {
 
 // Campana: conectada al backend real (GET /notifications, POST
 // /notifications/:id/read — ver comrural_erp_backend/docs/notifications.md).
-// Se refresca al montar y cada vez que se abre el dropdown; no hay push en
-// vivo todavía (el trigger/policy de Supabase Realtime ya existen del lado
-// del backend pero están sin verificar contra un proyecto real, ver el
-// README de mocks). Mensajes sigue siendo solo un indicador (no <button>) —
+// Se refresca al montar, cada vez que se abre el dropdown, y en vivo vía
+// Supabase Realtime (useNotificacionesTiempoReal, canal privado por
+// usuario) — al llegar un evento se recarga la bandeja y el contador de no
+// leídas, y la campana hace un solo "ring" (.bell-ring en index.css) como
+// aviso de que llegó algo nuevo. El contador (notifNoLeidasTotal) es un
+// número real, no un simple punto — pide status=unread aparte porque la
+// lista visible (`notificaciones`) trae "todas", paginada de a
+// LIMITE_NOTIFICACIONES, y no alcanza para saber el total de no leídas.
+// Mensajes sigue siendo solo un indicador (no <button>) —
 // no hay sistema de mensajería. El buscador SÍ funciona: busca por nombre
 // entre Resumen, los 8 módulos y Configuración (los mismos ítems del
 // sidebar) y navega al elegido — no hay todavía un índice de contenido real
@@ -56,6 +63,8 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
   const [notifCursor, setNotifCursor] = useState(null)
   const [notifCargandoMas, setNotifCargandoMas] = useState(false)
   const [notifAbierto, setNotifAbierto] = useState(false)
+  const [notifNoLeidasTotal, setNotifNoLeidasTotal] = useState(0)
+  const [campanaAnimando, setCampanaAnimando] = useState(false)
   const [menuCuentaAbierto, setMenuCuentaAbierto] = useState(false)
   const [modulos, setModulos] = useState([])
   const [busqueda, setBusqueda] = useState('')
@@ -72,34 +81,51 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
     }
   }, [usuario?.rol])
 
-  useEffect(() => {
-    let cancelado = false
+  const cargarNotificaciones = () =>
     notificacionesService.listar({ limit: LIMITE_NOTIFICACIONES }).then((respuesta) => {
-      if (cancelado) return
       setNotificaciones(respuesta.data)
       setNotifCursor(siguienteCursor(respuesta))
     })
-    return () => {
-      cancelado = true
-    }
+
+  // Total real de no leídas para el badge de la campana — status=unread
+  // aparte de `cargarNotificaciones` porque esa trae "todas" (paginada de a
+  // LIMITE_NOTIFICACIONES) y no alcanza para un conteo correcto. limit=100
+  // es el máximo que acepta el backend (ver ListNotificationsQueryDto); si
+  // hasMore sigue en true después de eso, se muestra "99+".
+  const refrescarConteoNoLeidas = () =>
+    notificacionesService.listar({ status: 'unread', limit: 100 }).then((respuesta) => {
+      setNotifNoLeidasTotal(respuesta.hasMore ? 100 : respuesta.data.length)
+    })
+
+  useEffect(() => {
+    Promise.all([cargarNotificaciones(), refrescarConteoNoLeidas()]).catch(() => {
+      // Silencioso — la campana simplemente queda en 0 hasta el próximo
+      // trigger (abrir el dropdown, o el próximo evento de Realtime).
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Refresca al abrir el dropdown — no hay push en vivo todavía (ver
-  // comentario junto al import de notificacionesService), así que esto es
-  // lo que evita mostrar una bandeja desactualizada si pasó tiempo desde
-  // que se montó el header.
+  // Refresca al abrir el dropdown — respaldo si Realtime no llegó a
+  // conectar todavía o se perdió algún evento mientras la pestaña estaba en
+  // segundo plano.
   useEffect(() => {
     if (!notifAbierto) return
-    let cancelado = false
-    notificacionesService.listar({ limit: LIMITE_NOTIFICACIONES }).then((respuesta) => {
-      if (cancelado) return
-      setNotificaciones(respuesta.data)
-      setNotifCursor(siguienteCursor(respuesta))
-    })
-    return () => {
-      cancelado = true
-    }
+    cargarNotificaciones().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notifAbierto])
+
+  // Push en vivo — canal privado del usuario (ver
+  // useNotificacionesTiempoReal.js y el comentario de arriba del todo). El
+  // evento de Supabase solo avisa "pasó algo", no trae el contenido — por
+  // eso se recarga la bandeja real contra el backend. campanaAnimando
+  // dispara las tres animaciones a la vez (bell-ring, bell-ping, bell-label
+  // — ver index.css), todas sincronizadas al mismo evento.
+  useNotificacionesTiempoReal(usuario?.id, () => {
+    cargarNotificaciones().catch(() => {})
+    refrescarConteoNoLeidas().catch(() => {})
+    setCampanaAnimando(true)
+    setTimeout(() => setCampanaAnimando(false), 900)
+  })
 
   useEffect(() => {
     let cancelado = false
@@ -145,16 +171,21 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
   const marcarUnaLeida = async (notificationId) => {
     const { readAt } = await notificacionesService.marcarLeida(notificationId)
     setNotificaciones((actual) => actual.map((n) => (n.id === notificationId ? { ...n, readAt } : n)))
+    refrescarConteoNoLeidas().catch(() => {})
   }
 
   // El backend no tiene un endpoint de "marcar todas" — es una por una (ver
   // notificacionesService.js). Se resuelve en paralelo porque son
   // independientes entre sí (cada una es su propia fila de
-  // notification_recipients).
+  // notification_recipients). Solo marca las que están cargadas en
+  // `notificaciones` — si hay más no leídas sin traer todavía (más de
+  // LIMITE_NOTIFICACIONES), el refresco del contador de abajo las sigue
+  // reflejando, a propósito: no se pueden marcar leídas sin haberlas traído.
   const marcarTodasLeidas = async () => {
     const pendientes = notificaciones.filter((n) => !n.readAt)
     await Promise.all(pendientes.map((n) => notificacionesService.marcarLeida(n.id)))
     setNotificaciones((actual) => actual.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })))
+    refrescarConteoNoLeidas().catch(() => {})
   }
 
   const cargarMasNotificaciones = async () => {
@@ -173,7 +204,20 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
     setNotifAbierto(false)
   }
 
-  const sinLeer = notificaciones.some((n) => !n.readAt)
+  // Click en un ítem del dropdown: marca leída (si hacía falta) y navega al
+  // módulo correspondiente — ver src/config/notificacionesRutas.js. Un type
+  // sin ruta mapeada, o sin ningún candidato válido para los permisos del
+  // usuario, simplemente no navega (resolverRutaNotificacion devuelve null).
+  const abrirNotificacion = (n) => {
+    if (!n.readAt) marcarUnaLeida(n.id)
+    cerrarNotificaciones()
+    setMenuCuentaAbierto(false)
+    const destino = resolverRutaNotificacion(n, permisos)
+    if (destino) navigate(destino)
+  }
+
+  const sinLeer = notifNoLeidasTotal > 0
+  const conteoBadge = notifNoLeidasTotal > 99 ? '99+' : notifNoLeidasTotal
 
   return (
     <header className="flex items-center gap-2 border-b border-marron-tierra/10 bg-crema-quinua px-3 py-4 sm:gap-4 sm:px-6">
@@ -275,10 +319,31 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
           type="button"
           onClick={() => (notifAbierto ? cerrarNotificaciones() : setNotifAbierto(true))}
           title="Notificaciones"
-          className="relative rounded-full p-2 text-marron-cafe/40 transition-colors duration-200 hover:bg-marron-tierra/10 hover:text-marron-cafe"
+          className={`relative rounded-full p-2 transition-colors duration-200 ${
+            sinLeer
+              ? 'bg-rojo-pasankalla/10 text-rojo-pasankalla hover:bg-rojo-pasankalla/15'
+              : 'text-marron-cafe/40 hover:bg-marron-tierra/10 hover:text-marron-cafe'
+          }`}
         >
-          <Bell className="size-5" strokeWidth={1.75} />
-          {sinLeer && <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-rojo-pasankalla" />}
+          {campanaAnimando && (
+            <>
+              <span aria-hidden="true" className="bell-ping absolute inset-0 rounded-full bg-rojo-pasankalla/50" />
+              {/* Etiqueta que aparece y se oculta sola — mismo trigger que
+                  bell-ring/bell-ping, sin click ni botón de cerrar. */}
+              <span
+                role="status"
+                className="bell-label absolute top-1/2 right-full z-50 mr-2 max-w-[calc(100vw-2rem)] truncate rounded-full bg-rojo-pasankalla px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap text-crema-quinua"
+              >
+                Nueva notificación
+              </span>
+            </>
+          )}
+          <Bell className={`size-5 ${campanaAnimando ? 'bell-ring' : ''}`} strokeWidth={1.75} />
+          {sinLeer && (
+            <span className="badge-in absolute -top-0.5 -right-0.5 text-[9px] leading-none font-bold text-rojo-pasankalla">
+              {conteoBadge}
+            </span>
+          )}
         </button>
 
         {notifAbierto && (
@@ -288,7 +353,7 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
               <NotificacionesLista
                 notificaciones={notificaciones}
                 marcarTodasLeidas={marcarTodasLeidas}
-                marcarUnaLeida={marcarUnaLeida}
+                alClickear={abrirNotificacion}
                 cargarMas={notifCursor ? cargarMasNotificaciones : null}
                 cargandoMas={notifCargandoMas}
               />
@@ -347,7 +412,9 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
             wrapper de afuera (no al botón), puede sobresalir del círculo
             sin que nada se lo recorte. */}
         {sinLeer && (
-          <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-rojo-pasankalla ring-2 ring-crema-quinua" />
+          <span className="badge-in absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full bg-rojo-pasankalla text-[8px] leading-none font-bold text-crema-quinua ring-2 ring-crema-quinua">
+            {notifNoLeidasTotal > 9 ? '9+' : notifNoLeidasTotal}
+          </span>
         )}
 
         {menuCuentaAbierto && (
@@ -365,9 +432,22 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
                 onClick={() => (notifAbierto ? cerrarNotificaciones() : setNotifAbierto(true))}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-marron-cafe/80 transition-colors duration-150 hover:bg-marron-tierra/5"
               >
-                <Bell className="size-4 shrink-0 text-marron-cafe/40" strokeWidth={1.75} />
+                <span
+                  className={`relative flex size-6 shrink-0 items-center justify-center rounded-full ${
+                    sinLeer ? 'bg-rojo-pasankalla/10 text-rojo-pasankalla' : 'text-marron-cafe/40'
+                  }`}
+                >
+                  {campanaAnimando && (
+                    <span aria-hidden="true" className="bell-ping absolute inset-0 rounded-full bg-rojo-pasankalla/50" />
+                  )}
+                  <Bell className={`size-4 ${campanaAnimando ? 'bell-ring' : ''}`} strokeWidth={1.75} />
+                </span>
                 Notificaciones
-                {sinLeer && <span className="ml-auto size-1.5 shrink-0 rounded-full bg-rojo-pasankalla" />}
+                {sinLeer && (
+                  <span className="badge-in ml-auto text-[10px] leading-none font-bold text-rojo-pasankalla">
+                    {conteoBadge}
+                  </span>
+                )}
               </button>
 
               {notifAbierto && (
@@ -375,7 +455,7 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
                   <NotificacionesLista
                     notificaciones={notificaciones}
                     marcarTodasLeidas={marcarTodasLeidas}
-                    marcarUnaLeida={marcarUnaLeida}
+                    alClickear={abrirNotificacion}
                     cargarMas={notifCursor ? cargarMasNotificaciones : null}
                     cargandoMas={notifCargandoMas}
                   />
@@ -411,9 +491,13 @@ export default function DashboardHeader({ clima, climaError, usuario, onAbrirMen
 // repetirlo en el otro lugar.
 //
 // Sin "borrar" — el backend es append-only, no existe ese endpoint (ver
-// docs/notifications.md del backend). Click en un ítem no leído lo marca
-// leído (además del botón "marcar todas").
-function NotificacionesLista({ notificaciones, marcarTodasLeidas, marcarUnaLeida, cargarMas, cargandoMas }) {
+// docs/notifications.md del backend). Click en un ítem lo marca leído (si
+// hacía falta, además del botón "marcar todas") y navega al módulo
+// correspondiente — ver abrirNotificacion() y
+// src/config/notificacionesRutas.js. Un type sin ruta mapeada, o sin ningún
+// candidato válido para los permisos del usuario, no navega a ningún lado
+// (solo se marca leída).
+function NotificacionesLista({ notificaciones, marcarTodasLeidas, alClickear, cargarMas, cargandoMas }) {
   return (
     <>
       <div className="flex items-center justify-between px-2 py-1.5">
@@ -438,7 +522,7 @@ function NotificacionesLista({ notificaciones, marcarTodasLeidas, marcarUnaLeida
               <li key={n.id}>
                 <button
                   type="button"
-                  onClick={() => noLeida && marcarUnaLeida(n.id)}
+                  onClick={() => alClickear(n)}
                   className="flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left transition-colors duration-150 hover:bg-marron-tierra/5"
                 >
                   <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${noLeida ? 'bg-verde-lima' : ''}`} />

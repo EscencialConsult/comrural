@@ -87,6 +87,7 @@ body {
   animation: notif-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+
 /* Dropdown de resultados del buscador (DashboardHeader.jsx) — panel
    centrado a lo ancho del buscador, entra derecho desde arriba (no desde
    una esquina como el de notificaciones). */
@@ -111,6 +112,57 @@ body {
 
 .badge-in {
   animation: badge-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/*
+  Campana de notificaciones (DashboardHeader.jsx) — feedback de que llegó
+  algo nuevo por Realtime, no un loop decorativo: dispara una sola vez por
+  evento y se detiene sola (sin infinite). Transform-only, mismo criterio de
+  restricción que el resto de las animaciones funcionales del proyecto.
+*/
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(9deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+}
+
+.bell-ring {
+  animation: bell-ring 500ms ease-in-out;
+  transform-origin: top center;
+}
+
+/* Anillo que acompaña al bell-ring — se expande y se desvanece una vez,
+   detrás del ícono, para que el aviso se note incluso con la campana quieta
+   un instante entre sacudidas. Mismo criterio que .ripple-effect
+   (transform+opacity, sin loop, sin box-shadow). */
+@keyframes bell-ping {
+  0% { transform: scale(0.7); opacity: 0.55; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.bell-ping {
+  animation: bell-ping 700ms ease-out;
+}
+
+/* Etiqueta "Nueva notificación" al costado de la campana — sincronizada con
+   bell-ring/bell-ping (mismo trigger, mismo instante). transform-origin:
+   right center (el borde pegado a la campana) + translateX/scale desde ahí:
+   se ve salir de la campana hacia afuera y volver a meterse adentro, no un
+   simple fade en el lugar. Se sostiene un instante en el medio y se oculta
+   sola, sin click ni botón de cerrar. */
+@keyframes bell-label {
+  0% { opacity: 0; transform: translateY(-50%) translateX(70%) scale(0.35); }
+  25% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
+  75% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-50%) translateX(70%) scale(0.35); }
+}
+
+.bell-label {
+  animation: bell-label 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: right center;
 }
 
 /*
@@ -249,6 +301,15 @@ body {
   }
   .search-panel {
     animation: none;
+  }
+  .bell-ring {
+    animation: none;
+  }
+  .bell-ping {
+    display: none;
+  }
+  .bell-label {
+    display: none;
   }
   .ripple-effect {
     display: none;

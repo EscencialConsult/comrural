@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ClipboardList, X, Pencil, CheckCircle2, XCircle, Play } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
@@ -129,6 +130,7 @@ export default function PanelAlmacenRecepcion() {
   const [proveedores, setProveedores] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [lotAbierto, setLotAbierto] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState('')
@@ -174,6 +176,29 @@ export default function PanelAlmacenRecepcion() {
       cancelado = true
     }
   }, [puedeVer])
+
+  // Deep-link desde notificación (?lote=, ver
+  // src/config/notificacionesRutas.js): abre el lote directo apenas carga
+  // la lista, una sola vez — se limpia el query param enseguida para que
+  // "Volver al listado" (o un refresh) no lo vuelva a abrir. Si el lote no
+  // está en `lotes` (ej. es PT — acá solo se listan PM), no hace nada y
+  // queda el listado normal.
+  useEffect(() => {
+    const loteId = searchParams.get('lote')
+    if (!loteId || !lotes) return
+    if (lotes.some((l) => l.id === loteId)) {
+      setLotAbierto(loteId)
+    }
+    setSearchParams(
+      (prev) => {
+        const siguiente = new URLSearchParams(prev)
+        siguiente.delete('lote')
+        return siguiente
+      },
+      { replace: true },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotes])
 
   const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
   const proveedorNombre = (id) => {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { TestTubes, ClipboardList, ListChecks, Activity } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
@@ -35,7 +36,14 @@ export default function PanelLaboratorio() {
   // "Lotes" de Compras se gatea con lots:read.
   const puedeVer = permisos.has('samples:read')
 
-  const [pestaña, setPestaña] = useState('pendientes')
+  // ?tab= permite deep-link a una pestaña puntual (ej. desde una
+  // notificación — ver src/config/notificacionesRutas.js). Un valor
+  // desconocido o ausente cae al default de siempre, "pendientes".
+  const [searchParams] = useSearchParams()
+  const tabInicial = PESTAÑAS_LABORATORIO.some((p) => p.id === searchParams.get('tab'))
+    ? searchParams.get('tab')
+    : 'pendientes'
+  const [pestaña, setPestaña] = useState(tabInicial)
 
   if (!puedeVer) {
     return <AccesoDenegado mensaje="No tenés acceso a Laboratorio." />
