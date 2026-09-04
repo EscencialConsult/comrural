@@ -36,10 +36,10 @@ const ESTADOS_CANDIDATOS = ['ACEPTADO_RECEPCION', 'LAVADO']
 // mantiene el papel/código del formulario original como referencia visual,
 // pero el dato que se manda es un único promedio por secador, ya calculado
 // fuera del sistema por el responsable de control.
-export default function ControlTemperaturaHumedad() {
+export default function ControlTemperaturaHumedad({ loteInicialId }) {
   const [productos, setProductos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [loteId, setLoteId] = useState('')
+  const [loteId, setLoteId] = useState(loteInicialId ?? '')
   const [entradas, setEntradas] = useState(null)
   const [promedios, setPromedios] = useState({}) // entryId -> { avg1, avg2 }
   const { enviando, ejecutar } = useSolicitud()

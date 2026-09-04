@@ -18,8 +18,8 @@ import IndicadoresProduccion from './IndicadoresProduccion.jsx'
 // planeado agregarlo.
 const SUBPESTAÑAS_AREA_A = [
   { id: 'lotes', nombre: 'Lotes', Icon: Layers },
+  { id: 'temperatura-humedad', nombre: 'Temperatura', Icon: Thermometer },
   { id: 'volumen-a', nombre: 'Volumen A', Icon: Scale },
-  { id: 'temperatura-humedad', nombre: 'Temperatura y Humedad', Icon: Thermometer },
   { id: 'indicadores', nombre: 'Indicadores', Icon: Gauge },
 ]
 
@@ -31,7 +31,9 @@ const SUBPESTAÑAS_AREA_A = [
 export default function SeccionAreaA() {
   const [subPestaña, setSubPestaña] = useState('lotes')
   // Lote elegido en "Lotes" con "Iniciar producción" — salta a "Volumen A"
-  // (primer paso real contra el backend) con ese lote ya precargado.
+  // (primer paso real contra el backend, crea la entrada) con ese lote ya
+  // precargado. "Temperatura" se movió antes en el orden de pestañas, pero
+  // sigue siendo el paso que cierra una entrada ya creada, no el que arranca.
   const [loteParaIniciar, setLoteParaIniciar] = useState(null)
 
   const alIniciarProduccion = (loteId) => {
@@ -45,7 +47,7 @@ export default function SeccionAreaA() {
 
       {subPestaña === 'lotes' && <SeccionLotesProduccion onIniciarProduccion={alIniciarProduccion} />}
       {subPestaña === 'volumen-a' && <ControlVolumenA loteInicialId={loteParaIniciar} />}
-      {subPestaña === 'temperatura-humedad' && <ControlTemperaturaHumedad />}
+      {subPestaña === 'temperatura-humedad' && <ControlTemperaturaHumedad loteInicialId={loteParaIniciar} />}
       {subPestaña === 'indicadores' && <IndicadoresProduccion />}
     </div>
   )
