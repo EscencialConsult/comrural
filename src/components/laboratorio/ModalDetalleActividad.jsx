@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FlaskConical, Package, Layers, Scale, Clock3, User, ClipboardCheck } from 'lucide-react'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
-import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL } from '../../config/analisisLabels'
+import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL, formatearEstadoSolicitud } from '../../config/analisisLabels'
 import Modal from '../Modal.jsx'
 import Badge from '../Badge.jsx'
 import DatoCard from '../DatoCard.jsx'
@@ -69,7 +69,7 @@ export default function ModalDetalleActividad({ abierto, solicitudId, onCerrar }
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-extrabold text-marron-cafe">{detalle.sample.code}</h3>
-                <Badge tono={TONO_ESTADO[detalle.status] ?? 'neutro'}>{detalle.status.replace(/_/g, ' ')}</Badge>
+                <Badge tono={TONO_ESTADO[detalle.status] ?? 'neutro'}>{formatearEstadoSolicitud(detalle.status)}</Badge>
                 <Badge tono={detalle.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{detalle.effectiveType}</Badge>
               </div>
               <p className="text-xs text-marron-cafe/60">

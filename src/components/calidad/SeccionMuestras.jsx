@@ -9,6 +9,7 @@ import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
 import EmptyState from '../EmptyState.jsx'
+import { formatearEstadoSolicitud } from '../../config/analisisLabels'
 import ModalCrearMuestra from './ModalCrearMuestra.jsx'
 import ModalSolicitarAnalisis from './ModalSolicitarAnalisis.jsx'
 import ModalDetalleMuestra from './ModalDetalleMuestra.jsx'
@@ -202,7 +203,7 @@ export default function SeccionMuestras() {
                     <Badge tono={TONO_ESTADO_MUESTRA[m.status] ?? 'neutro'}>{m.status}</Badge>
                     {solicitudActiva && (
                       <Badge tono={TONO_ESTADO_SOLICITUD[solicitudActiva.status] ?? 'neutro'}>
-                        {solicitudActiva.effectiveType} · {solicitudActiva.status.replace(/_/g, ' ')}
+                        {solicitudActiva.effectiveType} · {formatearEstadoSolicitud(solicitudActiva.status)}
                       </Badge>
                     )}
                     <MoreVertical className="ml-auto size-4 shrink-0 text-marron-cafe/30" strokeWidth={2} />

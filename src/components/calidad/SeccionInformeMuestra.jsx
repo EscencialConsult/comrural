@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FileText, Download } from 'lucide-react'
 import { documentsService } from '../../services/documentsService'
 import { toast } from '../../lib/toast'
+import { formatearEstadoSolicitud } from '../../config/analisisLabels'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
@@ -83,7 +84,7 @@ export default function SeccionInformeMuestra({ detalle, solicitudDetalle, infor
           </div>
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Estado de la solicitud</dt>
-            <dd className="text-sm text-marron-cafe">{solicitudDetalle.status.replace(/_/g, ' ')}</dd>
+            <dd className="text-sm text-marron-cafe">{formatearEstadoSolicitud(solicitudDetalle.status)}</dd>
           </div>
         </dl>
       </div>

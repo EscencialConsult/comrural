@@ -418,7 +418,7 @@ export default function PanelAlmacenRecepcion() {
                       </td>
                       <td className="px-4 py-3 text-center text-marron-cafe/70">
                         {l.scheduledReceptionAt ? (
-                          new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                          new Date(l.scheduledReceptionAt).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })
                         ) : (
                           <span className="text-xs text-marron-cafe/40">—</span>
                         )}

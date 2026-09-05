@@ -843,22 +843,22 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, titu
     // solo si esta persona podría hacer algo en algún momento del ciclo —
     // mismo gate que tenía el botón que reemplaza (ver PanelCalidadRecepcion.jsx).
     inspection.status === 'FINALIZADA' &&
-      (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve')) && {
-        id: 'resolucion',
-        titulo: 'Resolución y visto bueno de Calidad',
-        completa: true,
-        contenido: (
-          <SeccionFormulario titulo="Resolución y visto bueno de Calidad">
-            <SeccionResolucionCalidad
-              inspection={inspection}
-              qualityResolution={qualityResolution}
-              summary={summary}
-              permisos={permisos}
-              onCambio={recargar}
-            />
-          </SeccionFormulario>
-        ),
-      },
+    (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve')) && {
+      id: 'resolucion',
+      titulo: 'Resolución de Calidad',
+      completa: true,
+      contenido: (
+        <SeccionFormulario titulo="Resolución de Calidad">
+          <SeccionResolucionCalidad
+            inspection={inspection}
+            qualityResolution={qualityResolution}
+            summary={summary}
+            permisos={permisos}
+            onCambio={recargar}
+          />
+        </SeccionFormulario>
+      ),
+    },
   ].filter(Boolean)
 
   return (

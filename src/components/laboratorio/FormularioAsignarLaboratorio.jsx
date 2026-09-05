@@ -79,7 +79,6 @@ export default function FormularioAsignarLaboratorio({
     try {
       const actualizada = await analysisRequestsService.asignarModalidad(solicitud.id, [{ itemId: item.id, executionMode }])
       setSolicitud(actualizada)
-      onActualizada?.(actualizada)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -201,11 +200,10 @@ export default function FormularioAsignarLaboratorio({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-marron-cafe/60">Elegí, ensayo por ensayo, dónde se procesa.</p>
             <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                faltanAsignar === 0 && itemsActivos.length > 0
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${faltanAsignar === 0 && itemsActivos.length > 0
                   ? 'bg-verde-hoja/15 text-verde-bosque'
                   : 'bg-marron-arcilla/15 text-marron-arcilla'
-              }`}
+                }`}
             >
               {totalAsignados}/{itemsActivos.length} asignados
             </span>
@@ -246,13 +244,12 @@ export default function FormularioAsignarLaboratorio({
                                 disabled={forzadoExterno || asignando}
                                 onClick={() => asignarUno(item, 'INTERNAL')}
                                 title={forzadoExterno ? 'Sin planilla interna en el catálogo — solo puede procesarse externamente.' : undefined}
-                                className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-bold transition-colors duration-150 disabled:pointer-events-none ${
-                                  activoInterno
+                                className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-bold transition-colors duration-150 disabled:pointer-events-none ${activoInterno
                                     ? 'border-verde-bosque bg-verde-bosque text-white shadow-sm'
                                     : forzadoExterno
                                       ? 'border-dashed border-marron-tierra/15 text-marron-cafe/25'
                                       : 'border-verde-bosque/30 text-verde-bosque hover:bg-verde-hoja/15'
-                                }`}
+                                  }`}
                               >
                                 <FlaskConical className="size-3" strokeWidth={2.25} />
                                 Interno
@@ -261,11 +258,10 @@ export default function FormularioAsignarLaboratorio({
                                 type="button"
                                 disabled={asignando}
                                 onClick={() => asignarUno(item, 'EXTERNAL')}
-                                className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-bold transition-colors duration-150 disabled:pointer-events-none ${
-                                  activoExterno
+                                className={`flex items-center gap-1 rounded-full border-2 px-2 py-0.5 text-[10px] font-bold transition-colors duration-150 disabled:pointer-events-none ${activoExterno
                                     ? 'border-oro-quinua bg-oro-quinua text-marron-cafe shadow-sm'
                                     : 'border-oro-quinua/40 text-oro-quinua hover:bg-oro-quinua/15'
-                                }`}
+                                  }`}
                               >
                                 <ShieldCheck className="size-3" strokeWidth={2.25} />
                                 Externo
@@ -400,7 +396,7 @@ export default function FormularioAsignarLaboratorio({
             </Button>
             <Button type="button" disabled={!puedeAbrirTrabajo || guardando} onClick={abrirTrabajoInterno} className="gap-1.5">
               <CheckCircle2 className="size-4" strokeWidth={2} />
-              {guardando ? 'Abriendo…' : 'Abrir trabajo interno'}
+              {guardando ? 'Abriendo…' : 'Guardar para trabajo interno'}
             </Button>
           </div>
         </div>

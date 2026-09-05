@@ -171,7 +171,7 @@ export default function PanelAlmacen() {
                     <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
                     <span className="text-sm text-marron-cafe/60">
                       {l.scheduledReceptionAt
-                        ? new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                        ? new Date(l.scheduledReceptionAt).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })
                         : 'Sin fecha programada'}
                     </span>
                   </div>
