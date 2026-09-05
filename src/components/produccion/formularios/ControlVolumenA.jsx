@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, TriangleAlert } from 'lucide-react'
 import { productsService } from '../../../services/productsService'
 import { shiftsService } from '../../../services/shiftsService'
 import { productionAreaAService } from '../../../services/productionAreaAService'
@@ -49,17 +49,39 @@ const FORM_VACIO = {
   saponinaKg: null,
 }
 
-// Estados de lote donde tiene sentido seguir cargando entradas de lavado —
-// mismo criterio que SamplesService.create ampliado en 0035 (ver
-// docs/production-area-a.md §3): un lote puede recibir varios turnos antes
-// de completar el total almacenado y pasar a LAVADO.
-const ESTADOS_CANDIDATOS = ['ACEPTADO_RECEPCION', 'LAVADO']
+// Mismo filtro que SeccionLotesProduccion.jsx (pestaña "Lotes") — el punto
+// de entrada a Área A pasó a ser LIBERADO (pedido explícito, ver esa
+// pantalla). El buscador de la cabecera tenía que filtrar igual: si seguía
+// en ACEPTADO_RECEPCION/LAVADO, nunca encontraba los lotes que "Lotes" ya
+// entrega, porque esos ya no existen en ese estado para cuando llegan acá.
+const ESTADOS_CANDIDATOS = ['LIBERADO']
+
+// Regla exacta del relevamiento (I-PRO-03/R-01): Secador 1 no debe trabajar
+// por debajo de 70°C — mismo umbral que dispara la notificación del backend
+// al cerrar (ver ProductionAreaAEntriesService.close,
+// DRYER_TEMP_ALERT_THRESHOLD_C). Acá es solo aviso visual del lado
+// cliente, la alerta real la manda el servidor.
+const SECADOR_1_MIN = 70
+
+// Peso estándar de un saco de quinua lavada, para autocompletar "Sacos
+// lavados (Kg)" a partir de "Sacos lavados (bolsas)" — pedido explícito, el
+// valor calculado sigue siendo editable a mano después.
+const KG_POR_SACO_LAVADO = 45
 
 // Formulario 2 del relevamiento — registro real de Área A
 // (production-area-a). A diferencia de la versión mock anterior (una tabla
 // con muchas filas/turnos a la vez), el backend modela UNA fila por
 // lote×turno×fecha operativa: acá se da de alta una entrada por vez, y
 // abajo se lista el historial ya cargado de ese lote.
+//
+// Absorbe también el cierre de turno (I-PRO-03/R-01, antes
+// ControlTemperaturaHumedad.jsx aparte) — pedido explícito de unificar en
+// una sola pestaña "Volumen A". El backend ya modelaba esto como dos
+// llamadas sobre la MISMA fila (POST crea, PATCH .../close cierra con
+// avgDryer1TempC/avgDryer2TempC — ver productionAreaAService.js), así que
+// unificar la pantalla no tocó nada del backend, solo juntó "Historial del
+// lote" (antes de solo lectura) con el formulario de cierre por turno
+// abierto.
 function CampoLote({ etiqueta, valor }) {
   return (
     <div>
@@ -77,6 +99,10 @@ export default function ControlVolumenA({ loteInicialId }) {
   const [historial, setHistorial] = useState(null)
   const [datosLote, setDatosLote] = useState(null)
   const { enviando, ejecutar } = useSolicitud()
+  // Promedios de secado en edición por turno abierto (entryId -> {avg1, avg2})
+  // — mismo criterio que ControlTemperaturaHumedad.jsx (ahora fusionado acá).
+  const [promedios, setPromedios] = useState({})
+  const [cerrandoId, setCerrandoId] = useState(null)
 
   // Refs de los campos obligatorios, en el mismo orden que `CAMPOS_OBLIGATORIOS`
   // — permiten scrollear al primero que falte al clickear "Registrar entrada"
@@ -138,6 +164,7 @@ export default function ControlVolumenA({ loteInicialId }) {
 
   const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
   const turnoNombre = (id) => turnos?.find((t) => t.id === id)?.name ?? '—'
+  const entradasAbiertas = (historial ?? []).filter((h) => !h.closedAt)
 
   const actualizar = (campo) => (valor) => setForm((f) => ({ ...f, [campo]: valor }))
 
@@ -160,6 +187,43 @@ export default function ControlVolumenA({ loteInicialId }) {
   const enTope = (valor, tope) => valor != null && tope != null && valor >= tope
   const claseTope = (excedido) =>
     excedido ? 'border-rojo-pasankalla text-rojo-pasankalla focus-visible:border-rojo-pasankalla focus-visible:ring-rojo-pasankalla/20' : ''
+
+  // "Sacos lavados (bolsas)" autocompleta "Sacos lavados (Kg)" (bolsas × 45)
+  // — pedido explícito. Sigue siendo editable a mano: esto solo corre al
+  // tipear bolsas, no al tipear kg.
+  const actualizarSacosLavadosBolsas = (valorStr) => {
+    if (valorStr === '') {
+      setForm((f) => ({ ...f, washedBags: null }))
+      return
+    }
+    const valor = Number(valorStr)
+    const tope = form.usedBags
+    const acotado = tope != null && valor > tope ? tope : valor
+    setForm((f) => ({ ...f, washedBags: acotado, washedKg: Number((acotado * KG_POR_SACO_LAVADO).toFixed(3)) }))
+  }
+
+  const actualizarPromedio = (entryId, campo) => (valor) =>
+    setPromedios((p) => ({ ...p, [entryId]: { ...p[entryId], [campo]: valor } }))
+
+  const cerrarEntrada = async (entryId) => {
+    const { avg1, avg2 } = promedios[entryId] ?? {}
+    if (avg1 == null || avg2 == null) {
+      toast.error('Ingresá el promedio de los dos secadores.')
+      return
+    }
+    setCerrandoId(entryId)
+    try {
+      const actualizada = await ejecutar(() =>
+        productionAreaAService.cerrar(entryId, { avgDryer1TempC: avg1, avgDryer2TempC: avg2 }),
+      )
+      toast.success('Turno cerrado.')
+      setHistorial((prev) => prev.map((h) => (h.id === entryId ? actualizada : h)))
+    } catch (err) {
+      toast.error(err.message ?? 'No se pudo cerrar el turno.')
+    } finally {
+      setCerrandoId(null)
+    }
+  }
 
   const merma = COLUMNAS_MERMA.reduce((acc, { key }) => acc + (form[key] ?? 0), 0)
   const dif =
@@ -313,7 +377,7 @@ export default function ControlVolumenA({ loteInicialId }) {
               min="0"
               max={form.usedBags ?? undefined}
               value={form.washedBags ?? ''}
-              onChange={(e) => actualizarConTope('washedBags', form.usedBags)(e.target.value)}
+              onChange={(e) => actualizarSacosLavadosBolsas(e.target.value)}
               className={claseTope(enTope(form.washedBags, form.usedBags))}
               hint={form.usedBags != null ? `Máx. ${form.usedBags} (bolsas utilizadas)` : undefined}
             />
@@ -371,7 +435,68 @@ export default function ControlVolumenA({ loteInicialId }) {
         </Button>
       </div>
 
-      <SeccionFormulario numero={5} titulo="Historial del lote">
+      <SeccionFormulario
+        numero={5}
+        titulo="Cierre de turno — Temperatura y Humedad"
+        nota={`I-PRO-03/R-01 · Secador 1 no debe bajar de ${SECADOR_1_MIN}°C — bajo ese umbral el cierre dispara una alerta.`}
+      >
+        {!form.lotId ? (
+          <p className="text-sm text-marron-cafe/50">Elegí un lote arriba para ver sus turnos abiertos.</p>
+        ) : historial === null ? (
+          <Skeleton className="h-24" />
+        ) : entradasAbiertas.length === 0 ? (
+          <EmptyState Icon={Plus} titulo="No hay turnos abiertos para este lote" />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {entradasAbiertas.map((e) => {
+              const avg1 = promedios[e.id]?.avg1
+              const secador1Bajo = avg1 != null && avg1 < SECADOR_1_MIN
+              return (
+                <div key={e.id} className="flex flex-wrap items-end gap-3 rounded-2xl bg-white/70 p-4">
+                  <div className="flex flex-col gap-1 text-xs text-marron-cafe/60">
+                    <span className="font-semibold text-marron-cafe">{e.entryDate}</span>
+                    <span>
+                      Utilizados: {e.usedKg.toFixed(3)} kg · Lavados: {e.washedKg.toFixed(3)} kg
+                    </span>
+                  </div>
+                  <FormInput
+                    label="Secador 1 (°C, promedio)"
+                    type="number"
+                    step="0.01"
+                    value={avg1 ?? ''}
+                    onChange={(ev) => actualizarPromedio(e.id, 'avg1')(ev.target.value === '' ? null : Number(ev.target.value))}
+                    className="w-40"
+                  />
+                  <FormInput
+                    label="Secador 2 (°C, promedio)"
+                    type="number"
+                    step="0.01"
+                    value={promedios[e.id]?.avg2 ?? ''}
+                    onChange={(ev) => actualizarPromedio(e.id, 'avg2')(ev.target.value === '' ? null : Number(ev.target.value))}
+                    className="w-40"
+                  />
+                  {secador1Bajo && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-rojo-pasankalla">
+                      <TriangleAlert className="size-3.5" strokeWidth={2} />
+                      Bajo {SECADOR_1_MIN}°C
+                    </span>
+                  )}
+                  <Button
+                    variant="secondary"
+                    className="ml-auto px-4 py-2 text-xs"
+                    disabled={enviando && cerrandoId === e.id}
+                    onClick={() => cerrarEntrada(e.id)}
+                  >
+                    {enviando && cerrandoId === e.id ? 'Cerrando…' : 'Cerrar turno'}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </SeccionFormulario>
+
+      <SeccionFormulario numero={6} titulo="Historial del lote">
         {!form.lotId ? (
           <p className="text-sm text-marron-cafe/50">Elegí un lote arriba para ver sus entradas registradas.</p>
         ) : historial === null ? (

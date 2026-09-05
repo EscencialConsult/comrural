@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Layers, Thermometer, Scale, Gauge } from 'lucide-react'
+import { Layers, Scale, Gauge } from 'lucide-react'
 import PillTabs from '../dashboard/PillTabs.jsx'
 import SeccionLotesProduccion from './SeccionLotesProduccion.jsx'
-import ControlTemperaturaHumedad from './formularios/ControlTemperaturaHumedad.jsx'
 import ControlVolumenA from './formularios/ControlVolumenA.jsx'
 import IndicadoresProduccion from './IndicadoresProduccion.jsx'
 
@@ -11,14 +10,15 @@ import IndicadoresProduccion from './IndicadoresProduccion.jsx'
 // explícito): el backend (production-area-a) no modela esa entidad como
 // algo aparte, el intake (usedBags/usedKg) es parte de la misma fila que
 // "Volumen A" — ver comrural_erp_backend/docs/production-area-a.md §1.
-// "Volumen A" da de alta la entrada del turno, "Temperatura y Humedad" la
-// cierra con los promedios de secado (PATCH .../close). "Consulta externa"
-// (planilla de órdenes de compra de Logística) también se sacó — pedido
-// explícito, no había módulo real de órdenes de compra detrás y no estaba
-// planeado agregarlo.
+// "Temperatura" (antes su propia pestaña, ControlTemperaturaHumedad.jsx) se
+// fusionó dentro de "Volumen A" — pedido explícito de unificar en una sola
+// pestaña; el backend ya modelaba el cierre de turno (avgDryer1TempC/
+// avgDryer2TempC) como una llamada aparte sobre la MISMA fila, así que la
+// fusión no tocó nada del backend. "Consulta externa" (planilla de órdenes
+// de compra de Logística) también se sacó — pedido explícito, no había
+// módulo real de órdenes de compra detrás y no estaba planeado agregarlo.
 const SUBPESTAÑAS_AREA_A = [
   { id: 'lotes', nombre: 'Lotes', Icon: Layers },
-  { id: 'temperatura-humedad', nombre: 'Temperatura', Icon: Thermometer },
   { id: 'volumen-a', nombre: 'Volumen A', Icon: Scale },
   { id: 'indicadores', nombre: 'Indicadores', Icon: Gauge },
 ]
@@ -32,8 +32,8 @@ export default function SeccionAreaA() {
   const [subPestaña, setSubPestaña] = useState('lotes')
   // Lote elegido en "Lotes" con "Iniciar producción" — salta a "Volumen A"
   // (primer paso real contra el backend, crea la entrada) con ese lote ya
-  // precargado. "Temperatura" se movió antes en el orden de pestañas, pero
-  // sigue siendo el paso que cierra una entrada ya creada, no el que arranca.
+  // precargado. El cierre de turno (temperatura/humedad) vive ahora dentro
+  // de la misma pestaña, más abajo en el historial.
   const [loteParaIniciar, setLoteParaIniciar] = useState(null)
 
   const alIniciarProduccion = (loteId) => {
@@ -47,7 +47,6 @@ export default function SeccionAreaA() {
 
       {subPestaña === 'lotes' && <SeccionLotesProduccion onIniciarProduccion={alIniciarProduccion} />}
       {subPestaña === 'volumen-a' && <ControlVolumenA loteInicialId={loteParaIniciar} />}
-      {subPestaña === 'temperatura-humedad' && <ControlTemperaturaHumedad loteInicialId={loteParaIniciar} />}
       {subPestaña === 'indicadores' && <IndicadoresProduccion />}
     </div>
   )

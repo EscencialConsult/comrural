@@ -51,11 +51,28 @@ export default function ComboboxLote({ label, value, onChange, estados, nature =
     if (!abierto) return
     let cancelado = false
     setCargando(true)
+    // Sin `code` acá a propósito: el backend (GET /lots) solo sabe buscar
+    // por código de lote, no por nombre de producto — pedido explícito de
+    // que el buscador encuentre también por nombre de producto, sin tocar
+    // el backend. Se trae una tanda (mismo límite de antes) sin filtrar por
+    // texto y se filtra acá por code O nombre de producto. Limitación real:
+    // si hay más de 50 lotes de esta `nature` en total, uno que matchee por
+    // fuera de esos primeros 50 (orden por id, no por relevancia) no
+    // aparece — aceptable hoy porque `estados` ya acota bastante el universo
+    // real (ver ESTADOS_CANDIDATOS de quien usa este combobox).
     lotsService
-      .listar({ limit: 50, code: busquedaDebounced || undefined })
+      .listar({ limit: 50 })
       .then((resp) => {
         if (cancelado) return
-        setOpciones(resp.data.filter((l) => l.nature === nature && (!estados || estados.includes(l.currentStatus))))
+        const texto = busquedaDebounced.trim().toLowerCase()
+        setOpciones(
+          resp.data.filter((l) => {
+            if (l.nature !== nature) return false
+            if (estados && !estados.includes(l.currentStatus)) return false
+            if (!texto) return true
+            return l.code.toLowerCase().includes(texto) || productoNombre(l.productId).toLowerCase().includes(texto)
+          }),
+        )
       })
       .finally(() => !cancelado && setCargando(false))
     return () => {
