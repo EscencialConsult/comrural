@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Activity, X } from 'lucide-react'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { siguienteCursor } from '../../services/paginacion'
+import { formatearEstadoSolicitud } from '../../config/analisisLabels'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import FormSelect from '../FormSelect.jsx'
@@ -185,7 +186,7 @@ export default function SeccionActividad() {
                 </span>
                 <span className="text-xs text-marron-cafe/50">{s.requestedBy.name}</span>
                 <Badge tono={TONO_ESTADO[s.status] ?? 'neutro'} className="ml-auto">
-                  {s.status.replace(/_/g, ' ')}
+                  {formatearEstadoSolicitud(s.status)}
                 </Badge>
               </button>
             ))}

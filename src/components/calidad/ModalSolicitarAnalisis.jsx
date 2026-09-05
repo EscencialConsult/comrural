@@ -3,6 +3,7 @@ import { X, FlaskConical, ClipboardList, Truck, Beaker } from 'lucide-react'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { laboratoryTestsService } from '../../services/laboratoryTestsService'
 import { iamService } from '../../services/iamService'
+import { areasService } from '../../services/areasService'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { NATURALEZA_LABEL, USO_LABEL } from '../../config/analisisLabels'
 import { CATEGORIA_LABEL, CATEGORIA_ICON, CATEGORIA_ESTILO, ORDEN_CATEGORIAS } from '../../config/analisisCategorias'
@@ -88,17 +89,52 @@ export default function ModalSolicitarAnalisis({ abierto, muestra, loteCodigo, p
     }
   }, [abierto])
 
-  // Responsable de entrega — antes era un input de texto con el UUID a
-  // mano (el rol calidad no tiene users:read). Con superadmin de prueba sí
-  // hay acceso, así que se lista de verdad. Si el usuario logueado no
-  // tiene el permiso, el catch deja `usuarios` en `[]` — el campo cae solo
-  // a "no hay usuarios para elegir" en vez de romper el resto del modal.
+  // Responsable de entrega — filtrado para mostrar únicamente al personal
+  // asignado al área de Laboratorio.
   useEffect(() => {
     if (!abierto) return
     let cancelado = false
-    iamService
-      .listarUsuarios()
-      .then((data) => !cancelado && setUsuarios(data.filter((u) => u.isActive)))
+    Promise.all([
+      iamService.listarUsuarios(),
+      areasService.listar().then((r) => r.data).catch(() => []),
+      iamService.listarRoles().catch(() => []),
+    ])
+      .then(async ([todosUsuarios, areasList, rolesList]) => {
+        if (cancelado) return
+        const activos = todosUsuarios.filter((u) => u.isActive)
+        const areaLab = areasList.find((a) => a.name?.toLowerCase().includes('laboratorio'))
+        
+        const idsRolesLab = new Set(
+          rolesList
+            .filter(
+              (r) =>
+                (areaLab && r.areaId === areaLab.id) ||
+                r.code?.toLowerCase().includes('lab') ||
+                r.name?.toLowerCase().includes('laboratorio')
+            )
+            .map((r) => r.id)
+        )
+
+        const asignaciones = await Promise.allSettled(
+          activos.map((u) => iamService.getRolesDeUsuario(u.id))
+        )
+        if (cancelado) return
+
+        const filtrados = activos.filter((u, index) => {
+          const res = asignaciones[index]
+          if (res.status !== 'fulfilled' || !Array.isArray(res.value)) return false
+          const rolesDeUsuario = res.value.filter((a) => a.effective !== false)
+          return rolesDeUsuario.some(
+            (a) =>
+              (a.roleId && idsRolesLab.has(a.roleId)) ||
+              (areaLab && a.role?.areaId === areaLab.id) ||
+              a.role?.code?.toLowerCase().includes('lab') ||
+              a.role?.name?.toLowerCase().includes('laboratorio')
+          )
+        })
+
+        setUsuarios(filtrados.length > 0 ? filtrados : activos)
+      })
       .catch((err) => {
         if (cancelado) return
         setErrorUsuarios(err.message)

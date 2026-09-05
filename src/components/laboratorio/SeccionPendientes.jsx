@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FlaskConical, PackageCheck, Clock, CheckCircle2, Scale, ClipboardCheck, Beaker } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { analysisExecutionsService } from '../../services/analysisExecutionsService'
+import { formatearEstadoSolicitud, TONO_ESTADO_LOTE, formatearEstadoLote } from '../../config/analisisLabels'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import ModalRecibirMuestra from '../calidad/ModalRecibirMuestra.jsx'
@@ -43,7 +44,7 @@ const TONO_ESTADO_SOLICITUD = {
 // acción de recepción.
 const SUBPESTAÑAS_PENDIENTES = [
   { id: 'por-recibir', nombre: 'Por recibir', Icon: Clock },
-  { id: 'recibidas', nombre: 'Recibidas', Icon: CheckCircle2 },
+  { id: 'recibidas', nombre: 'Por preparar', Icon: CheckCircle2 },
 ]
 
 export default function SeccionPendientes() {
@@ -173,28 +174,41 @@ export default function SeccionPendientes() {
     }
   }
 
-  if (asignacionEnCurso) {
-    return (
-      <FormularioAsignarLaboratorio
-        solicitud={asignacionEnCurso.detalle}
-        soloLectura={asignacionEnCurso.soloLectura}
-        pasoInicial={asignacionEnCurso.pasoInicial}
-        onVolver={() => setAsignacionEnCurso(null)}
-        // Abrir el trabajo interno mueve la solicitud a EN_PROCESO del lado
-        // del servidor — se refleja en la lista sin recargar todo.
-        onActualizada={(detalle) => {
-          setSolicitudes((prev) => prev.map((s) => (s.id === detalle.id ? { ...s, status: detalle.status } : s)))
-          setDetallePorSolicitud((prev) => ({ ...prev, [detalle.id]: detalle }))
-          // Se acaba de abrir/tocar el trabajo interno — invalida el caché
-          // de ejecuciones para que se vuelva a pedir si hace falta.
-          pedidosEjecucionesId.current.delete(detalle.id)
-        }}
-      />
-    )
+  const alGuardarAsignacion = () => {
+    const sId = asignacionEnCurso?.detalle?.id
+    setAsignacionEnCurso(null)
+    if (sId) {
+      analysisRequestsService.obtener(sId).then((det) => setDetallePorSolicitud((prev) => ({ ...prev, [sId]: det })))
+      analysisExecutionsService.listarPorSolicitud(sId).then((ejecs) => setEjecucionesPorSolicitud((prev) => ({ ...prev, [sId]: ejecs })))
+    }
   }
 
+  const solicitudesFiltradas = useMemo(() => {
+    if (!solicitudes) return []
+    return solicitudes.filter((s) =>
+      subPestaña === 'por-recibir' ? s.status === 'PENDIENTE_MUESTRA' : s.status !== 'PENDIENTE_MUESTRA',
+    )
+  }, [solicitudes, subPestaña])
+
+  const agrupadasPorLote = useMemo(() => {
+    if (!solicitudesFiltradas) return []
+    const mapa = new Map()
+    for (const s of solicitudesFiltradas) {
+      const lotId = s.lot?.id || s.lotId || s.lot?.code || 'sin-lote'
+      if (!mapa.has(lotId)) {
+        mapa.set(lotId, {
+          lote: s.lot,
+          productoNombre: s.product?.name ?? '—',
+          solicitudes: [],
+        })
+      }
+      mapa.get(lotId).solicitudes.push(s)
+    }
+    return Array.from(mapa.values())
+  }, [solicitudesFiltradas])
+
   if (errorCarga) {
-    return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
+    return <p className="text-sm font-medium text-rojo-pasankalla">No se pudieron cargar las solicitudes: {errorCarga}</p>
   }
 
   if (solicitudes === null) {
@@ -209,9 +223,17 @@ export default function SeccionPendientes() {
     )
   }
 
-  const solicitudesFiltradas = solicitudes.filter((s) =>
-    subPestaña === 'por-recibir' ? s.status === 'PENDIENTE_MUESTRA' : s.status !== 'PENDIENTE_MUESTRA',
-  )
+  if (asignacionEnCurso) {
+    return (
+      <FormularioAsignarLaboratorio
+        solicitud={asignacionEnCurso.detalle}
+        soloLectura={asignacionEnCurso.soloLectura}
+        pasoInicial={asignacionEnCurso.pasoInicial}
+        onVolver={() => setAsignacionEnCurso(null)}
+        onActualizada={alGuardarAsignacion}
+      />
+    )
+  }
 
   return (
     <section className="flex flex-col gap-3">
@@ -230,7 +252,7 @@ export default function SeccionPendientes() {
         <p className="text-sm font-medium text-rojo-pasankalla">No se pudo abrir la asignación: {errorAsignacion}</p>
       )}
 
-      {solicitudesFiltradas.length === 0 ? (
+      {agrupadasPorLote.length === 0 ? (
         <EmptyState
           Icon={FlaskConical}
           titulo={
@@ -240,79 +262,94 @@ export default function SeccionPendientes() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-          {solicitudesFiltradas.map((s) => {
-            const detalle = detallePorSolicitud[s.id]
-            const itemsActivos = detalle && detalle !== 'error' ? detalle.items.filter((i) => i.status !== 'REMOVED') : null
-            const todosAsignados = itemsActivos !== null && itemsActivos.length > 0 && itemsActivos.every((i) => i.assignedExecutionMode)
-            const internos = itemsActivos?.filter((i) => i.assignedExecutionMode === 'INTERNAL') ?? []
-            const ejecuciones = ejecucionesPorSolicitud[s.id]
-            // Con todo asignado, si hay ensayos internos hace falta además
-            // que exista su ejecución (submuestra ya preparada) — mientras
-            // no exista, el backend todavía deja corregir la modalidad y
-            // falta el paso de preparación, así que no puede pasar a "solo
-            // lectura" (ver comentario de ejecucionesPorSolicitud arriba).
-            const esperandoEjecuciones = todosAsignados && internos.length > 0 && ejecuciones === undefined
-            const faltaPreparar = todosAsignados && internos.length > 0 && ejecuciones !== undefined && ejecuciones.length === 0
-            const completo = todosAsignados && !esperandoEjecuciones && !faltaPreparar
-            return (
-              <div
-                key={s.id}
-                className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
-              >
-                <span className="font-mono text-xs font-semibold text-marron-cafe/70">{s.sample.code}</span>
-                <span className="text-sm text-marron-cafe">{s.product.name}</span>
-                <span className="font-mono text-xs text-marron-cafe/50">{s.lot.code}</span>
-                <Badge tono={s.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{s.effectiveType}</Badge>
-                <Badge tono={TONO_ESTADO_SOLICITUD[s.status] ?? 'neutro'} className="ml-auto">
-                  {s.status.replace(/_/g, ' ')}
-                </Badge>
-                {s.status === 'PENDIENTE_MUESTRA' && puedeRecibir && (
-                  <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setRecibirPara(s)}>
-                    <PackageCheck className="size-3.5" strokeWidth={2} />
-                    Recibir
-                  </Button>
-                )}
-                {(s.status === 'RECIBIDA' || s.status === 'EN_PROCESO') &&
-                  puedeAsignarLaboratorio &&
-                  (esperandoEjecuciones ? (
-                    <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" disabled>
-                      <Scale className="size-3.5" strokeWidth={2} />…
-                    </Button>
-                  ) : completo ? (
-                    <Button
-                      variant="secondary"
-                      className="gap-1.5 px-3 py-1.5 text-xs"
-                      disabled={cargandoAsignacionId === s.id}
-                      onClick={() => alClicarAsignarLaboratorio(s.id, true)}
-                    >
-                      <ClipboardCheck className="size-3.5" strokeWidth={2} />
-                      {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Revisar'}
-                    </Button>
-                  ) : faltaPreparar ? (
-                    <Button
-                      variant="secondary"
-                      className="gap-1.5 px-3 py-1.5 text-xs"
-                      disabled={cargandoAsignacionId === s.id}
-                      onClick={() => alClicarAsignarLaboratorio(s.id, false, 'preparacion')}
-                    >
-                      <Beaker className="size-3.5" strokeWidth={2} />
-                      {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Preparar muestra'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      className="gap-1.5 px-3 py-1.5 text-xs"
-                      disabled={cargandoAsignacionId === s.id}
-                      onClick={() => alClicarAsignarLaboratorio(s.id, false, 'modalidad')}
-                    >
-                      <Scale className="size-3.5" strokeWidth={2} />
-                      {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Asignar laboratorio'}
-                    </Button>
-                  ))}
+        <div className="flex flex-col gap-4">
+          {agrupadasPorLote.map(({ lote, productoNombre, solicitudes: items }) => (
+            <div key={lote?.id || lote?.code || Math.random()} className="flex flex-col gap-3 rounded-3xl bg-marron-tierra/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-marron-tierra/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-marron-cafe">{lote?.code}</span>
+                  <span className="text-xs text-marron-cafe/40">·</span>
+                  <span className="text-sm font-semibold text-marron-cafe">{productoNombre}</span>
+                  {(lote?.currentStatus || lote?.status) && (
+                    <Badge tono={TONO_ESTADO_LOTE[lote?.currentStatus || lote?.status] ?? 'neutro'}>
+                      {formatearEstadoLote(lote?.currentStatus || lote?.status)}
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-xs font-medium text-marron-cafe/50">
+                  {items.length} {items.length === 1 ? 'solicitud' : 'solicitudes'}
+                </span>
               </div>
-            )
-          })}
+              <div className="overflow-hidden rounded-2xl bg-white/70 divide-y divide-marron-tierra/10">
+                {items.map((s) => {
+                  const detalle = detallePorSolicitud[s.id]
+                  const itemsActivos = detalle && detalle !== 'error' ? detalle.items.filter((i) => i.status !== 'REMOVED') : null
+                  const todosAsignados = itemsActivos !== null && itemsActivos.length > 0 && itemsActivos.every((i) => i.assignedExecutionMode)
+                  const internos = itemsActivos?.filter((i) => i.assignedExecutionMode === 'INTERNAL') ?? []
+                  const ejecuciones = ejecucionesPorSolicitud[s.id]
+                  const esperandoEjecuciones = todosAsignados && internos.length > 0 && ejecuciones === undefined
+                  const faltaPreparar = todosAsignados && internos.length > 0 && ejecuciones !== undefined && ejecuciones.length === 0
+                  const completo = todosAsignados && !esperandoEjecuciones && !faltaPreparar
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex flex-wrap items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-marron-tierra/10"
+                    >
+                      <span className="font-mono text-xs font-semibold text-marron-cafe/70">{s.sample?.code ?? s.code ?? '—'}</span>
+                      <span className="text-xs text-marron-cafe/60">{s.sample?.quantity} {s.sample?.unit === 'OTRA' ? s.sample?.otherUnit : s.sample?.unit}</span>
+                      <Badge tono={s.effectiveType === 'EXPRESS' ? 'positivo' : 'neutro'}>{s.effectiveType}</Badge>
+                      <Badge tono={TONO_ESTADO_SOLICITUD[s.status] ?? 'neutro'} className="ml-auto">
+                        {formatearEstadoSolicitud(s.status)}
+                      </Badge>
+                      {s.status === 'PENDIENTE_MUESTRA' && puedeRecibir && (
+                        <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setRecibirPara(s)}>
+                          <PackageCheck className="size-3.5" strokeWidth={2} />
+                          Recibir
+                        </Button>
+                      )}
+                      {(s.status === 'RECIBIDA' || s.status === 'EN_PROCESO') &&
+                        puedeAsignarLaboratorio &&
+                        (esperandoEjecuciones ? (
+                          <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" disabled>
+                            <Scale className="size-3.5" strokeWidth={2} />…
+                          </Button>
+                        ) : completo ? (
+                          <Button
+                            variant="secondary"
+                            className="gap-1.5 px-3 py-1.5 text-xs"
+                            disabled={cargandoAsignacionId === s.id}
+                            onClick={() => alClicarAsignarLaboratorio(s.id, true)}
+                          >
+                            <ClipboardCheck className="size-3.5" strokeWidth={2} />
+                            {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Revisar'}
+                          </Button>
+                        ) : faltaPreparar ? (
+                          <Button
+                            variant="secondary"
+                            className="gap-1.5 px-3 py-1.5 text-xs"
+                            disabled={cargandoAsignacionId === s.id}
+                            onClick={() => alClicarAsignarLaboratorio(s.id, false, 'preparacion')}
+                          >
+                            <Beaker className="size-3.5" strokeWidth={2} />
+                            {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Preparar muestra'}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            className="gap-1.5 px-3 py-1.5 text-xs"
+                            disabled={cargandoAsignacionId === s.id}
+                            onClick={() => alClicarAsignarLaboratorio(s.id, false, 'modalidad')}
+                          >
+                            <Scale className="size-3.5" strokeWidth={2} />
+                            {cargandoAsignacionId === s.id ? 'Abriendo…' : 'Asignar laboratorio'}
+                          </Button>
+                        ))}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

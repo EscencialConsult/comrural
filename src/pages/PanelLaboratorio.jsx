@@ -23,8 +23,8 @@ import SeccionActividad from '../components/laboratorio/SeccionActividad.jsx'
 // del backend). También es donde vive "Analizar" para lo asignado a
 // Laboratorio interno (pedido explícito, ya no en Pendientes).
 const PESTAÑAS_LABORATORIO = [
-  { id: 'pendientes', nombre: 'Pendientes', Icon: ClipboardList },
-  { id: 'solicitudes', nombre: 'Solicitudes', Icon: ListChecks },
+  { id: 'pendientes', nombre: 'Recepción de muestras', Icon: ClipboardList },
+  { id: 'solicitudes', nombre: 'Análisis', Icon: ListChecks },
   { id: 'actividad', nombre: 'Actividad', Icon: Activity },
 ]
 

@@ -3,7 +3,7 @@ import { Check, FlaskConical, Layers, Scale, Package, Clock3, ClipboardCheck, Bu
 import { samplesService } from '../../services/samplesService'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { laboratoryReportsService } from '../../services/laboratoryReportsService'
-import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL } from '../../config/analisisLabels'
+import { NATURALEZA_LABEL, USO_LABEL, EXECUTION_MODE_LABEL, formatearEstadoSolicitud } from '../../config/analisisLabels'
 import { informesVigentes, REPORT_STATUS_LABEL, REPORT_STATUS_TONO, etiquetaInforme } from './SeccionInformeMuestra.jsx'
 import Modal from '../Modal.jsx'
 import Badge from '../Badge.jsx'
@@ -304,7 +304,7 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                     </div>
                     <div>
                       <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Estado</dt>
-                      <dd className="text-sm text-marron-cafe">{solicitudDetalle.status.replace(/_/g, ' ')}</dd>
+                      <dd className="text-sm text-marron-cafe">{formatearEstadoSolicitud(solicitudDetalle.status)}</dd>
                     </div>
                     <div>
                       <dt className="text-[11px] font-semibold uppercase tracking-wide text-marron-cafe/40">Turno</dt>
@@ -449,7 +449,7 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
                       )}
                     </span>
                     <Badge tono="neutro" className="ml-auto">
-                      {r.status.replace(/_/g, ' ')}
+                      {formatearEstadoSolicitud(r.status)}
                     </Badge>
                   </div>
                 ))}
