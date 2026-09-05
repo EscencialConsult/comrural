@@ -219,7 +219,14 @@ export default function ModalDetalleMuestra({ abierto, muestra, lote, onCerrar, 
           <PillTabs pestañas={PESTAÑAS_DETALLE} activa={pestaña} onCambiar={setPestaña} />
 
           {pestaña === 'informe' && (
-            <SeccionInformeMuestra detalle={detalle} solicitudDetalle={solicitudDetalle} informes={informes} />
+            <SeccionInformeMuestra
+              detalle={detalle}
+              solicitudDetalle={solicitudDetalle}
+              informes={informes}
+              onLoteLiberado={(nuevoStatus) =>
+                setDetalle((prev) => (prev ? { ...prev, lot: { ...prev.lot, currentStatus: nuevoStatus } } : prev))
+              }
+            />
           )}
 
           {pestaña === 'trazabilidad' && (

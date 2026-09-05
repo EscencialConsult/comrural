@@ -145,7 +145,6 @@ export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, 
           detalle: entry.userEmail ?? 'Sistema',
         }))
       : eventosDerivados(detalle, solicitudDetalle)
-  const usandoAuditoriaReal = entradasAudit.length > 0
 
   for (const informe of informesVigentes(informes)) {
     eventos.push({
@@ -173,12 +172,6 @@ export default function SeccionTrazabilidadMuestra({ detalle, solicitudDetalle, 
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs text-marron-cafe/70">
-        {usandoAuditoriaReal
-          ? 'Los eventos de muestra/solicitud vienen de la auditoría real del backend (audit_log); los de informe, del propio registro de Laboratorio.'
-          : 'Los eventos de muestra/solicitud se arman con los datos que ya carga esta pantalla (no audit_log); los de informe, del propio registro de Laboratorio.'}
-      </p>
-
       {sinPermiso && (
         <p className="flex items-center gap-2 rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs font-medium text-marron-arcilla">
           <ShieldAlert className="size-4 shrink-0" strokeWidth={2} />

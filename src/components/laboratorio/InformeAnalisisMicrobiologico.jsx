@@ -56,10 +56,6 @@ export default function InformeAnalisisMicrobiologico({
         <h2 className="text-lg font-bold text-marron-cafe">Informe de análisis — Microbiológico</h2>
       </div>
 
-      <p className="rounded-2xl bg-marron-arcilla/10 px-4 py-3 text-xs text-marron-cafe/70">
-        El backend todavía no registra resultados de ensayos — esta planilla es una vista previa. "Guardar cambios" y
-        "Finalizar categoría" solo persisten en este navegador, no en el servidor.
-      </p>
       {finalizada && (
         <p className="rounded-xl bg-verde-hoja/10 px-3 py-2 text-xs font-medium text-verde-bosque">
           Categoría finalizada — solo lectura.

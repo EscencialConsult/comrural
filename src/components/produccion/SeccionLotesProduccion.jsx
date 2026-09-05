@@ -17,12 +17,17 @@ const formatearFechaHora = (iso) =>
   iso ? new Date(iso).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
 // Pestaña "Lotes" de Producción — servicio real (production-area-a, ver
-// comrural_erp_backend/docs/production-area-a.md §3). El punto de entrada
-// real de Producción es `ACEPTADO_RECEPCION` (recepción + decisión de
-// Calidad ya resueltas en Almacén) — no `LIBERADO` como asumía la versión
-// mock anterior de este archivo: `LIBERADO` es el final del pipeline de
-// Laboratorio, que ocurre DESPUÉS de que Producción ya lavó el lote
-// (LAVADO se intercala entre ACEPTADO_RECEPCION y EN_ANALISIS), no antes.
+// comrural_erp_backend/docs/production-area-a.md §3).
+//
+// Filtra por `LIBERADO` a pedido explícito (contradice el orden real del
+// pipeline documentado en comrural_erp_backend/docs/lots.md §3, donde
+// LAVADO ocurre ANTES de EN_ANALISIS/LIBERADO, no después — se avisó de
+// esto y se decidió mantener igual). El backend no impone ninguna
+// precondición de `currentStatus` para crear una entrada de Área A
+// (ProductionAreaAEntriesService.create solo valida `nature === 'PM'`;
+// `maybeCloseWashing` no-opea en silencio si el lote no está en
+// ACEPTADO_RECEPCION, no rechaza la creación) — así que este es un cambio
+// puramente de filtro en el frontend, no requirió tocar el backend.
 //
 // "Iniciar producción" no abre nada acá adentro: dispara `onIniciarProduccion`
 // (implementado en PanelProduccion.jsx) para cambiar a la pestaña "Volumen A"
@@ -44,7 +49,7 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
     Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
       .then(([lotesResp, productos, proveedores]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && l.currentStatus === 'ACEPTADO_RECEPCION'))
+        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && l.currentStatus === 'LIBERADO'))
         setProductos(productos)
         setProveedores(proveedores)
       })
@@ -66,8 +71,7 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
       <div>
         <h2 className="text-lg font-bold text-marron-cafe">Lotes asignados</h2>
         <p className="text-xs text-marron-cafe/40">
-          Materia prima ya recibida en Almacén y aceptada por Calidad (ACEPTADO_RECEPCION) — lista para arrancar el
-          lavado de Área A.
+          Materia prima ya liberada (LIBERADO) — lista para arrancar el lavado de Área A.
         </p>
       </div>
 

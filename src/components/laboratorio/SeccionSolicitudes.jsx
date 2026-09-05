@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { analysisRequestsService } from '../../services/analysisRequestsService'
 import { analysisExecutionsService } from '../../services/analysisExecutionsService'
 import { externalShipmentsService } from '../../services/externalShipmentsService'
+import { laboratoryReportsService } from '../../services/laboratoryReportsService'
 import { listarTodo } from '../../services/paginacion'
 import { formatearEstadoSolicitud } from '../../config/analisisLabels'
 import Badge from '../Badge.jsx'
@@ -28,6 +29,19 @@ const TONO_ESTADO_SOLICITUD = {
   EN_PROCESO: 'alerta',
   PENDIENTE_EXTERNOS: 'alerta',
   ANALIZADA: 'positivo',
+}
+
+// Un ensayo interno ya tiene su categoría (`internalReportType`) resuelta
+// cuando su informe vigente (no REEMPLAZADO/ANULADO) está VALIDADO —
+// mismo criterio de "vigente" que usa FormularioIniciarAnalisis.jsx. Si
+// falta alguna categoría entre los ensayos internos de la solicitud, o no
+// llegaron los informes todavía, se considera que aún falta analizar.
+const internoYaValidado = (ensayosInternos, informes) => {
+  if (!Array.isArray(informes)) return false
+  const tipos = new Set(ensayosInternos.map((i) => i.internalReportType).filter(Boolean))
+  if (tipos.size === 0) return false
+  const vigentes = informes.filter((inf) => inf.status !== 'REEMPLAZADO' && inf.status !== 'ANULADO')
+  return [...tipos].every((tipo) => vigentes.some((inf) => inf.internalReportType === tipo && inf.status === 'VALIDADO'))
 }
 
 const ESTADO_ENVIO = {
@@ -55,6 +69,7 @@ export default function SeccionSolicitudes() {
   const [detallePorSolicitud, setDetallePorSolicitud] = useState({})
   const [enviosPorSolicitud, setEnviosPorSolicitud] = useState({})
   const [ejecucionesPorSolicitud, setEjecucionesPorSolicitud] = useState({})
+  const [informesPorSolicitud, setInformesPorSolicitud] = useState({})
 
   const pedidosId = useRef(new Set())
   const pedidosEjecucionesId = useRef(new Set())
@@ -95,6 +110,7 @@ export default function SeccionSolicitudes() {
       setDetallePorSolicitud({})
       setEnviosPorSolicitud({})
       setEjecucionesPorSolicitud({})
+      setInformesPorSolicitud({})
       setSolicitudes(solicitudes.filter((s) => s.status !== 'PENDIENTE_MUESTRA' && s.status !== 'RECHAZADA'))
     } catch (err) {
       setErrorCarga(err.message)
@@ -165,15 +181,27 @@ export default function SeccionSolicitudes() {
       })
     })
 
+    Promise.allSettled(candidatos.map((id) => laboratoryReportsService.listarPorSolicitud(id))).then((resultados) => {
+      if (cancelado) return
+      setInformesPorSolicitud((prev) => {
+        const siguiente = { ...prev }
+        resultados.forEach((r, i) => {
+          siguiente[candidatos[i]] = r.status === 'fulfilled' ? r.value : []
+        })
+        return siguiente
+      })
+    })
+
     return () => {
       cancelado = true
     }
   }, [detallePorSolicitud])
 
   const refrescarSolicitud = useCallback(async (requestId) => {
-    const [detalle, envios] = await Promise.allSettled([
+    const [detalle, envios, informes] = await Promise.allSettled([
       analysisRequestsService.obtener(requestId),
       externalShipmentsService.listarPorSolicitud(requestId),
+      laboratoryReportsService.listarPorSolicitud(requestId),
     ])
     if (detalle.status === 'fulfilled') {
       setDetallePorSolicitud((prev) => ({ ...prev, [requestId]: detalle.value }))
@@ -181,6 +209,9 @@ export default function SeccionSolicitudes() {
     }
     if (envios.status === 'fulfilled') {
       setEnviosPorSolicitud((prev) => ({ ...prev, [requestId]: envios.value }))
+    }
+    if (informes.status === 'fulfilled') {
+      setInformesPorSolicitud((prev) => ({ ...prev, [requestId]: informes.value }))
     }
   }, [])
 
@@ -229,6 +260,8 @@ export default function SeccionSolicitudes() {
             detalle: detalleOk,
             ensayos: ensayosInternos,
             ejecuciones: ejecucionesPorSolicitud[s.id],
+            informesCargados: informesPorSolicitud[s.id] !== undefined,
+            internoValidado: internoYaValidado(ensayosInternos, informesPorSolicitud[s.id]),
           })
         }
 
@@ -287,7 +320,7 @@ export default function SeccionSolicitudes() {
         totalSolicitudes,
       }
     })
-  }, [solicitudes, detallePorSolicitud, enviosPorSolicitud, ejecucionesPorSolicitud])
+  }, [solicitudes, detallePorSolicitud, enviosPorSolicitud, ejecucionesPorSolicitud, informesPorSolicitud])
 
   const lotesFiltrados = useMemo(() => {
     if (filtroLote === 'todos') return lotesCalculados
@@ -432,7 +465,7 @@ export default function SeccionSolicitudes() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-marron-tierra/10">
-                              {internas.map(({ s, detalle, ensayos, ejecuciones }) => {
+                              {internas.map(({ s, detalle, ensayos, ejecuciones, informesCargados, internoValidado }) => {
                                 const abiertoEnsayos = ensayosDesplegados.has(`int-${s.id}`)
                                 const listo = ejecuciones !== undefined && ejecuciones.length > 0
 
@@ -460,7 +493,18 @@ export default function SeccionSolicitudes() {
                                       </td>
                                       <td className="py-3 px-3 text-right">
                                         {puedeIniciarAnalisis && (
-                                          listo ? (
+                                          listo && !informesCargados ? (
+                                            <Skeleton className="ml-auto h-6 w-24 rounded-full" />
+                                          ) : internoValidado ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => alClicarAnalizar(s.id)}
+                                              className="inline-flex items-center gap-1.5 rounded-full border border-marron-tierra/30 px-3.5 py-1 text-xs font-semibold text-marron-cafe/70 hover:bg-marron-tierra/10 transition-colors"
+                                            >
+                                              <FlaskConical className="size-3.5" strokeWidth={2} />
+                                              Ver informe
+                                            </button>
+                                          ) : listo ? (
                                             <button
                                               type="button"
                                               onClick={() => alClicarAnalizar(s.id)}

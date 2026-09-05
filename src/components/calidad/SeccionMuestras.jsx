@@ -9,7 +9,8 @@ import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
 import EmptyState from '../EmptyState.jsx'
-import { formatearEstadoSolicitud } from '../../config/analisisLabels'
+import { formatearEstadoSolicitud, formatearEstadoLote, TONO_ESTADO_LOTE } from '../../config/analisisLabels'
+import PillTabs from '../dashboard/PillTabs.jsx'
 import ModalCrearMuestra from './ModalCrearMuestra.jsx'
 import ModalSolicitarAnalisis from './ModalSolicitarAnalisis.jsx'
 import ModalDetalleMuestra from './ModalDetalleMuestra.jsx'
@@ -57,6 +58,18 @@ const TONO_ESTADO_MUESTRA = {
   RECHAZADA: 'negativo',
 }
 
+// Sub-pestañas por estado de liberación del LOTE (no de la muestra ni la
+// solicitud) — ver lotsService.liberar()/SeccionInformeMuestra.jsx.
+// Binario: "Liberado" (currentStatus === LIBERADO) o "Por liberar" (todo
+// el resto del pipeline — ACEPTADO_RECEPCION/LAVADO/EN_ANALISIS/etc.),
+// aunque solo desde EN_ANALISIS se pueda liberar realmente (ver
+// docs/lots.md §3 del backend).
+const SUBPESTAÑAS_LOTES = [
+  { id: 'por_liberar', nombre: 'Por liberar' },
+  { id: 'liberado', nombre: 'Liberado' },
+]
+const categoriaLiberacion = (currentStatus) => (currentStatus === 'LIBERADO' ? 'liberado' : 'por_liberar')
+
 export default function SeccionMuestras() {
   const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
@@ -66,6 +79,7 @@ export default function SeccionMuestras() {
 
   const [modalCrearAbierto, setModalCrearAbierto] = useState(false)
   const [solicitudPara, setSolicitudPara] = useState(null) // { muestra, lote } | null
+  const [subpestaña, setSubpestaña] = useState('por_liberar')
 
   useEffect(() => {
     let cancelado = false
@@ -122,6 +136,11 @@ export default function SeccionMuestras() {
     [lotes, muestrasPorLote],
   )
 
+  const lotesFiltrados = useMemo(
+    () => lotesConMuestras.filter(({ lote }) => categoriaLiberacion(lote.currentStatus) === subpestaña),
+    [lotesConMuestras, subpestaña],
+  )
+
   const [detalleDe, setDetalleDe] = useState(null) // { muestra, lote } | null
 
   const abrirDetalle = (muestra, lote) => setDetalleDe({ muestra, lote })
@@ -168,6 +187,10 @@ export default function SeccionMuestras() {
         </Button>
       </div>
 
+      {lotes !== null && lotesConMuestras.length > 0 && (
+        <PillTabs pestañas={SUBPESTAÑAS_LOTES} activa={subpestaña} onCambiar={setSubpestaña} />
+      )}
+
       {lotes === null ? (
         <div className="flex flex-col gap-2 rounded-3xl bg-marron-tierra/5 p-4">
           <Skeleton className="h-4 w-1/3" />
@@ -175,13 +198,21 @@ export default function SeccionMuestras() {
         </div>
       ) : lotesConMuestras.length === 0 ? (
         <EmptyState Icon={FlaskConical} titulo="Todavía no se creó ninguna muestra" />
+      ) : lotesFiltrados.length === 0 ? (
+        <EmptyState Icon={FlaskConical} titulo="Ningún lote en esta categoría" />
       ) : (
-        lotesConMuestras.map(({ lote, muestras }) => (
+        lotesFiltrados.map(({ lote, muestras }) => (
           <div key={lote.id} className="flex flex-col gap-2 rounded-3xl bg-marron-tierra/5 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs font-semibold text-marron-cafe/70">{lote.code}</span>
               <span className="text-sm font-semibold text-marron-cafe">{productoNombre(lote.productId)}</span>
               <span className="text-sm text-marron-cafe/60">{proveedorNombre(lote.supplierId)}</span>
+              <Badge
+                tono={lote.currentStatus === 'LIBERADO' ? 'liberado' : (TONO_ESTADO_LOTE[lote.currentStatus] ?? 'neutro')}
+                className="ml-auto"
+              >
+                {formatearEstadoLote(lote.currentStatus)}
+              </Badge>
             </div>
             <div className="overflow-hidden rounded-2xl bg-white/60">
               {muestras.map((m) => {

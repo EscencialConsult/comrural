@@ -37,4 +37,12 @@ export const lotsService = {
   async actualizar(lotId, dto) {
     return apiClient.patch(`/lots/${lotId}`, dto)
   },
+
+  // Transiciona EN_ANALISIS -> LIBERADO (ver docs/lots.md §3/§7 del backend).
+  // Sin body. El backend no valida cobertura de informes acá — esa
+  // advertencia la arma el frontend con laboratoryReportsService.cobertura()
+  // antes de llamar (ver SeccionInformeMuestra.jsx, Calidad).
+  async liberar(lotId) {
+    return apiClient.post(`/lots/${lotId}/release`, {})
+  },
 }

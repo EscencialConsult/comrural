@@ -1,11 +1,15 @@
-import { useState } from 'react'
-import { FileText, Download } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { FileText, Download, PackageCheck } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext.jsx'
 import { documentsService } from '../../services/documentsService'
+import { lotsService } from '../../services/lotsService'
+import { laboratoryReportsService } from '../../services/laboratoryReportsService'
 import { toast } from '../../lib/toast'
 import { formatearEstadoSolicitud } from '../../config/analisisLabels'
 import Badge from '../Badge.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
+import ConfirmModal from '../ConfirmModal.jsx'
 
 export const REPORT_STATUS_LABEL = {
   BORRADOR: 'Borrador',
@@ -37,12 +41,15 @@ export const etiquetaInforme = (informe) =>
     : `Externo${informe.externalReportCode ? ` — ${informe.externalReportCode}` : ''}`
 
 // Pestaña "Informe" del detalle de muestra (ModalDetalleMuestra.jsx,
-// Calidad) — lista los informes reales de la solicitud (GET
+// Calidad) — lista los informes ya VALIDADOS de la solicitud (GET
 // /analysis-requests/:id/reports, mismos datos que arma Laboratorio en
 // FormularioIniciarAnalisis.jsx): un informe por planilla interna
-// (Físico-Químico / Microbiológico) vigente, más uno por envío externo ya
-// resuelto. El PDF final se descarga acá mismo una vez VALIDADO.
-export default function SeccionInformeMuestra({ detalle, solicitudDetalle, informes }) {
+// (Físico-Químico / Microbiológico), más uno por envío externo ya
+// resuelto. Deliberadamente NO muestra BORRADOR/PENDIENTE_VALIDACION acá —
+// esto es lo que Calidad recibe como definitivo, no el trabajo en curso de
+// Laboratorio (eso vive en FormularioIniciarAnalisis.jsx/Laboratorio). El
+// PDF se descarga acá mismo.
+export default function SeccionInformeMuestra({ detalle, solicitudDetalle, informes, onLoteLiberado }) {
   if (!solicitudDetalle) {
     return (
       <p className="rounded-2xl bg-marron-tierra/5 px-4 py-8 text-center text-sm text-marron-cafe/50">
@@ -60,7 +67,7 @@ export default function SeccionInformeMuestra({ detalle, solicitudDetalle, infor
     )
   }
 
-  const vigentes = informesVigentes(informes)
+  const vigentes = informesVigentes(informes).filter((i) => i.status === 'VALIDADO')
 
   return (
     <div className="flex flex-col gap-4">
@@ -103,6 +110,102 @@ export default function SeccionInformeMuestra({ detalle, solicitudDetalle, infor
           </div>
         )}
       </div>
+
+      <LiberarLote lot={detalle.lot} requestId={solicitudDetalle.id} onLoteLiberado={onLoteLiberado} />
+    </div>
+  )
+}
+
+// Botón de liberación del lote — EN_ANALISIS -> LIBERADO (ver
+// comrural_erp_backend/docs/lots.md §3/§7, LotsService.release). Bloqueado
+// mientras falte algún ensayo (interno o externo) sin informe VALIDADO —
+// se pide GET /analysis-requests/:id/coverage (laboratoryReportsService.
+// cobertura, ya existente) apenas se conoce la solicitud, no recién al
+// clickear, así el botón ya nace deshabilitado si corresponde. El backend
+// (LotsService.release) no valida esto — es una regla de esta pantalla.
+function LiberarLote({ lot, requestId, onLoteLiberado }) {
+  const { permisos } = useAuth()
+  const [cobertura, setCobertura] = useState(null) // null = cargando
+  const [liberando, setLiberando] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+
+  useEffect(() => {
+    if (lot.currentStatus !== 'EN_ANALISIS') return
+    let cancelado = false
+    laboratoryReportsService
+      .cobertura(requestId)
+      .then((c) => !cancelado && setCobertura(c))
+      .catch((err) => !cancelado && toast.error(err.message))
+    return () => {
+      cancelado = true
+    }
+  }, [requestId, lot.currentStatus])
+
+  if (!permisos.has('lots:release')) return null
+
+  if (lot.currentStatus === 'LIBERADO') {
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-marron-tierra/10 p-4">
+        <p className="text-sm font-bold text-marron-cafe">Liberación del lote</p>
+        <Badge tono="positivo">Lote liberado</Badge>
+      </div>
+    )
+  }
+
+  if (lot.currentStatus !== 'EN_ANALISIS') return null
+
+  const confirmarLiberacion = async () => {
+    if (liberando) return
+    setLiberando(true)
+    try {
+      const actualizado = await lotsService.liberar(lot.id)
+      toast.success(`Lote ${lot.code} liberado`)
+      onLoteLiberado?.(actualizado.currentStatus)
+      setConfirmando(false)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLiberando(false)
+    }
+  }
+
+  const faltantes = cobertura ? [...cobertura.pendingInternal, ...cobertura.pendingExternal] : []
+  const puedeLiberar = cobertura !== null && faltantes.length === 0
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-marron-tierra/10 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-marron-cafe">Liberación del lote</p>
+          <p className="text-xs text-marron-cafe/60">Lote {lot.code}</p>
+        </div>
+        <Button
+          type="button"
+          className="gap-1.5 px-3 py-1.5 text-xs"
+          disabled={cobertura === null || !puedeLiberar}
+          onClick={() => setConfirmando(true)}
+        >
+          <PackageCheck className="size-3.5" strokeWidth={2} />
+          {cobertura === null ? 'Verificando…' : 'Liberar lote'}
+        </Button>
+      </div>
+
+      {cobertura !== null && faltantes.length > 0 && (
+        <p className="rounded-xl bg-marron-arcilla/10 px-3 py-2 text-xs font-medium text-marron-arcilla">
+          Todavía falta{faltantes.length === 1 ? '' : 'n'} un informe validado de: {faltantes.join(', ')}. No se
+          puede liberar el lote hasta que estén todos los ensayos (interno y externo) validados.
+        </p>
+      )}
+
+      <ConfirmModal
+        abierto={confirmando}
+        titulo="Liberar lote"
+        mensaje={`¿Confirmás la liberación del lote ${lot.code}?`}
+        textoConfirmar={liberando ? 'Liberando…' : 'Confirmar liberación'}
+        variante="exito"
+        onConfirmar={confirmarLiberacion}
+        onCancelar={() => setConfirmando(false)}
+      />
     </div>
   )
 }
