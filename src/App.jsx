@@ -29,6 +29,7 @@ const PanelAlmacenRecepcion = lazy(() => import('./pages/PanelAlmacenRecepcion.j
 const PanelCalidad = lazy(() => import('./pages/PanelCalidad.jsx'))
 const PanelProduccion = lazy(() => import('./pages/PanelProduccion.jsx'))
 const PanelProduccionAreaA = lazy(() => import('./pages/PanelProduccionAreaA.jsx'))
+const PanelProduccionAreaB = lazy(() => import('./pages/PanelProduccionAreaB.jsx'))
 const PanelGerencia = lazy(() => import('./pages/PanelGerencia.jsx'))
 const PanelLaboratorio = lazy(() => import('./pages/PanelLaboratorio.jsx'))
 const PanelCalidadRecepcion = lazy(() => import('./pages/PanelCalidadRecepcion.jsx'))
@@ -111,6 +112,7 @@ function App() {
           <Route path="/panel/calidad" element={<PanelCalidad />} />
           <Route path="/panel/produccion" element={<PanelProduccion />} />
           <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
+          <Route path="/panel/produccion/area-b" element={<PanelProduccionAreaB />} />
           <Route path="/panel/gerencia" element={<PanelGerencia />} />
           <Route path="/panel/laboratorio" element={<PanelLaboratorio />} />
           <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />

@@ -626,26 +626,27 @@ export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloV
               >
                 {enviando ? 'Finalizando…' : 'Finalizar recepción'}
               </Button>
+            ) : puedeCerrarConPesos || puedeCerrarSinPesos ? (
+              // Último paso real (registrar pesos y cerrar) — "Guardar
+              // cambios" no sirve acá: su DTO (dtoDocumentosYTransporte) no
+              // manda pesoBruto/pesoNeto, así que tipear el peso y apretar
+              // "Guardar" no guardaba nada. Se saca del todo en este paso,
+              // queda solo "Cerrar recepción" (que sí manda los pesos).
+              <Button
+                disabled={enviando || !pesosValidos}
+                title={!pesosValidos ? 'Falta el peso bruto y neto para cerrar la recepción' : undefined}
+                onClick={cerrar}
+              >
+                {enviando ? 'Cerrando…' : 'Cerrar recepción'}
+              </Button>
             ) : (
-              <>
-                <Button
-                  disabled={enviando || !validoParaGuardar}
-                  title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.map((m) => m.texto).join(', ')}` : undefined}
-                  onClick={guardar}
-                >
-                  {enviando ? 'Guardando…' : 'Guardar cambios'}
-                </Button>
-                {(puedeCerrarConPesos || puedeCerrarSinPesos) && (
-                  <Button
-                    variant="secondary"
-                    disabled={enviando || !pesosValidos}
-                    title={!pesosValidos ? 'Falta el peso bruto y neto para cerrar la recepción' : undefined}
-                    onClick={cerrar}
-                  >
-                    {enviando ? 'Cerrando…' : 'Cerrar recepción'}
-                  </Button>
-                )}
-              </>
+              <Button
+                disabled={enviando || !validoParaGuardar}
+                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.map((m) => m.texto).join(', ')}` : undefined}
+                onClick={guardar}
+              >
+                {enviando ? 'Guardando…' : 'Guardar cambios'}
+              </Button>
             )}
           </div>
 

@@ -51,10 +51,13 @@ const FORM_VACIO = {
 
 // Mismo filtro que SeccionLotesProduccion.jsx (pestaña "Lotes") — el punto
 // de entrada a Área A pasó a ser LIBERADO (pedido explícito, ver esa
-// pantalla). El buscador de la cabecera tenía que filtrar igual: si seguía
-// en ACEPTADO_RECEPCION/LAVADO, nunca encontraba los lotes que "Lotes" ya
-// entrega, porque esos ya no existen en ese estado para cuando llegan acá.
-const ESTADOS_CANDIDATOS = ['LIBERADO']
+// pantalla). LAVADO entra también acá (pedido explícito): un lote que ya
+// inició el lavado pero todavía no llegó al 100% de bolsas (LAVADO_COMPLETO)
+// tiene que seguir apareciendo en este buscador para poder cargarle más
+// entradas — si no, "Lote MP" no encontraría lotes que "Lotes" ya entrega
+// una vez que se registró la primera entrada (LotsService.startWashing los
+// saca de LIBERADO).
+const ESTADOS_CANDIDATOS = ['LIBERADO', 'LAVADO']
 
 // Regla exacta del relevamiento (I-PRO-03/R-01): Secador 1 no debe trabajar
 // por debajo de 70°C — mismo umbral que dispara la notificación del backend
@@ -172,7 +175,16 @@ export default function ControlVolumenA({ loteInicialId }) {
   // y del propio turno (lo lavado no puede superar lo utilizado). Si el
   // valor tipeado supera el tope, se corrige al tope automáticamente — no
   // se deja pasar el número inválido ni un instante.
-  const maxBolsasLote = datosLote?.warehouseReceipt?.storedPackageCount ?? null
+  //
+  // El tope de bolsas es sobre lo que QUEDA del lote, no sobre el total: se
+  // resta lo usedBags de las entradas ya cargadas en el historial (abiertas
+  // o cerradas, todas cuentan porque las bolsas ya salieron de almacén) —
+  // pedido explícito: si el lote tiene 100 bolsas y una entrada ya usó 80,
+  // la próxima admite máximo 20. Mismo criterio que valida el backend en
+  // production-area-a-entries.service.ts (assertBagsAvailable).
+  const totalBolsasLote = datosLote?.warehouseReceipt?.storedPackageCount ?? null
+  const bolsasYaUsadas = (historial ?? []).reduce((acc, h) => acc + h.usedBags, 0)
+  const maxBolsasLote = totalBolsasLote != null ? Math.max(totalBolsasLote - bolsasYaUsadas, 0) : null
   const maxKgLote = datosLote?.warehouseReceipt?.acceptedNetWeightKg ?? null
 
   const actualizarConTope = (campo, tope) => (valorStr) => {
@@ -354,7 +366,7 @@ export default function ControlVolumenA({ loteInicialId }) {
               value={form.usedBags ?? ''}
               onChange={(e) => actualizarConTope('usedBags', maxBolsasLote)(e.target.value)}
               className={claseTope(enTope(form.usedBags, maxBolsasLote))}
-              hint={maxBolsasLote != null ? `Máx. ${maxBolsasLote} sacos del lote` : undefined}
+              hint={maxBolsasLote != null ? `Máx. ${maxBolsasLote} sacos disponibles (de ${totalBolsasLote} del lote)` : undefined}
             />
           </div>
           <div ref={refCampo('usedKg')}>
@@ -519,7 +531,13 @@ export default function ControlVolumenA({ loteInicialId }) {
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-marron-tierra/15 pt-2 text-xs">
                     <span className="text-marron-cafe/60">
+                      Bolsas usadas: <span className="font-semibold text-marron-cafe">{h.usedBags}</span>
+                    </span>
+                    <span className="text-marron-cafe/60">
                       Utilizados: <span className="font-semibold text-marron-cafe">{h.usedKg.toFixed(3)} kg</span>
+                    </span>
+                    <span className="text-marron-cafe/60">
+                      Bolsas lavadas: <span className="font-semibold text-marron-cafe">{h.washedBags}</span>
                     </span>
                     <span className="text-marron-cafe/60">
                       Lavados: <span className="font-semibold text-marron-cafe">{h.washedKg.toFixed(3)} kg</span>
@@ -533,21 +551,32 @@ export default function ControlVolumenA({ loteInicialId }) {
                         {h.difKg.toFixed(3)} kg
                       </span>
                     </span>
+                    {h.closedAt && (
+                      <span className="text-marron-cafe/60">
+                        Secadores:{' '}
+                        <span className="font-semibold text-marron-cafe">
+                          {h.avgDryer1TempC.toFixed(2)}°C / {h.avgDryer2TempC.toFixed(2)}°C
+                        </span>
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
 
             <div className="hidden overflow-x-auto rounded-2xl bg-white/70 md:block">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
+            <table className="w-full min-w-[960px] border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-verde-hoja/35 text-left text-xs font-bold uppercase tracking-wide text-verde-bosque">
                   <th className="px-3 py-2.5">Fecha</th>
                   <th className="px-3 py-2.5">Turno</th>
+                  <th className="px-3 py-2.5">Bolsas usadas</th>
                   <th className="px-3 py-2.5">Utilizados (kg)</th>
+                  <th className="px-3 py-2.5">Bolsas lavadas</th>
                   <th className="px-3 py-2.5">Lavados (kg)</th>
                   <th className="px-3 py-2.5">Merma (kg)</th>
                   <th className="px-3 py-2.5">DIF (kg)</th>
+                  <th className="px-3 py-2.5">Secadores (°C)</th>
                   <th className="px-3 py-2.5">Estado</th>
                 </tr>
               </thead>
@@ -556,11 +585,16 @@ export default function ControlVolumenA({ loteInicialId }) {
                   <tr key={h.id} className="border-b border-marron-tierra/15 last:border-b-0">
                     <td className="px-3 py-2">{h.entryDate}</td>
                     <td className="px-3 py-2">{turnoNombre(h.shiftId)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{h.usedBags}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h.usedKg.toFixed(3)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{h.washedBags}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h.washedKg.toFixed(3)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{h.mermaKg.toFixed(3)}</td>
                     <td className={`px-3 py-2 text-right tabular-nums font-semibold ${h.difKg < 0 ? 'text-rojo-pasankalla' : 'text-verde-bosque'}`}>
                       {h.difKg.toFixed(3)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {h.closedAt ? `${h.avgDryer1TempC.toFixed(2)} / ${h.avgDryer2TempC.toFixed(2)}` : '—'}
                     </td>
                     <td className="px-3 py-2">
                       <Badge tono={h.closedAt ? 'positivo' : 'alerta'}>{h.closedAt ? 'Cerrada' : 'Abierta'}</Badge>

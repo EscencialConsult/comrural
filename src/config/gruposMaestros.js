@@ -201,6 +201,13 @@ export const GRUPOS_MAESTROS = [
     // (PillTabs, ver SeccionAreaA.jsx) con los formularios de esa área —
     // esas subpestañas NO son rutas, viven en un solo nivel más abajo que
     // esto.
+    //
+    // "Área B" es hermana de "Área A" (pedido explícito) — igual patrón,
+    // sus propias subpestañas locales (PillTabs) viven adentro
+    // (SeccionAreaB.jsx), no acá. "Control de Existencias" es la primera de
+    // esas subpestañas: por ahora solo lista los lotes que ya iniciaron el
+    // lavado (currentStatus === 'LAVADO', ver SeccionControlExistencias.jsx)
+    // — el resto del contenido todavía no está definido.
     padre: { nombre: 'Producción', ruta: '/panel/produccion', permiso: 'produccion:read', Icon: Factory },
     items: [
       {
@@ -209,6 +216,13 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/produccion/area-a',
         permiso: 'produccion:read',
         Icon: Warehouse,
+      },
+      {
+        id: 'area-b',
+        nombre: 'Área B',
+        ruta: '/panel/produccion/area-b',
+        permiso: 'produccion:read',
+        Icon: Boxes,
       },
     ],
   },
