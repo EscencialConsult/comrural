@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Check } from 'lucide-react'
 import { shiftsService } from '../../../services/shiftsService'
 import { productsService } from '../../../services/productsService'
 import { lotsService } from '../../../services/lotsService'
@@ -63,13 +63,20 @@ const KG_POR_SACO_LAVADO = 45
 // llama "Merma" en el resumen pero NO son desecho, son subproductos con
 // destino comercial (mercado local / alimento balanceado) — el sistema
 // tiene que tratarlos como tales, no como pérdida.
+//
+// La columna "x Kg" del papel se reemplaza acá por "Quinua Tercera": el
+// análisis funcional (relevamiento 3) confirma que la quinua tercera es un
+// subproducto real de Área B, con su propio indicador (RP-25, < 1,70%), y
+// que el R-25 todavía no le tenía una columna explícita — "x" era el hueco
+// que ocupaba. Pendiente de confirmar con el cliente que el mapeo es
+// exactamente ese y no otra cosa.
 const GRUPOS_DETALLE = [
   { key: 'q2da', label: 'Q. 2da (a)' },
   { key: 'pNegros', label: 'P. Negros (b)' },
   { key: 'rechazo', label: 'Rechazo (c)' },
   { key: 'polvillo', label: 'Polvillo (d)' },
   { key: 'saldoQf', label: 'Saldo Q.F.' },
-  { key: 'x', label: 'x Kg' },
+  { key: 'tercera', label: 'Quinua Tercera' },
 ]
 
 let siguienteId = 1
@@ -183,15 +190,12 @@ export default function ControlVolumenB() {
   const totalEnvasadosSacos = sumar(filas, 'envasadosSacos')
   const totalEnvasadosKg = sumar(filas, 'envasadosKg')
   const totalQ2daKg = sumar(filas, 'q2daKg')
+  const totalTerceraKg = sumar(filas, 'terceraKg')
 
-  // Indicadores del punto 8 del relevamiento — solo los dos calculables con
-  // las columnas que ya modela este formulario. "Quinua tercera" queda
-  // afuera a propósito: su fórmula pide un total de "Q. 3ra kg" que no
-  // corresponde a ninguna columna actual (en el ejemplo del papel aparecía
-  // suelto en Observaciones, como texto libre) — falta definir de dónde
-  // sale ese dato antes de calcularlo acá.
+  // Los tres indicadores de Área B (RP-25 del análisis funcional).
   const rendimientoAreaB = totalUsadosKg > 0 ? (totalEnvasadosKg / totalUsadosKg) * 100 : null
   const quinuaSegunda = totalUsadosKg > 0 ? (totalQ2daKg / totalUsadosKg) * 100 : null
+  const quinuaTercera = totalUsadosKg > 0 ? (totalTerceraKg / totalUsadosKg) * 100 : null
 
   // No hay endpoint todavía (ver comentario de arriba del componente) — el
   // click no debe fallar en silencio ni parecer que guardó, así que por
@@ -244,23 +248,33 @@ export default function ControlVolumenB() {
 
         <div className="flex flex-col gap-2">
           <span className="text-sm text-marron-cafe">Normas certificadas</span>
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {NORMAS_DISPONIBLES.map((norma) => {
               const activa = normas.includes(norma)
               return (
-                <button
+                <label
                   key={norma}
-                  type="button"
-                  aria-pressed={activa}
-                  onClick={() => alternarNorma(norma)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  className={`relative flex cursor-pointer items-center justify-between gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                     activa
-                      ? 'bg-verde-lima text-marron-cafe shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]'
-                      : 'border border-marron-tierra/20 text-marron-cafe/60 hover:bg-marron-tierra/5'
+                      ? 'bg-verde-hoja/15 text-verde-bosque ring-1 ring-verde-bosque/25'
+                      : 'bg-white/70 text-marron-cafe/70 hover:bg-marron-tierra/5 hover:text-marron-cafe'
                   }`}
                 >
+                  <input
+                    type="checkbox"
+                    checked={activa}
+                    onChange={() => alternarNorma(norma)}
+                    className="sr-only"
+                  />
                   {norma}
-                </button>
+                  <span
+                    className={`flex size-5 shrink-0 items-center justify-center rounded-md border-2 transition-all duration-200 ${
+                      activa ? 'border-verde-bosque bg-verde-bosque text-crema-quinua' : 'border-marron-tierra/30 bg-white'
+                    }`}
+                  >
+                    {activa && <Check className="size-3.5" strokeWidth={3} />}
+                  </span>
+                </label>
               )
             })}
             <FormInput
@@ -268,7 +282,6 @@ export default function ControlVolumenB() {
               placeholder="Otra norma…"
               value={otraNorma}
               onChange={(e) => setOtraNorma(e.target.value)}
-              className="w-40"
             />
           </div>
         </div>
@@ -434,12 +447,8 @@ export default function ControlVolumenB() {
         </div>
       </SeccionFormulario>
 
-      <SeccionFormulario
-        numero={3}
-        titulo="Indicadores del lote"
-        nota="Punto 8 del relevamiento — «Quinua tercera» queda pendiente: su fórmula pide un total de Q. 3ra kg que hoy no corresponde a ninguna columna del formulario."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
+      <SeccionFormulario numero={3} titulo="Indicadores del lote">
+        <div className="grid gap-4 sm:grid-cols-3">
           <IndicadorTile
             etiqueta="Rendimiento Área B"
             valor={rendimientoAreaB}
@@ -451,6 +460,12 @@ export default function ControlVolumenB() {
             valor={quinuaSegunda}
             meta="< 3%"
             cumple={quinuaSegunda != null && quinuaSegunda < 3}
+          />
+          <IndicadorTile
+            etiqueta="Quinua tercera"
+            valor={quinuaTercera}
+            meta="< 1,70%"
+            cumple={quinuaTercera != null && quinuaTercera < 1.7}
           />
         </div>
       </SeccionFormulario>

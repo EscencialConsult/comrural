@@ -16,6 +16,10 @@ import {
   Factory,
   Users,
   ShieldCheck,
+  Truck,
+  ListChecks,
+  Activity,
+  PackageCheck,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -187,6 +191,59 @@ export const GRUPOS_MAESTROS = [
         permiso: 'control-proceso-a:read',
         Icon: ClipboardCheck,
       },
+      // MOCKUP (RP-17, ver SeccionInspeccionAreaB.jsx) — verificación de
+      // pureza antes del envasado de Área B. Nunca se compartió un
+      // formulario real de esto en las reuniones, a diferencia de sus
+      // hermanas de arriba.
+      {
+        id: 'inspeccion-area-b',
+        nombre: 'Inspección Área B',
+        ruta: '/panel/calidad/inspeccion-area-b',
+        permiso: 'lots:read',
+        Icon: ShieldCheck,
+      },
+    ],
+  },
+  {
+    id: 'laboratorio',
+    // Cambio puramente visual (pedido explícito): antes "Laboratorio" era
+    // un único link plano en el sidebar (ver DashboardSidebar.jsx) con sus
+    // 4 secciones como pastillas locales DENTRO de la pantalla
+    // (PanelLaboratorio.jsx, PillTabs). Ahora sigue el mismo molde que
+    // Calidad/Compras/Almacén: el padre ("Laboratorio") es la pantalla de
+    // "Recepción de muestras" en sí (mismo criterio que Compras, cuyo padre
+    // ES la gestión de lotes, no un Inicio separado), y las otras 3 son
+    // hermanas con ruta propia — GrupoTabs.jsx ya las muestra como
+    // pastillas arriba solo con esta entrada. El sidebar en sí necesita un
+    // ajuste manual aparte (ver DashboardSidebar.jsx) porque Laboratorio no
+    // tiene fila en modulos.json — no pasa por el mecanismo automático que
+    // usan los módulos de negocio reales.
+    padre: { nombre: 'Laboratorio', ruta: '/panel/laboratorio', permiso: 'samples:read', Icon: TestTubes },
+    items: [
+      {
+        id: 'analisis',
+        nombre: 'Análisis',
+        ruta: '/panel/laboratorio/analisis',
+        permiso: 'samples:read',
+        Icon: ListChecks,
+      },
+      {
+        id: 'actividad',
+        nombre: 'Actividad',
+        ruta: '/panel/laboratorio/actividad',
+        permiso: 'samples:read',
+        Icon: Activity,
+      },
+      // MOCKUP (RP-21, ver SeccionLoteDespacho.jsx) — antes vivía como 4ta
+      // pastilla local de PanelLaboratorio.jsx, ahora es hermana real como
+      // el resto.
+      {
+        id: 'lote-despacho',
+        nombre: 'Lote de Despacho',
+        ruta: '/panel/laboratorio/lote-despacho',
+        permiso: 'samples:read',
+        Icon: PackageCheck,
+      },
     ],
   },
   {
@@ -243,6 +300,17 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/almacen/recepcion',
         permiso: 'almacen:read',
         Icon: ClipboardList,
+      },
+      // MOCKUP (P-ADM-03/R-24, ver SeccionEntregaMateriaPrima.jsx) —
+      // solicitud/entrega de lotes completos a Producción. Sí tiene un
+      // formulario real de referencia (compartido en la reunión de
+      // relevamiento 1) pero todavía no existe como pantalla ni backend.
+      {
+        id: 'entrega',
+        nombre: 'Entrega de MP',
+        ruta: '/panel/almacen/entrega',
+        permiso: 'almacen:read',
+        Icon: Truck,
       },
     ],
   },

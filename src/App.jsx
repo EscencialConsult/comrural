@@ -26,16 +26,21 @@ const PanelConfiguracion = lazy(() => import('./pages/PanelConfiguracion.jsx'))
 const PanelCompras = lazy(() => import('./pages/PanelCompras.jsx'))
 const PanelAlmacen = lazy(() => import('./pages/PanelAlmacen.jsx'))
 const PanelAlmacenRecepcion = lazy(() => import('./pages/PanelAlmacenRecepcion.jsx'))
+const PanelAlmacenEntrega = lazy(() => import('./pages/PanelAlmacenEntrega.jsx'))
 const PanelCalidad = lazy(() => import('./pages/PanelCalidad.jsx'))
 const PanelProduccion = lazy(() => import('./pages/PanelProduccion.jsx'))
 const PanelProduccionAreaA = lazy(() => import('./pages/PanelProduccionAreaA.jsx'))
 const PanelProduccionAreaB = lazy(() => import('./pages/PanelProduccionAreaB.jsx'))
 const PanelGerencia = lazy(() => import('./pages/PanelGerencia.jsx'))
 const PanelLaboratorio = lazy(() => import('./pages/PanelLaboratorio.jsx'))
+const PanelLaboratorioAnalisis = lazy(() => import('./pages/PanelLaboratorioAnalisis.jsx'))
+const PanelLaboratorioActividad = lazy(() => import('./pages/PanelLaboratorioActividad.jsx'))
+const PanelLaboratorioLoteDespacho = lazy(() => import('./pages/PanelLaboratorioLoteDespacho.jsx'))
 const PanelCalidadRecepcion = lazy(() => import('./pages/PanelCalidadRecepcion.jsx'))
 const PanelCalidadRemito = lazy(() => import('./pages/PanelCalidadRemito.jsx'))
 const PanelCalidadMuestras = lazy(() => import('./pages/PanelCalidadMuestras.jsx'))
 const PanelCalidadControlProceso = lazy(() => import('./pages/PanelCalidadControlProceso.jsx'))
+const PanelCalidadInspeccionAreaB = lazy(() => import('./pages/PanelCalidadInspeccionAreaB.jsx'))
 const PanelRecepcionLote = lazy(() => import('./pages/PanelRecepcionLote.jsx'))
 const PanelInspeccionMateriaPrima = lazy(() => import('./pages/PanelInspeccionMateriaPrima.jsx'))
 const PanelIngresoMateriaPrima = lazy(() => import('./pages/PanelIngresoMateriaPrima.jsx'))
@@ -109,16 +114,21 @@ function App() {
           <Route path="/panel/compras" element={<PanelCompras />} />
           <Route path="/panel/almacen" element={<PanelAlmacen />} />
           <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
+          <Route path="/panel/almacen/entrega" element={<PanelAlmacenEntrega />} />
           <Route path="/panel/calidad" element={<PanelCalidad />} />
           <Route path="/panel/produccion" element={<PanelProduccion />} />
           <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
           <Route path="/panel/produccion/area-b" element={<PanelProduccionAreaB />} />
           <Route path="/panel/gerencia" element={<PanelGerencia />} />
           <Route path="/panel/laboratorio" element={<PanelLaboratorio />} />
+          <Route path="/panel/laboratorio/analisis" element={<PanelLaboratorioAnalisis />} />
+          <Route path="/panel/laboratorio/actividad" element={<PanelLaboratorioActividad />} />
+          <Route path="/panel/laboratorio/lote-despacho" element={<PanelLaboratorioLoteDespacho />} />
           <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
           <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />
           <Route path="/panel/calidad/muestras" element={<PanelCalidadMuestras />} />
           <Route path="/panel/calidad/control-proceso" element={<PanelCalidadControlProceso />} />
+          <Route path="/panel/calidad/inspeccion-area-b" element={<PanelCalidadInspeccionAreaB />} />
           <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
           <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
           <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />

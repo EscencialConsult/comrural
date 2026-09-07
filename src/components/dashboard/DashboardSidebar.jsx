@@ -26,6 +26,13 @@ const GRUPOS_POR_MODULO = new Map(
 )
 const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
 const SUBITEMS_USUARIOS = GRUPOS_MAESTROS.find((g) => g.id === 'usuarios').items
+// Laboratorio no tiene fila en modulos.json (no es un módulo de negocio con
+// permiso "laboratorio:read" — usa samples:read), así que no pasa por
+// GRUPOS_POR_MODULO/`modulos.map(...)` de más abajo como los módulos
+// reales: su NavGroup se arma acá a mano con los mismos datos de
+// gruposMaestros.js (única fuente real, GrupoTabs.jsx ya lee de ahí para
+// las pastillas de arriba) en vez de un link plano suelto.
+const GRUPO_LABORATORIO = GRUPOS_MAESTROS.find((g) => g.id === 'laboratorio')
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
 // (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
@@ -59,6 +66,10 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   )
   const subitemsUsuarios = useMemo(
     () => SUBITEMS_USUARIOS.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsLaboratorio = useMemo(
+    () => GRUPO_LABORATORIO.items.filter((s) => permisos.has(s.permiso)),
     [permisos],
   )
   const [colapsado, setColapsado] = useState(
@@ -268,20 +279,34 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {/* Laboratorio: módulo aparte de Calidad, a pedido explícito
                   (antes eran pantallas hermanas con un navbar compartido) —
-                  no viene de modulos.json, así que va como link manual,
-                  mismo criterio que "Usuarios" más abajo. Gate por
-                  samples:read (el permiso técnico real), no por un flag de
-                  módulo que no existe. */}
-              {permisos.has('samples:read') && (
-                <NavLink
-                  to="/panel/laboratorio"
-                  className={linkClass}
-                  title={colapsadoEfectivo ? 'Laboratorio' : undefined}
-                >
-                  <TestTubes className="size-5 shrink-0" strokeWidth={1.75} />
-                  <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Laboratorio</span>
-                </NavLink>
-              )}
+                  no viene de modulos.json, así que arma su NavGroup a mano
+                  en vez de por el loop de `modulos` de arriba, mismo
+                  criterio que "Usuarios" más abajo. Gate por samples:read
+                  (el permiso técnico real), no por un flag de módulo que no
+                  existe. Sus 4 secciones ahora son hermanas con ruta propia
+                  (antes, pastillas locales dentro de la pantalla — cambio
+                  puramente visual, ver gruposMaestros.js). */}
+              {permisos.has('samples:read') &&
+                (subitemsLaboratorio.length > 0 ? (
+                  <NavGroup
+                    nombre={GRUPO_LABORATORIO.padre.nombre}
+                    ruta={GRUPO_LABORATORIO.padre.ruta}
+                    Icon={TestTubes}
+                    subitems={subitemsLaboratorio}
+                    colapsadoEfectivo={colapsadoEfectivo}
+                    linkClass={linkClass}
+                    onToggle={alExpandirGrupo}
+                  />
+                ) : (
+                  <NavLink
+                    to="/panel/laboratorio"
+                    className={linkClass}
+                    title={colapsadoEfectivo ? 'Laboratorio' : undefined}
+                  >
+                    <TestTubes className="size-5 shrink-0" strokeWidth={1.75} />
+                    <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Laboratorio</span>
+                  </NavLink>
+                ))}
 
               {/* Gestión de usuarios/roles — solo superadmin hoy (permiso
                   real "iam:read", no un código de rol hardcodeado). "Roles y

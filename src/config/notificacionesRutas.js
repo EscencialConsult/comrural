@@ -15,7 +15,10 @@
 // Un `type` que llega sin entrada acá no navega a ningún lado (solo se
 // marca leída) — nunca un botón que lleve a una pantalla rota.
 export const RUTAS_NOTIFICACION = {
-  ANALYSIS_REQUEST_CREATED: [{ permiso: 'samples:read', ruta: () => '/panel/laboratorio?tab=pendientes' }],
+  // "Recepción de muestras" es ahora la pantalla raíz de Laboratorio en sí
+  // (PanelLaboratorio.jsx, ver gruposMaestros.js) — ya no hace falta
+  // `?tab=pendientes`, esa pastilla local dejó de existir.
+  ANALYSIS_REQUEST_CREATED: [{ permiso: 'samples:read', ruta: () => '/panel/laboratorio' }],
 
   PRODUCTION_AREA_A_LOW_DRYER_TEMP: [
     { permiso: 'production-area-a:read', ruta: () => '/panel/produccion/area-a' },
