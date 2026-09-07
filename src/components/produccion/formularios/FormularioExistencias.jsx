@@ -124,7 +124,6 @@ export default function FormularioExistencias({ lote, onVolver }) {
 
       <SeccionFormulario
         titulo="Cabecera y movimientos"
-        nota="Borrador local — todavía no se guarda contra el servidor."
         acciones={
           <div className="flex flex-wrap gap-2">
             <Button className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => agregarFila('entrada')}>
