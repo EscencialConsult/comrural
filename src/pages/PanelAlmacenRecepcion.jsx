@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ClipboardList, X, Pencil, CheckCircle2, XCircle, Play } from 'lucide-react'
+import { ClipboardList, X, Pencil, CheckCircle2, XCircle, Play, Truck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useSolicitud } from '../hooks/useSolicitud'
 import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
@@ -137,6 +138,7 @@ export default function PanelAlmacenRecepcion() {
   const [productos, setProductos] = useState(null)
   const [proveedores, setProveedores] = useState(null)
   const [lotAbierto, setLotAbierto] = useState(null)
+  const [registrandoSinAviso, setRegistrandoSinAviso] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [estado, setEstado] = useState('')
@@ -256,16 +258,46 @@ export default function PanelAlmacenRecepcion() {
     )
   }
 
+  if (registrandoSinAviso) {
+    return (
+      <main className="flex w-full flex-col gap-6 p-6 md:p-10">
+        <FormularioLlegadaSinAviso
+          productos={productos}
+          proveedores={proveedores}
+          onCancelar={() => setRegistrandoSinAviso(false)}
+          onGuardado={(lote) => {
+            setRegistrandoSinAviso(false)
+            recargarLotes()
+            setLotAbierto(lote.id)
+          }}
+        />
+      </main>
+    )
+  }
+
   return (
     <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-      <header className="flex items-center gap-3">
-        <div className="rounded-full bg-verde-hoja/10 p-3">
-          <ClipboardList className="size-6 text-verde-bosque" strokeWidth={1.75} />
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-full bg-verde-hoja/10 p-3">
+            <ClipboardList className="size-6 text-verde-bosque" strokeWidth={1.75} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold text-marron-cafe">Recepción</h1>
+            <p className="text-sm text-marron-cafe/60">Lotes de materia prima — recepción de Almacén.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-extrabold text-marron-cafe">Recepción</h1>
-          <p className="text-sm text-marron-cafe/60">Lotes de materia prima — recepción de Almacén.</p>
-        </div>
+        {/* Sección 4.1 del relevamiento / narrativa: "cuando no existe una
+            orden asociada, el ingreso se registra como manual" — hoy
+            Recepción solo trabaja sobre lotes ya programados desde
+            Compras. Este botón resuelve el caso de un camión que llega sin
+            aviso: crea el lote con fecha "ahora" (el backend no exige que
+            sea futura, ver lot.dto.ts) y entra directo al formulario, sin
+            pasar por Compras primero. */}
+        <Button variant="secondary" className="gap-1.5 px-3.5 py-2 text-sm" onClick={() => setRegistrandoSinAviso(true)}>
+          <Truck className="size-4" strokeWidth={2} />
+          Llegada sin aviso
+        </Button>
       </header>
 
       {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
@@ -504,5 +536,119 @@ export default function PanelAlmacenRecepcion() {
         </>
       )}
     </main>
+  )
+}
+
+// Crea el lote PM con `scheduledReceptionAt` = ahora mismo y abre
+// directo su formulario de ingreso — mismo endpoint real que usa
+// FormularioAltaLote en PanelCompras.jsx (lotsService.crear), solo que acá
+// la fecha no la elige el usuario porque el caso de uso es "esto ya está
+// en la puerta". El backend no exige que la fecha sea futura (ver
+// lot.dto.ts, createLotSchema no lo valida), así que no hace falta ningún
+// cambio de backend para esto.
+function FormularioLlegadaSinAviso({ productos, proveedores, onCancelar, onGuardado }) {
+  const [productId, setProductId] = useState('')
+  const [productIdTocado, setProductIdTocado] = useState(false)
+  const [supplierId, setSupplierId] = useState('')
+  const [supplierIdTocado, setSupplierIdTocado] = useState(false)
+  const { enviando: guardando, error, ejecutar } = useSolicitud()
+
+  const nombreProveedor = (s) => (s.person ? `${s.person.firstNames} ${s.person.lastNames}` : s.organization ? s.organization.tradeName || s.organization.legalName : '—')
+
+  const puedeGuardar = productId !== '' && supplierId !== ''
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!puedeGuardar) return
+    try {
+      const lote = await ejecutar(() =>
+        lotsService.crear({
+          nature: 'PM',
+          productId,
+          supplierId,
+          scheduledReceptionAt: new Date().toISOString(),
+        }),
+      )
+      onGuardado(lote)
+    } catch {
+      // ejecutar() ya guardó el mensaje legible en `error`.
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-5 rounded-3xl bg-marron-tierra/5 p-6">
+      <div className="flex items-center gap-3">
+        <div className="rounded-full bg-verde-hoja/10 p-3">
+          <Truck className="size-6 text-verde-bosque" strokeWidth={1.75} />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold text-marron-cafe">Llegada sin aviso</h1>
+          <p className="text-sm text-marron-cafe/60">
+            Registra el lote con fecha de llegada ahora mismo y te lleva directo al formulario de ingreso.
+          </p>
+        </div>
+      </div>
+
+      {error && <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="min-w-0">
+          <FormSelect
+            label="Producto"
+            value={productId}
+            onChange={(e) => {
+              setProductId(e.target.value)
+              setProductIdTocado(true)
+            }}
+            onBlur={() => setProductIdTocado(true)}
+            hint={productos === null ? 'Cargando productos…' : undefined}
+            required
+          >
+            <option value="">Seleccioná un producto…</option>
+            {productos?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.code})
+              </option>
+            ))}
+          </FormSelect>
+          {productIdTocado && productId === '' && (
+            <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Elegí el producto que llegó.</p>
+          )}
+        </div>
+
+        <div className="min-w-0">
+          <FormSelect
+            label="Proveedor"
+            value={supplierId}
+            onChange={(e) => {
+              setSupplierId(e.target.value)
+              setSupplierIdTocado(true)
+            }}
+            onBlur={() => setSupplierIdTocado(true)}
+            hint={proveedores === null ? 'Cargando proveedores…' : undefined}
+            required
+          >
+            <option value="">Seleccioná un proveedor…</option>
+            {proveedores?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {nombreProveedor(s)}
+              </option>
+            ))}
+          </FormSelect>
+          {supplierIdTocado && supplierId === '' && (
+            <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Elegí el proveedor que trajo la carga.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <Button type="submit" disabled={guardando || !puedeGuardar}>
+          {guardando ? 'Registrando…' : 'Registrar y recibir'}
+        </Button>
+        <Button type="button" variant="secondary" disabled={guardando} onClick={onCancelar}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
   )
 }

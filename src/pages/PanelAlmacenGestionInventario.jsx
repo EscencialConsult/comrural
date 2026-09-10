@@ -17,8 +17,8 @@ import SeccionAltaItem from '../components/almacen/SeccionAltaItem.jsx'
 // General. Todas menos Almacén Intermedio ya venían de pantallas propias,
 // ver cada Seccion*.jsx para el detalle de por qué son mockup.
 const SUBPESTAÑAS_GESTION = [
-  { id: 'existencias', nombre: 'Existencias', Icon: Boxes },
   { id: 'inventario', nombre: 'Inventario', Icon: ClipboardCheck },
+  { id: 'existencias', nombre: 'Existencias', Icon: Boxes },
   { id: 'intermedio', nombre: 'Almacén Intermedio', Icon: ArrowLeftRight },
   { id: 'devoluciones', nombre: 'Devoluciones', Icon: Undo2 },
   { id: 'ajustes', nombre: 'Ajustes', Icon: SlidersHorizontal },
@@ -28,7 +28,10 @@ const SUBPESTAÑAS_GESTION = [
 export default function PanelAlmacenGestionInventario() {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('almacen:read')
-  const [subPestaña, setSubPestaña] = useState('existencias')
+  // Arranca en "inventario" (no "existencias") para que el nombre de la
+  // pantalla coincida con lo primero que se ve al entrar — la pestaña de
+  // sidebar y la subpestaña interna se llaman igual a propósito.
+  const [subPestaña, setSubPestaña] = useState('inventario')
 
   if (!puedeVer) {
     return <AccesoDenegado titulo="No tenés acceso a este módulo" mensaje="Tu rol actual no incluye Almacén." />

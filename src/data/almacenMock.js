@@ -37,3 +37,16 @@ export const EXISTENCIAS_EJEMPLO = [
   { id: 7, grupo: 'Otros Almacenes', almacen: 'ESC', item: 'Resma de papel A4', lote: null, unidad: 'Piezas', cantidadFisica: 18, disponible: 18, bloqueada: 0, ubicacion: 'Oficina — Estante 1', vencimiento: null },
   { id: 8, grupo: 'Otros Almacenes', almacen: 'EPP', item: 'Bota de agua', lote: null, unidad: 'Pares', cantidadFisica: 24, disponible: 22, bloqueada: 2, ubicacion: 'Casillero EPP', vencimiento: null },
 ]
+
+// Historial de EPP por persona (sección 10 del relevamiento: "Historial de
+// EPPs por persona"; P-16 de la narrativa: "queda incorporado al historial
+// individual del trabajador"). Ejemplo ilustrativo — la Entrega de
+// Indumentaria y EPP es mockup y no persiste, así que no hay entregas
+// reales de las que armar un historial todavía.
+export const HISTORIAL_EPP_EJEMPLO = [
+  { id: 1, persona: 'Ana Mamani', area: 'Área A-B', fecha: '2026-08-12', item: 'Bota de agua', talla: '38', cantidad: 1, tipoDotacion: 'Dotación', estado: 'Nuevo' },
+  { id: 2, persona: 'Ana Mamani', area: 'Área A-B', fecha: '2026-08-12', item: 'Faja de seguridad', talla: 'M', cantidad: 1, tipoDotacion: 'Dotación', estado: 'Nuevo' },
+  { id: 3, persona: 'Julio Condori', area: 'Almacén', fecha: '2026-07-30', item: 'Lentes de seguridad 3M', talla: '—', cantidad: 1, tipoDotacion: 'Nuevo ingreso', estado: 'Nuevo' },
+  { id: 4, persona: 'Julio Condori', area: 'Almacén', fecha: '2026-09-05', item: 'Pijama plomo', talla: 'L', cantidad: 1, tipoDotacion: 'Cambio de indumentaria', estado: 'Usado' },
+  { id: 5, persona: 'Marco Quispe', area: 'Producción', fecha: '2026-06-18', item: 'Zapato de trabajo con refuerzo', talla: '40', cantidad: 1, tipoDotacion: 'Dotación', estado: 'Nuevo' },
+]

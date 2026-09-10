@@ -1,20 +1,24 @@
 import { useState } from 'react'
-import { PackagePlus, PackageMinus, Boxes, HardHat, Trash2 } from 'lucide-react'
+import { PackagePlus, PackageMinus, Boxes, HardHat, History, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import PillTabs from '../components/dashboard/PillTabs.jsx'
 import SeccionIngresoAlmacenGeneral from '../components/almacen/SeccionIngresoAlmacenGeneral.jsx'
 import SeccionSalidaAlmacenGeneral from '../components/almacen/SeccionSalidaAlmacenGeneral.jsx'
 import SeccionEntregaIndumentariaEpp from '../components/almacen/SeccionEntregaIndumentariaEpp.jsx'
+import SeccionHistorialEpp from '../components/almacen/SeccionHistorialEpp.jsx'
 import SeccionBajaAlmacen from '../components/almacen/SeccionBajaAlmacen.jsx'
 
 // Reorganización pedida por el usuario: 13 ítems de sidebar eran demasiados
 // — Indumentaria/EPP y Bajas se mudan acá como subpestañas (mismo criterio
 // que Ingreso/Salida), en vez de tener cada una su propio ítem de sidebar.
+// "Historial EPP" se suma después (sección 10 del relevamiento: "Historial
+// de EPPs por persona", ver SeccionHistorialEpp.jsx).
 const SUBPESTAÑAS_GENERAL = [
   { id: 'ingreso', nombre: 'Ingreso', Icon: PackagePlus },
   { id: 'salida', nombre: 'Salida', Icon: PackageMinus },
   { id: 'indumentaria-epp', nombre: 'Indumentaria y EPP', Icon: HardHat },
+  { id: 'historial-epp', nombre: 'Historial EPP', Icon: History },
   { id: 'bajas', nombre: 'Bajas', Icon: Trash2 },
 ]
 
@@ -47,6 +51,7 @@ export default function PanelAlmacenGeneral() {
       {subPestaña === 'ingreso' && <SeccionIngresoAlmacenGeneral />}
       {subPestaña === 'salida' && <SeccionSalidaAlmacenGeneral />}
       {subPestaña === 'indumentaria-epp' && <SeccionEntregaIndumentariaEpp />}
+      {subPestaña === 'historial-epp' && <SeccionHistorialEpp />}
       {subPestaña === 'bajas' && <SeccionBajaAlmacen />}
     </main>
   )
