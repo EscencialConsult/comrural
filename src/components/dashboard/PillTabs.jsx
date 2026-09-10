@@ -27,7 +27,7 @@ export default function PillTabs({ pestañas, activa, onCambiar }) {
               className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-out ${
                 esActiva
                   ? 'bg-verde-lima text-marron-cafe shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] scale-[1.03]'
-                  : 'text-marron-cafe/50 hover:-translate-y-0.5 hover:bg-marron-tierra/5 hover:text-marron-cafe/80'
+                  : 'bg-marron-tierra/10 text-marron-cafe/70 hover:-translate-y-0.5 hover:bg-marron-tierra/20 hover:text-marron-cafe'
               }`}
             >
               {pestaña.Icon && <pestaña.Icon className="size-3.5 shrink-0" strokeWidth={2.25} />}
