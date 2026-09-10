@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Download, FileSpreadsheet, X, AlertTriangle } from 'lucide-react'
+import { Download, FileSpreadsheet, AlertTriangle } from 'lucide-react'
 import { toast } from '../../lib/toast'
 import { EXISTENCIAS_EJEMPLO } from '../../data/almacenMock.js'
 import MockupBanner from '../MockupBanner.jsx'
 import CabeceraFormulario from '../formularios/CabeceraFormulario.jsx'
-import SearchInput from '../SearchInput.jsx'
+import BarraFiltros from './BarraFiltros.jsx'
 import FormSelect from '../FormSelect.jsx'
 import Button from '../Button.jsx'
 
@@ -29,12 +29,18 @@ function proximoAVencer(vencimiento) {
 // stocks" / "Botón de stocks para ver OK, no OK y disponibilidad". Sin
 // backend de existencias real todavía — datos de ejemplo (ver
 // src/data/almacenMock.js). MOCKUP total.
-export default function SeccionExistenciasAlmacen() {
+// `grupoFijo`: cuando se pasa (ver PanelInventario.jsx — pestañas Materia
+// Prima/Producto Terminado/Envases e Insumos), la pantalla queda anclada a
+// ese grupo y no muestra el selector "Grupo" — es la misma consulta, solo
+// que ya viene recortada por la pestaña en la que estás, en vez de que el
+// usuario tenga que elegirlo cada vez.
+export default function SeccionExistenciasAlmacen({ grupoFijo }) {
   const [busqueda, setBusqueda] = useState('')
   const [grupo, setGrupo] = useState('')
   const [estado, setEstado] = useState('')
 
-  const hayFiltrosActivos = busqueda !== '' || grupo !== '' || estado !== ''
+  const grupoActivo = grupoFijo ?? grupo
+  const hayFiltrosActivos = busqueda !== '' || (!grupoFijo && grupo !== '') || estado !== ''
   const limpiarFiltros = () => {
     setBusqueda('')
     setGrupo('')
@@ -43,13 +49,13 @@ export default function SeccionExistenciasAlmacen() {
 
   const filtradas = useMemo(() => {
     return EXISTENCIAS_EJEMPLO.filter((e) => {
-      if (grupo && e.grupo !== grupo) return false
+      if (grupoActivo && e.grupo !== grupoActivo) return false
       if (estado === 'Disponible' && e.disponible <= 0) return false
       if (estado === 'Bloqueada' && e.bloqueada <= 0) return false
       if (busqueda && !e.item.toLowerCase().includes(busqueda.toLowerCase()) && !(e.lote ?? '').toLowerCase().includes(busqueda.toLowerCase())) return false
       return true
     })
-  }, [busqueda, grupo, estado])
+  }, [busqueda, grupoActivo, estado])
 
   const exportar = (formato) => {
     toast.info(`Exportado a ${formato} (mockup).`)
@@ -76,17 +82,24 @@ export default function SeccionExistenciasAlmacen() {
 
       <MockupBanner mensaje="Mockup — sin backend de existencias real todavía, datos de ejemplo (P-06)." />
 
-      <div className="grid grid-cols-1 gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-4">
-        <SearchInput label="Buscar" placeholder="Ítem o lote…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-        <FormSelect label="Grupo" value={grupo} onChange={(e) => setGrupo(e.target.value)}>
-          <option value="">Todos</option>
-          {GRUPOS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </FormSelect>
-        <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)}>
+      <BarraFiltros
+        busqueda={busqueda}
+        onBusquedaChange={(e) => setBusqueda(e.target.value)}
+        placeholderBusqueda="Ítem o lote…"
+        hayFiltrosActivos={hayFiltrosActivos}
+        onLimpiar={limpiarFiltros}
+      >
+        {!grupoFijo && (
+          <FormSelect label="Grupo" value={grupo} onChange={(e) => setGrupo(e.target.value)} className="min-w-[160px] flex-1 sm:max-w-[260px]">
+            <option value="">Todos</option>
+            {GRUPOS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </FormSelect>
+        )}
+        <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)} className="min-w-[160px] flex-1 sm:max-w-[200px]">
           <option value="">Todos</option>
           {ESTADOS.map((e) => (
             <option key={e} value={e}>
@@ -94,13 +107,7 @@ export default function SeccionExistenciasAlmacen() {
             </option>
           ))}
         </FormSelect>
-        <div className="flex items-end">
-          <Button variant="secondary" className="w-full justify-center gap-1.5 px-3 py-2 text-sm" disabled={!hayFiltrosActivos} onClick={limpiarFiltros}>
-            <X className="size-3.5" strokeWidth={2} />
-            Limpiar filtros
-          </Button>
-        </div>
-      </div>
+      </BarraFiltros>
 
       {/* Tarjetas en mobile — mismo criterio que PanelAlmacenRecepcion.jsx:
           la tabla de abajo obliga a scrollear horizontal en pantallas

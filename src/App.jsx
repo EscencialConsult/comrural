@@ -29,7 +29,11 @@ const PanelAlmacenRecepcion = lazy(() => import('./pages/PanelAlmacenRecepcion.j
 const PanelAlmacenEnvases = lazy(() => import('./pages/PanelAlmacenEnvases.jsx'))
 const PanelAlmacenProductoTerminado = lazy(() => import('./pages/PanelAlmacenProductoTerminado.jsx'))
 const PanelAlmacenGeneral = lazy(() => import('./pages/PanelAlmacenGeneral.jsx'))
-const PanelAlmacenGestionInventario = lazy(() => import('./pages/PanelAlmacenGestionInventario.jsx'))
+const PanelInventario = lazy(() => import('./pages/PanelInventario.jsx'))
+const PanelInventarioMateriaPrima = lazy(() => import('./pages/PanelInventarioMateriaPrima.jsx'))
+const PanelInventarioProductoTerminado = lazy(() => import('./pages/PanelInventarioProductoTerminado.jsx'))
+const PanelInventarioEnvasesInsumos = lazy(() => import('./pages/PanelInventarioEnvasesInsumos.jsx'))
+const PanelInventarioAlmacenGeneral = lazy(() => import('./pages/PanelInventarioAlmacenGeneral.jsx'))
 const PanelCalidad = lazy(() => import('./pages/PanelCalidad.jsx'))
 const PanelProduccion = lazy(() => import('./pages/PanelProduccion.jsx'))
 const PanelProduccionAreaA = lazy(() => import('./pages/PanelProduccionAreaA.jsx'))
@@ -124,7 +128,11 @@ function App() {
           <Route path="/panel/almacen/envases" element={<PanelAlmacenEnvases />} />
           <Route path="/panel/almacen/producto-terminado" element={<PanelAlmacenProductoTerminado />} />
           <Route path="/panel/almacen/general" element={<PanelAlmacenGeneral />} />
-          <Route path="/panel/almacen/gestion-inventario" element={<PanelAlmacenGestionInventario />} />
+          <Route path="/panel/inventario" element={<PanelInventario />} />
+          <Route path="/panel/inventario/materia-prima" element={<PanelInventarioMateriaPrima />} />
+          <Route path="/panel/inventario/producto-terminado" element={<PanelInventarioProductoTerminado />} />
+          <Route path="/panel/inventario/envases-insumos" element={<PanelInventarioEnvasesInsumos />} />
+          <Route path="/panel/inventario/almacen-general" element={<PanelInventarioAlmacenGeneral />} />
           <Route path="/panel/calidad" element={<PanelCalidad />} />
           <Route path="/panel/produccion" element={<PanelProduccion />} />
           <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />

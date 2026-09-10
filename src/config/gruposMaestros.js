@@ -20,6 +20,8 @@ import {
   Activity,
   PackageCheck,
   Package,
+  Wheat,
+  Archive,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -59,25 +61,6 @@ export const GRUPOS_MAESTROS = [
         Icon: Handshake,
       },
       { id: 'productos', nombre: 'Productos', ruta: '/panel/productos', permiso: 'products:read', Icon: Boxes },
-    ],
-  },
-  {
-    // Igual que 'configuracion': no es un módulo de negocio de modulos.json,
-    // así que DashboardSidebar.jsx lo resuelve aparte (subitemsUsuarios,
-    // mismo criterio que subitemsConfiguracion) en vez de por el
-    // modulos.map() genérico. Entra acá solo para que esta sea la ÚNICA
-    // fuente de "padre + hermanas" — así GrupoTabs.jsx (las pastillas
-    // arriba de la pantalla) funciona gratis, sin un caso especial más.
-    id: 'usuarios',
-    padre: { nombre: 'Usuarios', ruta: '/panel/usuarios', permiso: 'iam:read', Icon: Users },
-    items: [
-      {
-        id: 'roles',
-        nombre: 'Roles y permisos',
-        ruta: '/panel/usuarios/roles',
-        permiso: 'iam:read',
-        Icon: ShieldCheck,
-      },
     ],
   },
   {
@@ -341,16 +324,54 @@ export const GRUPOS_MAESTROS = [
         permiso: 'almacen:read',
         Icon: Boxes,
       },
-      // MOCKUP — misma reorganización: Existencias (P-06), Inventario
-      // (P-10/P-11), Almacén Intermedio, Devoluciones (P-07/P-08), Ajustes
-      // (P-12) y Alta de Ítem (P-13) agrupados con subpestañas locales, ver
-      // PanelAlmacenGestionInventario.jsx. Sin backend propio todavía.
+    ],
+  },
+  {
+    id: 'inventario',
+    // Reorganización pedida por el usuario: Inventario pasa a ser su
+    // propio grupo con pastillas reales arriba (GrupoTabs.jsx), mismo
+    // patrón que Compras — antes intentaba simular esto con PillTabs
+    // locales adentro de una sola pantalla y terminaba en pestañas
+    // anidadas dentro de pestañas. No es un módulo de negocio nuevo (no
+    // tiene fila en mock/data/modulos.json, esa lista son los 8
+    // departamentos reales de la empresa — "Almacén" ya incluye
+    // inventario en su propia descripción), por eso usa el mismo permiso
+    // que Almacén (almacen:read) en vez de uno propio.
+    // El padre ("Inventario", /panel/inventario) es la pestaña central:
+    // Conteo/Ajustes/Alta de Ítem viven ahí adentro como subpestañas
+    // locales (un solo nivel, mismo criterio que Almacén General →
+    // Ingreso/Salida/...). Los 3 hijos son Existencias dividida por
+    // categoría (antes un selector de "Grupo" dentro de una sola
+    // pantalla).
+    padre: { nombre: 'Inventario', ruta: '/panel/inventario', permiso: 'almacen:read', Icon: ClipboardCheck },
+    items: [
       {
-        id: 'gestion-inventario',
-        nombre: 'Inventario',
-        ruta: '/panel/almacen/gestion-inventario',
+        id: 'inventario-mp',
+        nombre: 'Materia Prima',
+        ruta: '/panel/inventario/materia-prima',
         permiso: 'almacen:read',
-        Icon: ClipboardCheck,
+        Icon: Wheat,
+      },
+      {
+        id: 'inventario-pt',
+        nombre: 'Producto Terminado',
+        ruta: '/panel/inventario/producto-terminado',
+        permiso: 'almacen:read',
+        Icon: Package,
+      },
+      {
+        id: 'inventario-envases',
+        nombre: 'Envases e Insumos',
+        ruta: '/panel/inventario/envases-insumos',
+        permiso: 'almacen:read',
+        Icon: Boxes,
+      },
+      {
+        id: 'inventario-general',
+        nombre: 'Almacén General',
+        ruta: '/panel/inventario/almacen-general',
+        permiso: 'almacen:read',
+        Icon: Archive,
       },
     ],
   },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, SlidersHorizontal, Users, TestTubes, ChevronDown, X } from 'lucide-react'
+import { LayoutDashboard, SlidersHorizontal, Users, TestTubes, ClipboardCheck, ChevronDown, X } from 'lucide-react'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
 import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
@@ -33,6 +33,11 @@ const SUBITEMS_USUARIOS = GRUPOS_MAESTROS.find((g) => g.id === 'usuarios').items
 // gruposMaestros.js (única fuente real, GrupoTabs.jsx ya lee de ahí para
 // las pastillas de arriba) en vez de un link plano suelto.
 const GRUPO_LABORATORIO = GRUPOS_MAESTROS.find((g) => g.id === 'laboratorio')
+// Inventario: mismo criterio que Laboratorio — no tiene fila en
+// modulos.json (no es uno de los 8 departamentos reales de la empresa,
+// usa el permiso de Almacén) así que arma su NavGroup a mano en vez de
+// pasar por `modulos.map(...)` de más abajo.
+const GRUPO_INVENTARIO = GRUPOS_MAESTROS.find((g) => g.id === 'inventario')
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
 // (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
@@ -70,6 +75,10 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
   )
   const subitemsLaboratorio = useMemo(
     () => GRUPO_LABORATORIO.items.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsInventario = useMemo(
+    () => GRUPO_INVENTARIO.items.filter((s) => permisos.has(s.permiso)),
     [permisos],
   )
   const [colapsado, setColapsado] = useState(
@@ -276,6 +285,34 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                   </NavLink>
                 )
               })}
+
+              {/* Inventario: pedido explícito del usuario de que se vea
+                  "como otro módulo" — pastillas reales arriba (GrupoTabs.jsx
+                  lee el mismo `gruposMaestros.js`) en vez de pestañas
+                  locales anidadas. Mismo permiso que Almacén (almacen:read)
+                  porque es la misma área funcional, no un módulo de negocio
+                  nuevo (no tiene fila en mock/data/modulos.json). */}
+              {permisos.has('almacen:read') &&
+                (subitemsInventario.length > 0 ? (
+                  <NavGroup
+                    nombre={GRUPO_INVENTARIO.padre.nombre}
+                    ruta={GRUPO_INVENTARIO.padre.ruta}
+                    Icon={ClipboardCheck}
+                    subitems={subitemsInventario}
+                    colapsadoEfectivo={colapsadoEfectivo}
+                    linkClass={linkClass}
+                    onToggle={alExpandirGrupo}
+                  />
+                ) : (
+                  <NavLink
+                    to="/panel/inventario"
+                    className={linkClass}
+                    title={colapsadoEfectivo ? 'Inventario' : undefined}
+                  >
+                    <ClipboardCheck className="size-5 shrink-0" strokeWidth={1.75} />
+                    <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Inventario</span>
+                  </NavLink>
+                ))}
 
               {/* Laboratorio: módulo aparte de Calidad, a pedido explícito
                   (antes eran pantallas hermanas con un navbar compartido) —

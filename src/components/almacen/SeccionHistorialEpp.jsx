@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { HISTORIAL_EPP_EJEMPLO } from '../../data/almacenMock.js'
 import MockupBanner from '../MockupBanner.jsx'
-import SearchInput from '../SearchInput.jsx'
-import Button from '../Button.jsx'
-import { X } from 'lucide-react'
+import BarraFiltros from './BarraFiltros.jsx'
+import FormSelect from '../FormSelect.jsx'
+
+const TIPOS_DOTACION = [...new Set(HISTORIAL_EPP_EJEMPLO.map((h) => h.tipoDotacion))]
 
 // Historial de EPP por persona — sección 10 del relevamiento ("Historial
 // de EPPs por persona") y P-16 de la narrativa ("queda incorporado al
@@ -14,28 +15,43 @@ import { X } from 'lucide-react'
 // src/data/almacenMock.js). MOCKUP total, sin backend propio.
 export default function SeccionHistorialEpp() {
   const [busqueda, setBusqueda] = useState('')
+  const [tipoDotacion, setTipoDotacion] = useState('')
+
+  const hayFiltrosActivos = busqueda !== '' || tipoDotacion !== ''
+  const limpiarFiltros = () => {
+    setBusqueda('')
+    setTipoDotacion('')
+  }
 
   const filtrado = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    if (!q) return HISTORIAL_EPP_EJEMPLO
-    return HISTORIAL_EPP_EJEMPLO.filter((h) => h.persona.toLowerCase().includes(q) || h.item.toLowerCase().includes(q))
-  }, [busqueda])
+    return HISTORIAL_EPP_EJEMPLO.filter((h) => {
+      if (tipoDotacion && h.tipoDotacion !== tipoDotacion) return false
+      if (q && !h.persona.toLowerCase().includes(q) && !h.item.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [busqueda, tipoDotacion])
 
   return (
     <div className="flex flex-col gap-6">
       <MockupBanner mensaje="Mockup — sin entregas reales que registrar todavía (la Entrega de EPP no persiste), historial de ejemplo." />
 
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <SearchInput label="Buscar" placeholder="Persona o ítem…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-        </div>
-        {busqueda && (
-          <Button variant="secondary" className="gap-1.5 px-3 py-2 text-sm" onClick={() => setBusqueda('')}>
-            <X className="size-3.5" strokeWidth={2} />
-            Limpiar
-          </Button>
-        )}
-      </div>
+      <BarraFiltros
+        busqueda={busqueda}
+        onBusquedaChange={(e) => setBusqueda(e.target.value)}
+        placeholderBusqueda="Persona o ítem…"
+        hayFiltrosActivos={hayFiltrosActivos}
+        onLimpiar={limpiarFiltros}
+      >
+        <FormSelect label="Tipo de dotación" value={tipoDotacion} onChange={(e) => setTipoDotacion(e.target.value)} className="min-w-[160px] flex-1 sm:max-w-[220px]">
+          <option value="">Todos</option>
+          {TIPOS_DOTACION.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </FormSelect>
+      </BarraFiltros>
 
       {/* Tarjetas en mobile — mismo criterio que Existencias/Inventario: la
           tabla de abajo (6 columnas) fuerza scroll horizontal en pantallas

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ClipboardList, X, Pencil, CheckCircle2, XCircle, Play, Truck } from 'lucide-react'
+import { ClipboardList, Pencil, CheckCircle2, XCircle, Play, Truck, Undo2, ArrowLeftRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { lotsService } from '../services/lotsService'
@@ -11,7 +11,7 @@ import { listarTodo } from '../services/paginacion'
 import { useLotesBuscables } from '../hooks/useLotesBuscables'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Button from '../components/Button.jsx'
-import SearchInput from '../components/SearchInput.jsx'
+import BarraFiltros from '../components/almacen/BarraFiltros.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import IndicadorEtapas from '../components/IndicadorEtapas.jsx'
@@ -21,6 +21,8 @@ import FormularioIngresoMateriaPrima from '../components/formularios/FormularioI
 import { SECCIONES_INGRESO_MATERIA_PRIMA } from '../components/formularios/seccionesIngresoMateriaPrima.js'
 import { compararPorFechaRecepcion } from '../utils/fecha'
 import SeccionEntregaMateriaPrima from '../components/almacen/SeccionEntregaMateriaPrima.jsx'
+import SeccionDevolucionAlmacen from '../components/almacen/SeccionDevolucionAlmacen.jsx'
+import SeccionAlmacenIntermedio from '../components/almacen/SeccionAlmacenIntermedio.jsx'
 
 // Recepción y Entrega de MP, unificadas en subpestañas locales (mismo
 // patrón que Envases/PT/General, ver PanelAlmacenEnvases.jsx) — antes eran
@@ -29,9 +31,25 @@ import SeccionEntregaMateriaPrima from '../components/almacen/SeccionEntregaMate
 // /panel/almacen/recepcion (la única con deep-link desde notificaciones,
 // ver config/notificacionesRutas.js) y "Entrega" sigue siendo el mismo
 // SeccionEntregaMateriaPrima.jsx de siempre, sin tocar su lógica.
+//
+// "Devoluciones" se suma acá porque SeccionDevolucionAlmacen.jsx no es
+// específica de un material (el ítem es texto libre) — reorganización
+// pedida por el usuario: cada división (MP acá, Envases en
+// PanelAlmacenEnvases.jsx) tiene su propia subpestaña de Devoluciones en
+// vez de una sola compartida en "Inventario"; Producto Terminado
+// deliberadamente no la tiene (pedido explícito).
+//
+// "Almacén Intermedio" también se muda acá — es específico de MP (el
+// buffer de Producción, ver SeccionAlmacenIntermedio.jsx) y no encajaba en
+// ninguna de las 4 pestañas nuevas de PanelInventario.jsx (Materia Prima/
+// Producto Terminado/Envases e Insumos/Inventario), así que queda con el
+// resto del ciclo de MP en vez de forzarlo en un lugar que no le
+// corresponde.
 const SUBPESTAÑAS_RECEPCION = [
   { id: 'recepcion', nombre: 'Recepción', Icon: ClipboardList },
   { id: 'entrega', nombre: 'Entrega', Icon: Truck },
+  { id: 'intermedio', nombre: 'Almacén Intermedio', Icon: ArrowLeftRight },
+  { id: 'devoluciones', nombre: 'Devoluciones', Icon: Undo2 },
 ]
 
 // Segundo formulario de la maqueta ya con el molde confirmado en
@@ -292,36 +310,24 @@ export default function PanelAlmacenRecepcion() {
 
   return (
     <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-full bg-verde-hoja/10 p-3">
-            <ClipboardList className="size-6 text-verde-bosque" strokeWidth={1.75} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-marron-cafe">Recepción y Entrega de MP</h1>
-            <p className="text-sm text-marron-cafe/60">Materia prima — ingreso desde Compras y entrega a Producción.</p>
-          </div>
+      <header className="flex items-center gap-3">
+        <div className="rounded-full bg-verde-hoja/10 p-3">
+          <ClipboardList className="size-6 text-verde-bosque" strokeWidth={1.75} />
         </div>
-        {/* Sección 4.1 del relevamiento / narrativa: "cuando no existe una
-            orden asociada, el ingreso se registra como manual" — hoy
-            Recepción solo trabaja sobre lotes ya programados desde
-            Compras. Este botón resuelve el caso de un camión que llega sin
-            aviso: crea el lote con fecha "ahora" (el backend no exige que
-            sea futura, ver lot.dto.ts) y entra directo al formulario, sin
-            pasar por Compras primero. Solo tiene sentido en la subpestaña
-            de Recepción. */}
-        {subPestaña === 'recepcion' && (
-          <Button variant="secondary" className="gap-1.5 px-3.5 py-2 text-sm" onClick={() => setRegistrandoSinAviso(true)}>
-            <Truck className="size-4" strokeWidth={2} />
-            Llegada sin aviso
-          </Button>
-        )}
+        <div>
+          <h1 className="text-2xl font-extrabold text-marron-cafe">Recepción y Entrega de MP</h1>
+          <p className="text-sm text-marron-cafe/60">Materia prima — ingreso desde Compras y entrega a Producción.</p>
+        </div>
       </header>
 
       <PillTabs pestañas={SUBPESTAÑAS_RECEPCION} activa={subPestaña} onCambiar={setSubPestaña} />
 
       {subPestaña === 'entrega' ? (
         <SeccionEntregaMateriaPrima />
+      ) : subPestaña === 'intermedio' ? (
+        <SeccionAlmacenIntermedio />
+      ) : subPestaña === 'devoluciones' ? (
+        <SeccionDevolucionAlmacen />
       ) : (
         <>
           {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
@@ -333,16 +339,30 @@ export default function PanelAlmacenRecepcion() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-3 lg:grid-cols-6">
-                <div className="col-span-2 sm:col-span-1">
-                  <SearchInput
-                    label="Buscar"
-                    placeholder="Código de lote…"
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                  />
-                </div>
-                <FormSelect label="Producto" value={productoId} onChange={(e) => setProductoId(e.target.value)}>
+              {/* Mismo lugar que en Envases y Embalaje → Ingreso
+                  (PanelAlmacenEnvases.jsx): el botón vive junto al título
+                  de la lista, no en el header de la pantalla. Acá sí crea
+                  un lote real (ver FormularioLlegadaSinAviso más abajo) —
+                  sección 4.1 del relevamiento / narrativa: "cuando no
+                  existe una orden asociada, el ingreso se registra como
+                  manual". El backend no exige que la fecha sea futura (ver
+                  lot.dto.ts), así que no hace falta ningún cambio ahí. */}
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-extrabold text-marron-cafe">Pendientes de recepción</h2>
+                <Button variant="secondary" className="gap-1.5 px-3.5 py-2 text-sm" onClick={() => setRegistrandoSinAviso(true)}>
+                  <Truck className="size-4" strokeWidth={2} />
+                  Llegada sin aviso
+                </Button>
+              </div>
+
+              <BarraFiltros
+                busqueda={busqueda}
+                onBusquedaChange={(e) => setBusqueda(e.target.value)}
+                placeholderBusqueda="Código de lote…"
+                hayFiltrosActivos={hayFiltrosActivos}
+                onLimpiar={limpiarFiltros}
+              >
+                <FormSelect label="Producto" value={productoId} onChange={(e) => setProductoId(e.target.value)} className="min-w-[160px] flex-1 sm:max-w-[220px]">
                   <option value="">Todos</option>
                   {productos?.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -350,7 +370,7 @@ export default function PanelAlmacenRecepcion() {
                     </option>
                   ))}
                 </FormSelect>
-                <FormSelect label="Proveedor" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
+                <FormSelect label="Proveedor" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} className="min-w-[160px] flex-1 sm:max-w-[220px]">
                   <option value="">Todos</option>
                   {proveedores?.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -363,8 +383,9 @@ export default function PanelAlmacenRecepcion() {
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
+                  className="min-w-[160px] flex-1 sm:max-w-[200px]"
                 />
-                <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)}>
+                <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)} className="min-w-[160px] flex-1 sm:max-w-[200px]">
                   <option value="">Todos</option>
                   {Object.keys(TONO_ESTADO_LOTE).map((e) => (
                     <option key={e} value={e}>
@@ -372,18 +393,7 @@ export default function PanelAlmacenRecepcion() {
                     </option>
                   ))}
                 </FormSelect>
-                <div className="col-span-2 flex items-end sm:col-span-1">
-                  <Button
-                    variant="secondary"
-                    className="w-full justify-center gap-1.5 px-3 py-2 text-sm"
-                    disabled={!hayFiltrosActivos}
-                    onClick={limpiarFiltros}
-                  >
-                    <X className="size-3.5" strokeWidth={2} />
-                    Limpiar filtros
-                  </Button>
-                </div>
-              </div>
+              </BarraFiltros>
 
               {/* Tarjetas en mobile — la tabla de abajo obliga a scrollear
                   horizontal en pantallas angostas (min-w-[820px]), acá se

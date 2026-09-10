@@ -6,6 +6,7 @@ import { toast } from '../../lib/toast'
 import MockupBanner from '../MockupBanner.jsx'
 import CabeceraFormulario from '../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../formularios/SeccionFormulario.jsx'
+import FirmasResponsables from '../formularios/FirmasResponsables.jsx'
 import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
 import Button from '../Button.jsx'
@@ -38,11 +39,6 @@ export default function SeccionIngresoProductoTerminado() {
   const [fecha, setFecha] = useState('')
   const [numeroNota, setNumeroNota] = useState('')
   const [filas, setFilas] = useState(() => [filaVacia()])
-
-  const [entregadoNombre, setEntregadoNombre] = useState('')
-  const [entregadoCi, setEntregadoCi] = useState('')
-  const [recibidoNombre, setRecibidoNombre] = useState('')
-  const [recibidoCi, setRecibidoCi] = useState('')
 
   useEffect(() => {
     let cancelado = false
@@ -165,19 +161,14 @@ export default function SeccionIngresoProductoTerminado() {
         </div>
       </SeccionFormulario>
 
-      <SeccionFormulario numero={3} titulo="Conformidad" nota="Nombre y cédula de identidad de ambas partes.">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-3 rounded-2xl bg-white/70 p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-verde-bosque">Entregado por</p>
-            <FormInput label="Nombre" value={entregadoNombre} onChange={(e) => setEntregadoNombre(e.target.value)} />
-            <FormInput label="C.I." value={entregadoCi} onChange={(e) => setEntregadoCi(e.target.value)} />
-          </div>
-          <div className="grid gap-3 rounded-2xl bg-white/70 p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-verde-bosque">Recibido por</p>
-            <FormInput label="Nombre" value={recibidoNombre} onChange={(e) => setRecibidoNombre(e.target.value)} />
-            <FormInput label="C.I." value={recibidoCi} onChange={(e) => setRecibidoCi(e.target.value)} />
-          </div>
-        </div>
+      <SeccionFormulario numero={3} titulo="Firmas y conformidad">
+        <FirmasResponsables
+          responsables={[
+            { rol: 'Entregado por', puesto: 'Producción' },
+            { rol: 'Recibido por', puesto: 'Asistente de Almacén' },
+          ]}
+          claseGrilla="sm:grid-cols-2"
+        />
       </SeccionFormulario>
 
       <div className="flex justify-end">

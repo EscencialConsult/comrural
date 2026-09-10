@@ -50,3 +50,27 @@ export const HISTORIAL_EPP_EJEMPLO = [
   { id: 4, persona: 'Julio Condori', area: 'Almacén', fecha: '2026-09-05', item: 'Pijama plomo', talla: 'L', cantidad: 1, tipoDotacion: 'Cambio de indumentaria', estado: 'Usado' },
   { id: 5, persona: 'Marco Quispe', area: 'Producción', fecha: '2026-06-18', item: 'Zapato de trabajo con refuerzo', talla: '40', cantidad: 1, tipoDotacion: 'Dotación', estado: 'Nuevo' },
 ]
+
+// Llegadas programadas de Envases — mismo concepto que la lista de lotes
+// de Recepción (PanelAlmacenRecepcion.jsx), pero acá es 100% mockup: no
+// hay un "lote" real para envases/insumos en el backend, así que no se
+// puede reusar lotsService. Ejemplo ilustrativo para simular la lista de
+// pendientes de recepción y el botón "Llegada sin aviso" (también mockup
+// acá, a diferencia de MP donde sí crea un lote real).
+export const LLEGADAS_PROGRAMADAS_ENVASES_EJEMPLO = [
+  { id: 1, item: 'Bolsas kraft marrón 25kg', proveedor: 'Envases del Sur', numeroSolicitud: '2201', subalmacen: 'ML', fechaProgramada: '2026-09-11' },
+  { id: 2, item: 'Big Bag de 1000kg', proveedor: 'Embalajes Andinos', numeroSolicitud: '2205', subalmacen: 'EXP', fechaProgramada: '2026-09-12' },
+  { id: 3, item: 'Cobertura de chocolate — barras', proveedor: 'Insumos Altiplano', numeroSolicitud: '2210', subalmacen: 'INS', fechaProgramada: '2026-09-13' },
+]
+
+// Llegadas programadas de Producto Terminado — a diferencia de MP y
+// Envases, acá no hay botón de "llegada sin aviso": Producción siempre
+// avisa con anticipación cuándo entrega un lote (P-03 de la narrativa,
+// "Producción inicia este proceso al entregar al almacén un lote
+// terminado acompañado por su nota"), no hay caso de "llegó sin avisar".
+// Ejemplo ilustrativo, mismo criterio que el resto de los mocks de
+// Almacén — no hay backend de PT todavía.
+export const LLEGADAS_PROGRAMADAS_PT_EJEMPLO = [
+  { id: 1, producto: 'Barra de chocolate 30gr', loteProduccion: '3135190', fechaElaboracion: '2026-09-09', cantidadEstimada: 1800, fechaProgramada: '2026-09-11' },
+  { id: 2, producto: 'Quinua blanca 400gr', loteProduccion: '1436460', fechaElaboracion: '2026-09-10', cantidadEstimada: 3200, fechaProgramada: '2026-09-12' },
+]
