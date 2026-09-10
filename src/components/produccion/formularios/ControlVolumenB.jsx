@@ -5,6 +5,7 @@ import { productsService } from '../../../services/productsService'
 import { lotsService } from '../../../services/lotsService'
 import { listarTodo } from '../../../services/paginacion'
 import { toast } from '../../../lib/toast'
+import { GRUPOS_DETALLE, filaVacia, sumar, numero } from './volumenBFilas.js'
 import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
 import FirmasResponsables from '../../formularios/FirmasResponsables.jsx'
@@ -58,48 +59,8 @@ const TIPOS_PRODUCTO = [
 // un solo número): ahí cada campo se carga a mano.
 const KG_POR_SACO_LAVADO = 45
 
-// Grupo "Detalle del proceso" — subproductos generados en el turno, cada
-// uno con su propio par sacos/kg (peso variable). RP-15: el formulario los
-// llama "Merma" en el resumen pero NO son desecho, son subproductos con
-// destino comercial (mercado local / alimento balanceado) — el sistema
-// tiene que tratarlos como tales, no como pérdida.
-//
-// La columna "x Kg" del papel se reemplaza acá por "Quinua Tercera": el
-// análisis funcional (relevamiento 3) confirma que la quinua tercera es un
-// subproducto real de Área B, con su propio indicador (RP-25, < 1,70%), y
-// que el R-25 todavía no le tenía una columna explícita — "x" era el hueco
-// que ocupaba. Pendiente de confirmar con el cliente que el mapeo es
-// exactamente ese y no otra cosa.
-const GRUPOS_DETALLE = [
-  { key: 'q2da', label: 'Q. 2da (a)' },
-  { key: 'pNegros', label: 'P. Negros (b)' },
-  { key: 'rechazo', label: 'Rechazo (c)' },
-  { key: 'polvillo', label: 'Polvillo (d)' },
-  { key: 'saldoQf', label: 'Saldo Q.F.' },
-  { key: 'tercera', label: 'Quinua Tercera' },
-]
-
-let siguienteId = 1
-const filaVacia = (loteMp = '') => ({
-  id: siguienteId++,
-  fecha: '',
-  turnoId: '',
-  loteMp,
-  tipo: '',
-  usadosSacos: '',
-  usadosKg: '',
-  envasadosSacos: '',
-  envasadosKg: '',
-  encargado: '',
-  control: '',
-  observaciones: '',
-  ...Object.fromEntries(GRUPOS_DETALLE.flatMap(({ key }) => [[`${key}Sacos`, ''], [`${key}Kg`, '']])),
-})
-
-const filaResumenVacia = () => ({ id: siguienteId++, loteMp: '', envasadosKg: '', subproductosKg: '' })
-
-const sumar = (filas, campo) => filas.reduce((acc, f) => acc + (Number(f[campo]) || 0), 0)
-const numero = (v) => (v === '' || v == null ? '' : Number(v))
+let siguienteIdResumen = 1
+const filaResumenVacia = () => ({ id: siguienteIdResumen++, loteMp: '', envasadosKg: '', subproductosKg: '' })
 
 // Formulario 3 del relevamiento — registro de Área B (P-PRO-01/R-25). No
 // existe todavía un módulo production-area-b en el backend (a diferencia de
@@ -108,7 +69,11 @@ const numero = (v) => (v === '' || v == null ? '' : Number(v))
 // que se conectan a esos services en vez de tipearlos a mano: mismo filtro
 // que SeccionControlExistencias.jsx (lotes en LAVADO) para no dejar elegir
 // un lote que Área B todavía no puede tener.
-export default function ControlVolumenB() {
+//
+// `filas`/`setFilas` los pasa SeccionAreaB.jsx (no son estado propio de este
+// componente) — "Indicadores" (pestaña hermana, IndicadoresAreaB.jsx)
+// necesita leer los mismos totales sin duplicar el registro del turno.
+export default function ControlVolumenB({ filas, setFilas }) {
   const [turnos, setTurnos] = useState(null)
   const [productos, setProductos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -117,7 +82,6 @@ export default function ControlVolumenB() {
   const [presentacion, setPresentacion] = useState(PRESENTACIONES[0].value)
   const [normas, setNormas] = useState([])
   const [otraNorma, setOtraNorma] = useState('')
-  const [filas, setFilas] = useState(() => [filaVacia()])
   const [resumen, setResumen] = useState(() => [filaResumenVacia()])
 
   useEffect(() => {
@@ -189,13 +153,6 @@ export default function ControlVolumenB() {
   const totalUsadosKg = sumar(filas, 'usadosKg')
   const totalEnvasadosSacos = sumar(filas, 'envasadosSacos')
   const totalEnvasadosKg = sumar(filas, 'envasadosKg')
-  const totalQ2daKg = sumar(filas, 'q2daKg')
-  const totalTerceraKg = sumar(filas, 'terceraKg')
-
-  // Los tres indicadores de Área B (RP-25 del análisis funcional).
-  const rendimientoAreaB = totalUsadosKg > 0 ? (totalEnvasadosKg / totalUsadosKg) * 100 : null
-  const quinuaSegunda = totalUsadosKg > 0 ? (totalQ2daKg / totalUsadosKg) * 100 : null
-  const quinuaTercera = totalUsadosKg > 0 ? (totalTerceraKg / totalUsadosKg) * 100 : null
 
   // No hay endpoint todavía (ver comentario de arriba del componente) — el
   // click no debe fallar en silencio ni parecer que guardó, así que por
@@ -447,31 +404,8 @@ export default function ControlVolumenB() {
         </div>
       </SeccionFormulario>
 
-      <SeccionFormulario numero={3} titulo="Indicadores del lote">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <IndicadorTile
-            etiqueta="Rendimiento Área B"
-            valor={rendimientoAreaB}
-            meta="> 90%"
-            cumple={rendimientoAreaB != null && rendimientoAreaB > 90}
-          />
-          <IndicadorTile
-            etiqueta="Quinua segunda"
-            valor={quinuaSegunda}
-            meta="< 3%"
-            cumple={quinuaSegunda != null && quinuaSegunda < 3}
-          />
-          <IndicadorTile
-            etiqueta="Quinua tercera"
-            valor={quinuaTercera}
-            meta="< 1,70%"
-            cumple={quinuaTercera != null && quinuaTercera < 1.7}
-          />
-        </div>
-      </SeccionFormulario>
-
       <SeccionFormulario
-        numero={4}
+        numero={3}
         titulo="Resumen por lote"
         nota="RP-15: aunque el papel llama «Merma» a esta suma, en Área B no hay merma real — son subproductos comercializables (mercado local / alimento balanceado), no desecho."
         acciones={
@@ -517,7 +451,7 @@ export default function ControlVolumenB() {
         </div>
       </SeccionFormulario>
 
-      <SeccionFormulario numero={5} titulo="Firmas">
+      <SeccionFormulario numero={4} titulo="Firmas">
         <FirmasResponsables responsables={RESPONSABLES} />
       </SeccionFormulario>
 
@@ -540,14 +474,3 @@ function CampoLote({ etiqueta, valor }) {
   )
 }
 
-function IndicadorTile({ etiqueta, valor, meta, cumple }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-2xl bg-white/70 p-4">
-      <span className="text-xs font-semibold uppercase tracking-wide text-marron-cafe/50">{etiqueta}</span>
-      <span className={`text-2xl font-extrabold ${valor == null ? 'text-marron-cafe/30' : cumple ? 'text-verde-bosque' : 'text-rojo-pasankalla'}`}>
-        {valor == null ? '—' : `${valor.toFixed(2)}%`}
-      </span>
-      <span className="text-xs text-marron-cafe/50">Meta: {meta}</span>
-    </div>
-  )
-}

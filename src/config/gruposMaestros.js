@@ -20,6 +20,7 @@ import {
   ListChecks,
   Activity,
   PackageCheck,
+  Package,
 } from 'lucide-react'
 
 // Única fuente de verdad de "qué pantallas de datos maestros van agrupadas
@@ -311,6 +312,51 @@ export const GRUPOS_MAESTROS = [
         ruta: '/panel/almacen/entrega',
         permiso: 'almacen:read',
         Icon: Truck,
+      },
+      // MOCKUP (P-ADM-03/R-19 ingreso, P-ADM-03/R-27 + P-ADM-03/R-20 salida)
+      // — ingreso y salida de envases/embalaje/insumos de proceso, agrupados
+      // acá porque son el mismo flujo de material (subpestañas locales
+      // adentro, ver PanelAlmacenEnvases.jsx). Sin backend propio todavía.
+      {
+        id: 'envases',
+        nombre: 'Envases y Embalaje',
+        ruta: '/panel/almacen/envases',
+        permiso: 'almacen:read',
+        Icon: Boxes,
+      },
+      // MOCKUP (P-BPA-01/R-11 ingreso, P-BPA-01/R-12 salida) — solo
+      // Producto Terminado Local (RP-20); exportación queda en Producción
+      // (ver ControlProductoAlmacen.jsx). Agrupado con subpestañas como
+      // Envases. Sin backend propio todavía.
+      {
+        id: 'producto-terminado',
+        nombre: 'Producto Terminado',
+        ruta: '/panel/almacen/producto-terminado',
+        permiso: 'almacen:read',
+        Icon: Package,
+      },
+      // MOCKUP — reorganización pedida por el usuario (13 ítems de sidebar
+      // eran demasiados): Ingreso/Salida de Almacén General (P-ADM-03/R-19/
+      // R-27/R-20), Indumentaria y EPP (I-SYSO-06/R-06) y Bajas
+      // (P-ADM-03/R-21) agrupados acá con subpestañas locales, ver
+      // PanelAlmacenGeneral.jsx. Sin backend propio todavía.
+      {
+        id: 'general',
+        nombre: 'Almacén General',
+        ruta: '/panel/almacen/general',
+        permiso: 'almacen:read',
+        Icon: Boxes,
+      },
+      // MOCKUP — misma reorganización: Existencias (P-06), Inventario
+      // (P-10/P-11), Almacén Intermedio, Devoluciones (P-07/P-08), Ajustes
+      // (P-12) y Alta de Ítem (P-13) agrupados con subpestañas locales, ver
+      // PanelAlmacenGestionInventario.jsx. Sin backend propio todavía.
+      {
+        id: 'gestion-inventario',
+        nombre: 'Inventario',
+        ruta: '/panel/almacen/gestion-inventario',
+        permiso: 'almacen:read',
+        Icon: ClipboardCheck,
       },
     ],
   },

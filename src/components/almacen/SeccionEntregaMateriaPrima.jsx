@@ -9,6 +9,7 @@ import SeccionFormulario from '../formularios/SeccionFormulario.jsx'
 import FirmasResponsables from '../formularios/FirmasResponsables.jsx'
 import FormInput from '../FormInput.jsx'
 import FormSelect from '../FormSelect.jsx'
+import FormTextarea from '../FormTextarea.jsx'
 import Button from '../Button.jsx'
 import Skeleton from '../Skeleton.jsx'
 
@@ -27,6 +28,7 @@ const RESPONSABLES = [
 let siguienteId = 1
 const filaVacia = () => ({
   id: siguienteId++,
+  solicitante: '',
   fecha: '',
   numeroSalida: '',
   tipoSalida: TIPOS_SALIDA[0],
@@ -34,6 +36,7 @@ const filaVacia = () => ({
   productoId: '',
   cantidadSacos: '',
   pesoPromedioKg: '',
+  observaciones: '',
 })
 
 const numero = (v) => (v === '' || v == null ? '' : Number(v))
@@ -114,7 +117,13 @@ export default function SeccionEntregaMateriaPrima() {
                 </button>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <FormInput
+                  label="Solicitante"
+                  value={f.solicitante}
+                  onChange={(e) => actualizarFila(f.id, 'solicitante')(e.target.value)}
+                  placeholder="Nombre del supervisor"
+                />
                 <FormInput label="Fecha" type="date" value={f.fecha} onChange={(e) => actualizarFila(f.id, 'fecha')(e.target.value)} />
                 <FormInput
                   label="N° de salida"
@@ -168,7 +177,15 @@ export default function SeccionEntregaMateriaPrima() {
                 <FormInput label="Peso neto (kg)" value={f.pesoNetoKg.toFixed(2)} disabled />
               </div>
 
-              <FormInput label="Peso neto (QQ)" value={f.pesoNetoQq.toFixed(2)} disabled hint="Base de pago al proveedor — 1 QQ = 45,359 kg" className="max-w-xs" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormInput label="Peso neto (QQ)" value={f.pesoNetoQq.toFixed(2)} disabled hint="Base de pago al proveedor — 1 QQ = 45,359 kg" />
+                <FormTextarea
+                  label="Observaciones"
+                  rows={1}
+                  value={f.observaciones}
+                  onChange={(e) => actualizarFila(f.id, 'observaciones')(e.target.value)}
+                />
+              </div>
             </div>
           ))}
         </div>

@@ -27,6 +27,10 @@ const PanelCompras = lazy(() => import('./pages/PanelCompras.jsx'))
 const PanelAlmacen = lazy(() => import('./pages/PanelAlmacen.jsx'))
 const PanelAlmacenRecepcion = lazy(() => import('./pages/PanelAlmacenRecepcion.jsx'))
 const PanelAlmacenEntrega = lazy(() => import('./pages/PanelAlmacenEntrega.jsx'))
+const PanelAlmacenEnvases = lazy(() => import('./pages/PanelAlmacenEnvases.jsx'))
+const PanelAlmacenProductoTerminado = lazy(() => import('./pages/PanelAlmacenProductoTerminado.jsx'))
+const PanelAlmacenGeneral = lazy(() => import('./pages/PanelAlmacenGeneral.jsx'))
+const PanelAlmacenGestionInventario = lazy(() => import('./pages/PanelAlmacenGestionInventario.jsx'))
 const PanelCalidad = lazy(() => import('./pages/PanelCalidad.jsx'))
 const PanelProduccion = lazy(() => import('./pages/PanelProduccion.jsx'))
 const PanelProduccionAreaA = lazy(() => import('./pages/PanelProduccionAreaA.jsx'))
@@ -115,6 +119,10 @@ function App() {
           <Route path="/panel/almacen" element={<PanelAlmacen />} />
           <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
           <Route path="/panel/almacen/entrega" element={<PanelAlmacenEntrega />} />
+          <Route path="/panel/almacen/envases" element={<PanelAlmacenEnvases />} />
+          <Route path="/panel/almacen/producto-terminado" element={<PanelAlmacenProductoTerminado />} />
+          <Route path="/panel/almacen/general" element={<PanelAlmacenGeneral />} />
+          <Route path="/panel/almacen/gestion-inventario" element={<PanelAlmacenGestionInventario />} />
           <Route path="/panel/calidad" element={<PanelCalidad />} />
           <Route path="/panel/produccion" element={<PanelProduccion />} />
           <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
