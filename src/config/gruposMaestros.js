@@ -16,7 +16,6 @@ import {
   Factory,
   Users,
   ShieldCheck,
-  Truck,
   ListChecks,
   Activity,
   PackageCheck,
@@ -295,23 +294,18 @@ export const GRUPOS_MAESTROS = [
     // (`almacen:read`) porque acá no hay split de roles como en Calidad.
     padre: { nombre: 'Almacén', ruta: '/panel/almacen', permiso: 'almacen:read', Icon: Warehouse },
     items: [
+      // Recepción y Entrega de MP unificadas bajo un solo ítem (antes
+      // "Entrega de MP" tenía su propia fila acá) — único caso donde el par
+      // ingreso/salida de un mismo material no vivía junto como en
+      // Envases/PT/General. Ahora son subpestañas locales dentro de
+      // PanelAlmacenRecepcion.jsx (ver ese archivo), mismo patrón que sus
+      // hermanas. Cambio puramente visual: la ruta sigue siendo la misma.
       {
         id: 'recepcion',
-        nombre: 'Recepción',
+        nombre: 'Recepción y Entrega',
         ruta: '/panel/almacen/recepcion',
         permiso: 'almacen:read',
         Icon: ClipboardList,
-      },
-      // MOCKUP (P-ADM-03/R-24, ver SeccionEntregaMateriaPrima.jsx) —
-      // solicitud/entrega de lotes completos a Producción. Sí tiene un
-      // formulario real de referencia (compartido en la reunión de
-      // relevamiento 1) pero todavía no existe como pantalla ni backend.
-      {
-        id: 'entrega',
-        nombre: 'Entrega de MP',
-        ruta: '/panel/almacen/entrega',
-        permiso: 'almacen:read',
-        Icon: Truck,
       },
       // MOCKUP (P-ADM-03/R-19 ingreso, P-ADM-03/R-27 + P-ADM-03/R-20 salida)
       // — ingreso y salida de envases/embalaje/insumos de proceso, agrupados

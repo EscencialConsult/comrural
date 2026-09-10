@@ -26,7 +26,6 @@ const PanelConfiguracion = lazy(() => import('./pages/PanelConfiguracion.jsx'))
 const PanelCompras = lazy(() => import('./pages/PanelCompras.jsx'))
 const PanelAlmacen = lazy(() => import('./pages/PanelAlmacen.jsx'))
 const PanelAlmacenRecepcion = lazy(() => import('./pages/PanelAlmacenRecepcion.jsx'))
-const PanelAlmacenEntrega = lazy(() => import('./pages/PanelAlmacenEntrega.jsx'))
 const PanelAlmacenEnvases = lazy(() => import('./pages/PanelAlmacenEnvases.jsx'))
 const PanelAlmacenProductoTerminado = lazy(() => import('./pages/PanelAlmacenProductoTerminado.jsx'))
 const PanelAlmacenGeneral = lazy(() => import('./pages/PanelAlmacenGeneral.jsx'))
@@ -118,7 +117,10 @@ function App() {
           <Route path="/panel/compras" element={<PanelCompras />} />
           <Route path="/panel/almacen" element={<PanelAlmacen />} />
           <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
-          <Route path="/panel/almacen/entrega" element={<PanelAlmacenEntrega />} />
+          {/* Entrega de MP se unificó como subpestaña de Recepción (ver
+              PanelAlmacenRecepcion.jsx) — se mantiene el redirect para no
+              romper links o pestañas ya abiertas en esa ruta vieja. */}
+          <Route path="/panel/almacen/entrega" element={<Navigate to="/panel/almacen/recepcion" replace />} />
           <Route path="/panel/almacen/envases" element={<PanelAlmacenEnvases />} />
           <Route path="/panel/almacen/producto-terminado" element={<PanelAlmacenProductoTerminado />} />
           <Route path="/panel/almacen/general" element={<PanelAlmacenGeneral />} />
