@@ -8,4 +8,11 @@ export const lotTraceabilityService = {
   async obtener(lotId) {
     return apiClient.get(`/lots/${lotId}/traceability`)
   },
+
+  // Kardex de quinua lavada (P-PRO-01/R-23) — ver docs/lot-traceability.md
+  // §4/production-area-b.md §1. INGRESO = Volumen A cerrado, SALIDA =
+  // Área B inputType='NUEVA', con saldo corrido ya calculado por el backend.
+  async kardexLavada(lotId) {
+    return apiClient.get(`/lots/${lotId}/kardex-lavada`)
+  },
 }

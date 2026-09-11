@@ -85,6 +85,11 @@ const KG_POR_SACO_LAVADO = 45
 // unificar la pantalla no tocó nada del backend, solo juntó "Historial del
 // lote" (antes de solo lectura) con el formulario de cierre por turno
 // abierto.
+//
+// La humedad (I-PRO-03/R-01, cada 30 min a la salida del secador 2) salió
+// de acá — pedido explícito: ese registro pasa a Calidad, no queda en
+// Producción. Todavía no existe del lado de Calidad (se hace después), así
+// que hoy no hay ninguna pantalla que la capture.
 function CampoLote({ etiqueta, valor }) {
   return (
     <div>
@@ -95,6 +100,24 @@ function CampoLote({ etiqueta, valor }) {
 }
 
 export default function ControlVolumenA({ loteInicialId }) {
+  // Sin lote precargado: esta pantalla ya no es una pestaña de acceso libre
+  // (ver el comentario en SeccionAreaA.jsx) — el único camino real es
+  // "Lotes" → "Iniciar/Continuar producción", que valida la R-24
+  // confirmada antes de llegar acá. Si no hay `loteInicialId`, no hay nada
+  // que mostrar; no se rearma un buscador de lote propio sin ese filtro.
+  if (!loteInicialId) {
+    return (
+      <EmptyState
+        Icon={Plus}
+        titulo='Elegí un lote desde "Lotes"'
+        descripcion='Usá "Iniciar producción" o "Continuar producción" sobre un lote de esa pestaña para llegar acá.'
+      />
+    )
+  }
+  return <ControlVolumenAConLote loteInicialId={loteInicialId} />
+}
+
+function ControlVolumenAConLote({ loteInicialId }) {
   const [productos, setProductos] = useState(null)
   const [turnos, setTurnos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
@@ -217,6 +240,7 @@ export default function ControlVolumenA({ loteInicialId }) {
   const actualizarPromedio = (entryId, campo) => (valor) =>
     setPromedios((p) => ({ ...p, [entryId]: { ...p[entryId], [campo]: valor } }))
 
+
   const cerrarEntrada = async (entryId) => {
     const { avg1, avg2 } = promedios[entryId] ?? {}
     if (avg1 == null || avg2 == null) {
@@ -303,6 +327,11 @@ export default function ControlVolumenA({ loteInicialId }) {
               onChange={actualizar('lotId')}
               estados={ESTADOS_CANDIDATOS}
               productoNombre={productoNombre}
+              // Fijo al lote con el que se entró — ese es el que ya pasó el
+              // chequeo de R-24 en "Lotes" (ver SeccionLotesProduccion.jsx).
+              // Dejarlo editable acá reabriría el mismo hueco que se cerró
+              // sacando la pestaña "Volumen A" de acceso libre.
+              disabled
             />
           </div>
         )}
@@ -449,8 +478,8 @@ export default function ControlVolumenA({ loteInicialId }) {
 
       <SeccionFormulario
         numero={5}
-        titulo="Cierre de turno — Temperatura y Humedad"
-        nota={`I-PRO-03/R-01 · Secador 1 no debe bajar de ${SECADOR_1_MIN}°C — bajo ese umbral el cierre dispara una alerta.`}
+        titulo="Cierre de turno — Temperatura"
+        nota={`I-PRO-03/R-01 · Secador 1 no debe bajar de ${SECADOR_1_MIN}°C — bajo ese umbral el cierre dispara una alerta. La humedad de este mismo formulario ahora la registra Calidad, no Producción.`}
       >
         {!form.lotId ? (
           <p className="text-sm text-marron-cafe/50">Elegí un lote arriba para ver sus turnos abiertos.</p>
@@ -464,43 +493,45 @@ export default function ControlVolumenA({ loteInicialId }) {
               const avg1 = promedios[e.id]?.avg1
               const secador1Bajo = avg1 != null && avg1 < SECADOR_1_MIN
               return (
-                <div key={e.id} className="flex flex-wrap items-end gap-3 rounded-2xl bg-white/70 p-4">
-                  <div className="flex flex-col gap-1 text-xs text-marron-cafe/60">
-                    <span className="font-semibold text-marron-cafe">{e.entryDate}</span>
-                    <span>
-                      Utilizados: {e.usedKg.toFixed(3)} kg · Lavados: {e.washedKg.toFixed(3)} kg
-                    </span>
+                <div key={e.id} className="flex flex-col gap-3 rounded-2xl bg-white/70 p-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex flex-col gap-1 text-xs text-marron-cafe/60">
+                      <span className="font-semibold text-marron-cafe">{e.entryDate}</span>
+                      <span>
+                        Utilizados: {e.usedKg.toFixed(3)} kg · Lavados: {e.washedKg.toFixed(3)} kg
+                      </span>
+                    </div>
+                    <FormInput
+                      label="Secador 1 (°C, promedio)"
+                      type="number"
+                      step="0.01"
+                      value={avg1 ?? ''}
+                      onChange={(ev) => actualizarPromedio(e.id, 'avg1')(ev.target.value === '' ? null : Number(ev.target.value))}
+                      className="w-40"
+                    />
+                    <FormInput
+                      label="Secador 2 (°C, promedio)"
+                      type="number"
+                      step="0.01"
+                      value={promedios[e.id]?.avg2 ?? ''}
+                      onChange={(ev) => actualizarPromedio(e.id, 'avg2')(ev.target.value === '' ? null : Number(ev.target.value))}
+                      className="w-40"
+                    />
+                    {secador1Bajo && (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-rojo-pasankalla">
+                        <TriangleAlert className="size-3.5" strokeWidth={2} />
+                        Bajo {SECADOR_1_MIN}°C
+                      </span>
+                    )}
+                    <Button
+                      variant="secondary"
+                      className="ml-auto px-4 py-2 text-xs"
+                      disabled={enviando && cerrandoId === e.id}
+                      onClick={() => cerrarEntrada(e.id)}
+                    >
+                      {enviando && cerrandoId === e.id ? 'Cerrando…' : 'Cerrar turno'}
+                    </Button>
                   </div>
-                  <FormInput
-                    label="Secador 1 (°C, promedio)"
-                    type="number"
-                    step="0.01"
-                    value={avg1 ?? ''}
-                    onChange={(ev) => actualizarPromedio(e.id, 'avg1')(ev.target.value === '' ? null : Number(ev.target.value))}
-                    className="w-40"
-                  />
-                  <FormInput
-                    label="Secador 2 (°C, promedio)"
-                    type="number"
-                    step="0.01"
-                    value={promedios[e.id]?.avg2 ?? ''}
-                    onChange={(ev) => actualizarPromedio(e.id, 'avg2')(ev.target.value === '' ? null : Number(ev.target.value))}
-                    className="w-40"
-                  />
-                  {secador1Bajo && (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-rojo-pasankalla">
-                      <TriangleAlert className="size-3.5" strokeWidth={2} />
-                      Bajo {SECADOR_1_MIN}°C
-                    </span>
-                  )}
-                  <Button
-                    variant="secondary"
-                    className="ml-auto px-4 py-2 text-xs"
-                    disabled={enviando && cerrandoId === e.id}
-                    onClick={() => cerrarEntrada(e.id)}
-                  >
-                    {enviando && cerrandoId === e.id ? 'Cerrando…' : 'Cerrar turno'}
-                  </Button>
                 </div>
               )
             })}

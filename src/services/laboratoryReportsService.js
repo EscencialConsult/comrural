@@ -28,6 +28,18 @@ export const laboratoryReportsService = {
     return apiClient.get(`/analysis-requests/${requestId}/reports`)
   },
 
+  // Filtros generales (status/origin/analysisRequestId/externalShipmentId) —
+  // se usa para ubicar el informe EXTERNO de un envío puntual, que no cuelga
+  // de la solicitud sino del envío.
+  async listar(params = {}) {
+    const query = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') query.set(k, String(v))
+    })
+    const qs = query.toString()
+    return apiClient.get(`/laboratory-reports${qs ? `?${qs}` : ''}`)
+  },
+
   // "¿Qué falta para cerrar esta solicitud?" — ensayos activos todavía sin
   // un informe VALIDADO que los cubra, separados por modalidad.
   async cobertura(requestId) {

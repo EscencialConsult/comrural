@@ -48,6 +48,7 @@ const PanelCalidadRemito = lazy(() => import('./pages/PanelCalidadRemito.jsx'))
 const PanelCalidadMuestras = lazy(() => import('./pages/PanelCalidadMuestras.jsx'))
 const PanelCalidadControlProceso = lazy(() => import('./pages/PanelCalidadControlProceso.jsx'))
 const PanelCalidadInspeccionAreaB = lazy(() => import('./pages/PanelCalidadInspeccionAreaB.jsx'))
+const PanelCalidadLiberacionEnvasado = lazy(() => import('./pages/PanelCalidadLiberacionEnvasado.jsx'))
 const PanelRecepcionLote = lazy(() => import('./pages/PanelRecepcionLote.jsx'))
 const PanelInspeccionMateriaPrima = lazy(() => import('./pages/PanelInspeccionMateriaPrima.jsx'))
 const PanelIngresoMateriaPrima = lazy(() => import('./pages/PanelIngresoMateriaPrima.jsx'))
@@ -147,6 +148,7 @@ function App() {
           <Route path="/panel/calidad/muestras" element={<PanelCalidadMuestras />} />
           <Route path="/panel/calidad/control-proceso" element={<PanelCalidadControlProceso />} />
           <Route path="/panel/calidad/inspeccion-area-b" element={<PanelCalidadInspeccionAreaB />} />
+          <Route path="/panel/calidad/liberacion-envasado" element={<PanelCalidadLiberacionEnvasado />} />
           <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
           <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
           <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />

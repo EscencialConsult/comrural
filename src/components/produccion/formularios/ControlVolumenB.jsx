@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Check } from 'lucide-react'
+import { Plus, Trash2, Check, ClipboardList, ChevronLeft } from 'lucide-react'
 import { shiftsService } from '../../../services/shiftsService'
 import { productsService } from '../../../services/productsService'
 import { lotsService } from '../../../services/lotsService'
+import { productionAreaBService } from '../../../services/productionAreaBService'
 import { listarTodo } from '../../../services/paginacion'
 import { toast } from '../../../lib/toast'
+import { useSolicitud } from '../../../hooks/useSolicitud'
 import { GRUPOS_DETALLE, filaVacia, sumar, numero } from './volumenBFilas.js'
 import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
 import FirmasResponsables from '../../formularios/FirmasResponsables.jsx'
 import FormInput from '../../FormInput.jsx'
 import FormSelect from '../../FormSelect.jsx'
-import ComboboxLote from '../../formularios/ComboboxLote.jsx'
 import Button from '../../Button.jsx'
 import Skeleton from '../../Skeleton.jsx'
+import EmptyState from '../../EmptyState.jsx'
 
-// Mismo filtro que SeccionControlExistencias.jsx (Área B): lotes de materia
-// prima que ya iniciaron el lavado en Área A. Es la única entrada real de
-// lotes candidatos a este formulario — LotsService.startWashing es lo que
-// los pone en este estado (ver comrural_erp_backend/docs/lots.md §3).
-const ESTADOS_CANDIDATOS = ['LAVADO']
+// Mismo filtro que SeccionControlExistencias.jsx (Área B): lotes en algún
+// punto del rango donde Área B puede consumir quinua lavada — ver
+// comrural_erp_backend/docs/lots.md §3/§8 y docs/production-area-b.md §1.
+const ESTADOS_CANDIDATOS = ['LAVADO', 'LAVADO_COMPLETO', 'EN_AREA_B']
+
+// f.tipo ('N'/'R'/'E', nombres del papel P-PRO-01/R-25) -> inputType real de
+// production_area_b_entries (ver docs/production-area-b.md §3). No incluye
+// REPROCESO — no está en el papel de este formulario, ver
+// ModalRegistrarSalidaAreaB.jsx (Control de Existencias) para esa variante.
+const TIPO_A_INPUT_TYPE = { N: 'NUEVA', R: 'RECUPERADA', E: 'SALDO_FINAL' }
 
 // Tres firmas, no dos (relevamiento): el encargado llena en papel, el
 // supervisor verifica físicamente y transcribe al sistema, y Jefe de
@@ -62,27 +69,162 @@ const KG_POR_SACO_LAVADO = 45
 let siguienteIdResumen = 1
 const filaResumenVacia = () => ({ id: siguienteIdResumen++, loteMp: '', envasadosKg: '', subproductosKg: '' })
 
-// Formulario 3 del relevamiento — registro de Área B (P-PRO-01/R-25). No
-// existe todavía un módulo production-area-b en el backend (a diferencia de
-// production-area-a, que sí es real), así que "Guardar" sigue sin persistir
-// — pero el lote y el producto SÍ son entidades reales (lots/products), así
-// que se conectan a esos services en vez de tipearlos a mano: mismo filtro
-// que SeccionControlExistencias.jsx (lotes en LAVADO) para no dejar elegir
-// un lote que Área B todavía no puede tener.
+// Formulario 3 del relevamiento — registro de Área B (P-PRO-01/R-25). Real
+// de punta a punta: "Guardar" hace un POST /production-area-b/entries (ver
+// comrural_erp_backend/docs/production-area-b.md §5) por cada fila cargada,
+// todas contra el mismo `loteId` elegido en "Datos generales" ("un lote
+// puede ocupar varias filas hasta completarse" = varios turnos del MISMO
+// lote, no lotes distintos por fila — el "Lote MP" de cada fila es solo el
+// código autocompletado a mostrar, no se usa para submit).
+//
+// Sin mapeo backend para: `encargado`/`control`/`observaciones` (recordedBy/
+// verifiedBy salen del actor autenticado, no de texto libre) ni para los
+// "Sacos" de cada subproducto en "Detalle del proceso" (production_area_b_
+// entries solo persiste el kg de cada uno) — esos campos quedan en la
+// pantalla para que Producción los siga completando en papel/pantalla, pero
+// no viajan al backend todavía.
 //
 // `filas`/`setFilas` los pasa SeccionAreaB.jsx (no son estado propio de este
-// componente) — "Indicadores" (pestaña hermana, IndicadoresAreaB.jsx)
-// necesita leer los mismos totales sin duplicar el registro del turno.
+// componente) — así "Volumen B" no pierde el borrador de varias filas al
+// cambiar de subpestaña. "Indicadores" (IndicadoresAreaB.jsx) ya no lee
+// `filas`: tiene su propio selector de lote y pide los totales reales al
+// backend.
+//
+// "Volumen B" ya NO tiene su propio buscador de lote libre — pedido
+// explícito: primero muestra la lista de lotes que YA tienen alguna salida
+// registrada en "Control de Existencias" (ver ListaLotesVolumenB abajo);
+// clicar uno abre este formulario con el lote fijo. Un lote sin ninguna
+// salida todavía no aparece acá — la primera salida de un lote se sigue
+// cargando desde "Control de Existencias" (SeccionControlExistencias.jsx),
+// que no cambió.
 export default function ControlVolumenB({ filas, setFilas }) {
+  const [loteSeleccionado, setLoteSeleccionado] = useState(null)
+
+  if (!loteSeleccionado) {
+    return <ListaLotesVolumenB onSeleccionar={setLoteSeleccionado} />
+  }
+
+  return (
+    <FormularioVolumenB
+      lote={loteSeleccionado}
+      onVolver={() => setLoteSeleccionado(null)}
+      filas={filas}
+      setFilas={setFilas}
+    />
+  )
+}
+
+// Lotes en ESTADOS_CANDIDATOS que ya tienen al menos una entrada de Área B
+// cargada (via "Añadir salida" en Control de Existencias) — N+1 a propósito
+// (candidatos son pocos, mismo trade-off que SeccionSolicitudes.jsx en
+// Laboratorio): no hay endpoint que devuelva "lotes con entradas" de una,
+// así que se resuelve pidiendo production-area-b/lots/:lotId/entries por
+// cada candidato y quedándose con los que devuelven algo.
+function ListaLotesVolumenB({ onSeleccionar }) {
+  const [lotes, setLotes] = useState(null)
+  const [productos, setProductos] = useState(null)
+  const [errorCarga, setErrorCarga] = useState(null)
+
+  useEffect(() => {
+    let cancelado = false
+    Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar)])
+      .then(async ([lotesResp, productosResp]) => {
+        if (cancelado) return
+        const candidatos = lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_CANDIDATOS.includes(l.currentStatus))
+        const entradasPorLote = await Promise.all(candidatos.map((l) => productionAreaBService.listarPorLote(l.id)))
+        if (cancelado) return
+        const conSalidas = candidatos
+          .map((l, i) => ({ ...l, cantidadEntradas: entradasPorLote[i].length }))
+          .filter((l) => l.cantidadEntradas > 0)
+        setLotes(conSalidas)
+        setProductos(productosResp)
+      })
+      .catch((err) => !cancelado && setErrorCarga(err.message))
+    return () => {
+      cancelado = true
+    }
+  }, [])
+
+  const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
+
+  if (errorCarga) {
+    return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <CabeceraFormulario
+        antetitulo="Registro"
+        titulo="Control de Volumen de Producción — Área B"
+        codigo="P-PRO-01/R-25"
+        version="02"
+      />
+      <div>
+        <h2 className="text-lg font-bold text-marron-cafe">Lotes con salidas registradas</h2>
+        <p className="text-xs text-marron-cafe/40">
+          Para cargar la primera salida de un lote nuevo, hacelo desde "Control de Existencias".
+        </p>
+      </div>
+
+      {lotes === null ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
+        </div>
+      ) : lotes.length === 0 ? (
+        <EmptyState
+          Icon={ClipboardList}
+          titulo="Todavía no hay lotes con salidas cargadas"
+          descripcion='Andá a "Control de Existencias" y registrá la primera salida de un lote.'
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-marron-tierra/10 text-xs font-semibold uppercase tracking-wide text-marron-cafe/40">
+                <th className="px-4 py-3">Lote</th>
+                <th className="px-4 py-3">Producto</th>
+                <th className="px-4 py-3">Entradas cargadas</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {lotes.map((l) => (
+                <tr key={l.id} className="border-b border-marron-tierra/10 last:border-b-0 hover:bg-marron-tierra/5">
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
+                  </td>
+                  <td className="px-4 py-3 text-marron-cafe">{productoNombre(l.productId)}</td>
+                  <td className="px-4 py-3 text-marron-cafe">{l.cantidadEntradas}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end">
+                      <Button className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => onSeleccionar(l)}>
+                        <ClipboardList className="size-3.5" strokeWidth={2} />
+                        Ver / continuar
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FormularioVolumenB({ lote, onVolver, filas, setFilas }) {
   const [turnos, setTurnos] = useState(null)
   const [productos, setProductos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [loteId, setLoteId] = useState('')
+  const loteId = lote.id
   const [datosLote, setDatosLote] = useState(null)
   const [presentacion, setPresentacion] = useState(PRESENTACIONES[0].value)
   const [normas, setNormas] = useState([])
   const [otraNorma, setOtraNorma] = useState('')
   const [resumen, setResumen] = useState(() => [filaResumenVacia()])
+  const { enviando, ejecutar } = useSolicitud()
 
   useEffect(() => {
     let cancelado = false
@@ -154,16 +296,62 @@ export default function ControlVolumenB({ filas, setFilas }) {
   const totalEnvasadosSacos = sumar(filas, 'envasadosSacos')
   const totalEnvasadosKg = sumar(filas, 'envasadosKg')
 
-  // No hay endpoint todavía (ver comentario de arriba del componente) — el
-  // click no debe fallar en silencio ni parecer que guardó, así que por
-  // ahora solo confirma con un toast neutro. Reemplazar por la llamada real
-  // al service de producción de Área B en cuanto exista.
-  const guardar = () => {
-    toast.info('Registro guardado.')
+  // Cada fila con turno + tipo cargados es una entrada válida — el resto de
+  // los campos numéricos por defecto van en 0 (CHECK >= 0 del backend, ver
+  // docs/production-area-b.md §2), no bloquean el guardado si Producción
+  // todavía no los completó.
+  const filaValida = (f) => f.turnoId !== '' && f.tipo !== ''
+  const puedeGuardar = loteId !== '' && filas.some(filaValida)
+
+  const guardar = async () => {
+    if (!puedeGuardar) return
+    const filasValidas = filas.filter(filaValida)
+    let creadas = 0
+    try {
+      await ejecutar(async () => {
+        for (const f of filasValidas) {
+          await productionAreaBService.crear({
+            lotId: loteId,
+            shiftId: f.turnoId,
+            entryDate: f.fecha || new Date().toLocaleDateString('en-CA'),
+            inputType: TIPO_A_INPUT_TYPE[f.tipo],
+            usedBags: Number(f.usadosSacos) || 0,
+            usedKg: Number(f.usadosKg) || 0,
+            finalBags: Number(f.envasadosSacos) || 0,
+            finalKg: Number(f.envasadosKg) || 0,
+            secondKg: Number(f.q2daKg) || 0,
+            thirdKg: Number(f.terceraKg) || 0,
+            blackPointsKg: Number(f.pNegrosKg) || 0,
+            rejectionKg: Number(f.rechazoKg) || 0,
+            powderKg: Number(f.polvilloKg) || 0,
+            recoverableKg: Number(f.recuperableKg) || 0,
+            saldoQfTransferidoKg: Number(f.saldoQfKg) || 0,
+          })
+          creadas += 1
+        }
+      })
+      toast.success(`${creadas} ${creadas === 1 ? 'entrada registrada' : 'entradas registradas'} en Área B.`)
+      setFilas([filaVacia(datosLote?.code ?? '')])
+    } catch (err) {
+      toast.error(
+        creadas > 0
+          ? `Se guardaron ${creadas} de ${filasValidas.length} filas — ${err.message}`
+          : (err.message ?? 'No se pudo guardar el registro.'),
+      )
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <button
+        type="button"
+        onClick={onVolver}
+        className="flex w-fit items-center gap-1 text-sm font-medium text-marron-cafe/60 transition-colors duration-150 hover:text-marron-cafe"
+      >
+        <ChevronLeft className="size-4" strokeWidth={1.75} />
+        Volver a la lista
+      </button>
+
       <CabeceraFormulario
         antetitulo="Registro"
         titulo="Control de Volumen de Producción — Área B"
@@ -175,17 +363,7 @@ export default function ControlVolumenB({ filas, setFilas }) {
 
       <SeccionFormulario numero={1} titulo="Datos generales">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {!productos ? (
-            <Skeleton className="h-16" />
-          ) : (
-            <ComboboxLote
-              label="Lote MP"
-              value={loteId}
-              onChange={setLoteId}
-              estados={ESTADOS_CANDIDATOS}
-              productoNombre={productoNombre}
-            />
-          )}
+          <FormInput label="Lote MP" value={lote.code} disabled />
           <FormSelect label="Presentación" value={presentacion} onChange={(e) => setPresentacion(e.target.value)}>
             {PRESENTACIONES.map((p) => (
               <option key={p.value} value={p.value}>
@@ -456,9 +634,9 @@ export default function ControlVolumenB({ filas, setFilas }) {
       </SeccionFormulario>
 
       <div className="flex justify-end">
-        <Button onClick={guardar}>
+        <Button onClick={guardar} disabled={enviando || !puedeGuardar}>
           <Plus className="mr-1.5 size-4" strokeWidth={2} />
-          Guardar
+          {enviando ? 'Guardando…' : 'Guardar'}
         </Button>
       </div>
     </div>
@@ -473,4 +651,3 @@ function CampoLote({ etiqueta, valor }) {
     </div>
   )
 }
-

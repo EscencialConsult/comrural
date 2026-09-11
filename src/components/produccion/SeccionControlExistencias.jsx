@@ -16,12 +16,14 @@ const nombreOrganizacion = (o) => o.tradeName || o.legalName
 const nombreProveedor = (s) => (s?.person ? nombrePersona(s.person) : s?.organization ? nombreOrganizacion(s.organization) : '—')
 
 // Subpestaña "Control de Existencias" de Área B (ver SeccionAreaB.jsx) —
-// Área B es hermana de "Área A" (config/gruposMaestros.js). Punto de partida
-// (pedido explícito): listado de lotes que ya iniciaron el lavado en Área A
-// (currentStatus === 'LAVADO', disparado por LotsService.startWashing al
-// registrar la primera entrada de Volumen A — ver
-// comrural_erp_backend/docs/lots.md §3). El resto del contenido de esta
-// pestaña todavía no está definido.
+// Área B es hermana de "Área A" (config/gruposMaestros.js). Lista lotes en
+// cualquier punto del rango donde tiene sentido trabajar el kardex de
+// quinua lavada (docs/lot-traceability.md §4): LAVADO (lavando, ya hay
+// ingresos que ver), LAVADO_COMPLETO (terminó de lavar, listo para que
+// Área B arranque a consumir) y EN_AREA_B (Área B ya está consumiendo) —
+// ver docs/lots.md §3/§8 y docs/production-area-b.md §1.
+const ESTADOS_CONTROL_EXISTENCIAS = ['LAVADO', 'LAVADO_COMPLETO', 'EN_AREA_B']
+
 export default function SeccionControlExistencias() {
   const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
@@ -35,7 +37,7 @@ export default function SeccionControlExistencias() {
     Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
       .then(([lotesResp, productos, proveedores]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && l.currentStatus === 'LAVADO'))
+        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_CONTROL_EXISTENCIAS.includes(l.currentStatus)))
         setProductos(productos)
         setProveedores(proveedores)
       })

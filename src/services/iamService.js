@@ -5,8 +5,16 @@
 import { apiClient } from '../lib/apiClient'
 
 export const iamService = {
-  async listarUsuarios() {
-    const { data } = await apiClient.get('/iam/users?limit=100')
+  // `roleCode` es un filtro genérico para selectores de personas acotados a
+  // uno o más roles — admite varios códigos separados por coma
+  // ('supervisor_prod,jefe_prod') porque en este deployment los roles reales
+  // son granulares por puesto, no los pocos roles-módulo genéricos del seed
+  // original. El backend lo resuelve contra user_roles/roles; no requiere
+  // permiso de IAM, solo `users:read` (ver docs/warehouse-deliveries.md).
+  async listarUsuarios({ roleCode } = {}) {
+    const query = new URLSearchParams({ limit: '100' })
+    if (roleCode) query.set('roleCode', roleCode)
+    const { data } = await apiClient.get(`/iam/users?${query.toString()}`)
     return data
   },
 

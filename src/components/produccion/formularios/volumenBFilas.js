@@ -24,6 +24,11 @@ export const GRUPOS_DETALLE = [
   { key: 'polvillo', label: 'Polvillo (d)' },
   { key: 'saldoQf', label: 'Saldo Q.F.' },
   { key: 'tercera', label: 'Quinua Tercera' },
+  // recoverable_kg de production_area_b_entries (ver
+  // comrural_erp_backend/docs/production-area-b.md §2) no tenía columna en
+  // el papel — se agrega acá para que el formulario pueda mandar ese campo
+  // obligatorio del backend real.
+  { key: 'recuperable', label: 'Recuperable' },
 ]
 
 let siguienteId = 1

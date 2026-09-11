@@ -3,7 +3,10 @@ import { Plus, Trash2 } from 'lucide-react'
 import { shiftsService } from '../../../services/shiftsService'
 import { productsService } from '../../../services/productsService'
 import { lotsService } from '../../../services/lotsService'
+import { packagingService } from '../../../services/packagingService'
+import { productionAreaBService } from '../../../services/productionAreaBService'
 import { listarTodo } from '../../../services/paginacion'
+import { useSolicitud } from '../../../hooks/useSolicitud'
 import { toast } from '../../../lib/toast'
 import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
@@ -14,11 +17,10 @@ import ComboboxLote from '../../formularios/ComboboxLote.jsx'
 import Button from '../../Button.jsx'
 import Skeleton from '../../Skeleton.jsx'
 
-// Mismo filtro que ControlVolumenB.jsx — es el único estado real disponible
-// hoy para acotar la búsqueda de lote. No hay todavía un estado propio para
-// "ya pasó por Área B, listo para envasar" (production-area-b no existe en
-// el backend), así que se reutiliza LAVADO como aproximación.
-const ESTADOS_CANDIDATOS = ['LAVADO']
+// Mismo filtro que ControlVolumenB.jsx — cualquier lote que ya pueda tener
+// consumo de Área B, de donde sale el material real que esta corrida
+// vincula (ver guardar()).
+const ESTADOS_CANDIDATOS = ['LAVADO', 'LAVADO_COMPLETO', 'EN_AREA_B']
 
 // RP-19 — mismo catálogo que ControlVolumenB.jsx y ControlProductoAlmacen.jsx.
 const PRESENTACIONES = [
@@ -102,13 +104,20 @@ const num = (v) => Number(v) || 0
 const sumarCampos = (obj, campos) => campos.reduce((acc, { key }) => acc + num(obj[key]), 0)
 
 // Formulario 5 del relevamiento — Envasado de Producto Terminado
-// (I-PRO-16/R-01). Mockup puro: no hay production-area-b ni packaging en el
-// backend todavía (ver PACKAGING_ENTRIES en la propuesta de integración).
-// Antes de este formulario "envasados" vivía mezclado dentro de Volumen B
-// (ControlVolumenB.jsx) — acá se modela como su propia entidad, como
-// corresponde según el análisis funcional: una corrida de envasado con su
-// propio control de envases/etiquetas, unidades por envasador/turno,
-// rechazos por impureza y reproceso.
+// (I-PRO-16/R-01). "Guardar" hace el flujo completo real (ver
+// comrural_erp_backend/docs/packaging.md): POST /packaging/entries, después
+// reparte packagedKg entre las entradas NUEVA de Área B del lote elegido
+// (POST .../sources, una por una, en orden — greedy, hasta cubrir el
+// total o agotar entradas) y si quedó cubierto exacto, POST .../close. Si
+// el lote no tiene suficiente material de Área B todavía, la corrida queda
+// creada pero abierta — avisa cuánto falta vincular.
+//
+// Es una corrida AGREGADA: packaging_entries solo persiste presentación/
+// sacos/kg/etiquetas/rechazos TOTALES, no el desglose diario de "Control de
+// envases"/"Control de etiqueta" (§2/§3) ni el detalle de rechazo por tipo
+// de impureza o de reproceso por presentación (§5/§6) — esas secciones no
+// tienen columna en el backend, quedan solo en pantalla para el
+// seguimiento interno de Producción.
 export default function EnvasadoProductoTerminado() {
   const [turnos, setTurnos] = useState(null)
   const [productos, setProductos] = useState(null)
@@ -122,6 +131,7 @@ export default function EnvasadoProductoTerminado() {
   const [filasUnidades, setFilasUnidades] = useState(() => [filaUnidadVacia()])
   const [rechazos, setRechazos] = useState(RECHAZOS_VACIO)
   const [reproceso, setReproceso] = useState(REPROCESO_VACIO)
+  const { enviando, ejecutar } = useSolicitud()
 
   useEffect(() => {
     let cancelado = false
@@ -173,9 +183,51 @@ export default function EnvasadoProductoTerminado() {
   const totalReproceso = sumarCampos(reproceso, CAMPOS_REPROCESO_NUM)
   const unidadesProducidas = filasUnidades.reduce((acc, f) => acc + num(f.cantidadEnvasados), 0)
   const totalProducidoKg = filasUnidades.reduce((acc, f) => acc + num(f.cantidadEnvasados) * num(f.pesoUnidadKg), 0)
+  const totalEtiquetaCorrecta = filasUnidades.reduce((acc, f) => acc + num(f.etiquetaCorrecta), 0)
 
-  const guardar = () => {
-    toast.info('Registro guardado.')
+  const presentacion = PRESENTACIONES.find((p) => p.value === tipoEnvase)
+  const puedeGuardar = unidadesProducidas > 0
+
+  const guardar = async () => {
+    if (!puedeGuardar) return
+    try {
+      await ejecutar(async () => {
+        const corrida = await packagingService.crear({
+          presentationCode: presentacion.value,
+          presentationLabel: presentacion.label,
+          unitNetKg: presentacion.kg,
+          packagingLotCodeSnapshot: loteEnvase.trim() || undefined,
+          packageCount: unidadesProducidas,
+          labelCount: totalEtiquetaCorrecta,
+          rejectedDuringPackaging: totalRechazos,
+        })
+
+        if (!loteId) {
+          toast.success('Corrida registrada — sin lote elegido, vinculá el material de Área B a mano.')
+          return
+        }
+
+        const entradasAreaB = await productionAreaBService.listarPorLote(loteId)
+        const nuevas = entradasAreaB.filter((e) => e.inputType === 'NUEVA')
+        let restante = corrida.packagedKg
+        for (const entrada of nuevas) {
+          if (restante <= 0.001) break
+          const aporte = Math.min(restante, entrada.finalKg)
+          if (aporte <= 0) continue
+          await packagingService.agregarFuente(corrida.id, { areaBEntryId: entrada.id, cantidadKg: Number(aporte.toFixed(3)) })
+          restante -= aporte
+        }
+
+        if (restante <= 0.001) {
+          await packagingService.cerrar(corrida.id)
+          toast.success('Corrida de envasado registrada, vinculada a Área B y cerrada.')
+        } else {
+          toast.info(`Corrida registrada — faltan ${restante.toFixed(3)} kg por vincular a Área B para poder cerrarla.`)
+        }
+      })
+    } catch (err) {
+      toast.error(err.message ?? 'No se pudo guardar el registro.')
+    }
   }
 
   return (
@@ -433,9 +485,9 @@ export default function EnvasadoProductoTerminado() {
       </SeccionFormulario>
 
       <div className="flex justify-end">
-        <Button onClick={guardar}>
+        <Button onClick={guardar} disabled={enviando || !puedeGuardar}>
           <Plus className="mr-1.5 size-4" strokeWidth={2} />
-          Guardar
+          {enviando ? 'Guardando…' : 'Guardar'}
         </Button>
       </div>
     </div>

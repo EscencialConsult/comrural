@@ -5,11 +5,22 @@ import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
 import { productionAreaAService } from '../../services/productionAreaAService'
+import { warehouseDeliveriesService } from '../../services/warehouseDeliveriesService'
 import { listarTodo } from '../../services/paginacion'
 import Button from '../Button.jsx'
+import Badge from '../Badge.jsx'
 import EmptyState from '../EmptyState.jsx'
 import Skeleton from '../Skeleton.jsx'
 import Modal from '../Modal.jsx'
+
+// Mismo corte que `GATE_WAREHOUSE_DELIVERY_ACTIVATION` en
+// production-area-a-entries.service.ts — el gate de R-24 no es retroactivo,
+// solo exige entrega confirmada a lotes creados desde esta fecha. Duplicado
+// acá a propósito (no hay paquete compartido entre front/back) para poder
+// avisar ANTES de que el usuario llegue al formulario completo y el backend
+// lo frene con un 409.
+const GATE_WAREHOUSE_DELIVERY_ACTIVATION = new Date('2026-09-11T00:00:00.000Z')
+const necesitaR24 = (lot) => new Date(lot.createdAt) >= GATE_WAREHOUSE_DELIVERY_ACTIVATION
 
 const nombrePersona = (p) => `${p.firstNames} ${p.lastNames}`
 const nombreOrganizacion = (o) => o.tradeName || o.legalName
@@ -56,6 +67,10 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
   // `undefined` si no hay recepción de almacén con storedPackageCount
   // todavía (nada que mostrar).
   const [bolsasDetalle, setBolsasDetalle] = useState(null)
+  // lotId -> boolean, solo para lotes que caen bajo el gate (`necesitaR24`).
+  // Los lotes exceptuados (creados antes de la activación) ni entran acá —
+  // no tiene sentido pedir sus entregas.
+  const [r24ConfirmadaPorLote, setR24ConfirmadaPorLote] = useState({})
 
   useEffect(() => {
     if (!loteDetalle) {
@@ -88,9 +103,24 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
     Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
       .then(([lotesResp, productos, proveedores]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_LOTES_PRODUCCION.includes(l.currentStatus)))
+        const lotesProduccion = lotesResp.data.filter(
+          (l) => l.nature === 'PM' && ESTADOS_LOTES_PRODUCCION.includes(l.currentStatus),
+        )
+        setLotes(lotesProduccion)
         setProductos(productos)
         setProveedores(proveedores)
+
+        const lotesConGate = lotesProduccion.filter(necesitaR24)
+        if (lotesConGate.length === 0) return
+        Promise.allSettled(lotesConGate.map((l) => warehouseDeliveriesService.listarPorLote(l.id))).then((resultados) => {
+          if (cancelado) return
+          const siguiente = {}
+          resultados.forEach((r, i) => {
+            const entregas = r.status === 'fulfilled' ? r.value : []
+            siguiente[lotesConGate[i].id] = entregas.some((e) => e.documentType === 'R-24' && e.estado === 'CONFIRMADA')
+          })
+          setR24ConfirmadaPorLote(siguiente)
+        })
       })
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
@@ -133,26 +163,42 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
               </tr>
             </thead>
             <tbody>
-              {lotes.map((l) => (
-                <tr key={l.id} className="border-b border-marron-tierra/10 last:border-b-0 hover:bg-marron-tierra/5">
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
-                  </td>
-                  <td className="px-4 py-3 text-marron-cafe">{productoNombre(l.productId)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setLoteDetalle(l)}>
-                        <Eye className="size-3.5" strokeWidth={2} />
-                        Ver detalle
-                      </Button>
-                      <Button className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => onIniciarProduccion(l.id)}>
-                        <PlayCircle className="size-3.5" strokeWidth={2} />
-                        {l.currentStatus === 'LAVADO' ? 'Continuar producción' : 'Iniciar producción'}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {lotes.map((l) => {
+                // Bloquea tanto si falta la R-24 como si todavía no se sabe
+                // (undefined, consulta en curso) — dejar el botón habilitado
+                // en ese momento breve permitía clicar y entrar de lleno al
+                // formulario de Volumen A antes de que la respuesta llegara,
+                // para recién chocar con el 409 del backend al guardar. El
+                // parpadeo deshabilitado→habilitado en el caso normal (lote
+                // ya con R-24 confirmada) es preferible a ese hueco.
+                const r24Resuelta = !necesitaR24(l) || r24ConfirmadaPorLote[l.id] === true
+                const faltaR24 = necesitaR24(l) && r24ConfirmadaPorLote[l.id] === false
+                return (
+                  <tr key={l.id} className="border-b border-marron-tierra/10 last:border-b-0 hover:bg-marron-tierra/5">
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
+                    </td>
+                    <td className="px-4 py-3 text-marron-cafe">
+                      <div className="flex items-center gap-2">
+                        {productoNombre(l.productId)}
+                        {faltaR24 && <Badge tono="alerta">Falta entrega de Almacén (R-24)</Badge>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setLoteDetalle(l)}>
+                          <Eye className="size-3.5" strokeWidth={2} />
+                          Ver detalle
+                        </Button>
+                        <Button className="gap-1.5 px-3 py-1.5 text-xs" disabled={!r24Resuelta} onClick={() => onIniciarProduccion(l.id)}>
+                          <PlayCircle className="size-3.5" strokeWidth={2} />
+                          {l.currentStatus === 'LAVADO' ? 'Continuar producción' : 'Iniciar producción'}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -197,9 +243,16 @@ export default function SeccionLotesProduccion({ onIniciarProduccion }) {
                 </div>
               )}
             </dl>
+            {necesitaR24(loteDetalle) && r24ConfirmadaPorLote[loteDetalle.id] === false && (
+              <p className="text-xs font-medium text-marron-arcilla">
+                Falta la entrega de Almacén (R-24) confirmada — Producción tiene que confirmarla en la pestaña
+                "Entregas pendientes" antes de poder arrancar o continuar este lote.
+              </p>
+            )}
             <div className="flex justify-end border-t border-marron-tierra/10 pt-4">
               <Button
                 className="gap-1.5 px-4 py-2 text-sm"
+                disabled={necesitaR24(loteDetalle) && r24ConfirmadaPorLote[loteDetalle.id] !== true}
                 onClick={() => {
                   onIniciarProduccion(loteDetalle.id)
                   setLoteDetalle(null)

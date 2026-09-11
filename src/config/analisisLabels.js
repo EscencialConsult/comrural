@@ -35,6 +35,8 @@ export const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'alerta',
+  LAVADO_COMPLETO: 'positivo',
   EN_ANALISIS: 'alerta',
   LIBERADO: 'positivo',
   RECHAZADO: 'negativo',

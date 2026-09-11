@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { productsService } from '../../services/productsService'
+import { areasService } from '../../services/areasService'
+import { warehouseDeliveriesService } from '../../services/warehouseDeliveriesService'
 import { listarTodo } from '../../services/paginacion'
+import { useSolicitud } from '../../hooks/useSolicitud'
 import { toast } from '../../lib/toast'
-import MockupBanner from '../MockupBanner.jsx'
 import CabeceraFormulario from '../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../formularios/SeccionFormulario.jsx'
 import FirmasResponsables from '../formularios/FirmasResponsables.jsx'
@@ -27,14 +29,21 @@ const numero = (v) => (v === '' || v == null ? '' : Number(v))
 // documentos correlativos (P-15 → P-04 de la narrativa): primero el
 // requerimiento del área, después la nota de entrega que Almacén emite
 // cuando lo despacha — no hace falta ocultar uno detrás del otro.
-// Formularios P-ADM-03/R-27 (Requerimiento de Almacenes) y P-ADM-03/R-20
-// (Nota de Entrega de Almacén). MOCKUP total, sin backend propio todavía.
+//
+// §1 "Requerimiento del área" (P-ADM-03/R-27) sigue siendo MOCKUP puro — no
+// hay tabla propuesta para eso en el diseño. §2 "Nota de entrega" (P-ADM-03/
+// R-20) es real: cada ítem es un POST /warehouse-deliveries
+// (documentType='R-20'), ver comrural_erp_backend/docs/warehouse-deliveries.md.
+// `solicitanteId` se tipea como uuid a mano (mismo criterio que
+// `deliveryResponsibleId` en ModalSolicitarAnalisis.jsx).
 export default function SeccionSalidaEnvases() {
   const [productos, setProductos] = useState(null)
+  const [areas, setAreas] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
+  const { enviando, ejecutar } = useSolicitud()
 
-  const [solicitante, setSolicitante] = useState('')
-  const [area, setArea] = useState('')
+  const [solicitanteId, setSolicitanteId] = useState('')
+  const [destinoAreaId, setDestinoAreaId] = useState('')
   const [numeroRequerimiento, setNumeroRequerimiento] = useState('')
   const [fechaRequerimiento, setFechaRequerimiento] = useState('')
   const [ordenProduccion, setOrdenProduccion] = useState('')
@@ -47,8 +56,13 @@ export default function SeccionSalidaEnvases() {
 
   useEffect(() => {
     let cancelado = false
-    listarTodo(productsService.listar)
-      .then((data) => !cancelado && setProductos(data))
+    Promise.all([listarTodo(productsService.listar), areasService.listar()])
+      .then(([productosResp, areasResp]) => {
+        if (cancelado) return
+        setProductos(productosResp)
+        setAreas(areasResp.data)
+        if (areasResp.data.length > 0) setDestinoAreaId(areasResp.data[0].id)
+      })
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true
@@ -68,22 +82,58 @@ export default function SeccionSalidaEnvases() {
 
   const totalRequerimiento = filasRequerimiento.reduce((acc, f) => acc + (Number(f.cantidad) || 0), 0)
 
-  const guardar = () => {
-    toast.info('Registro guardado.')
+  const filaEntregaValida = (f) => f.productoId !== '' && Number(f.cantidad) > 0 && f.unidadMedida.trim() !== ''
+  const puedeGuardar =
+    solicitanteId.trim() !== '' && destinoAreaId !== '' && fechaEntrega !== '' && filasEntrega.some(filaEntregaValida)
+
+  const guardar = async () => {
+    if (!puedeGuardar) return
+    const validas = filasEntrega.filter(filaEntregaValida)
+    let creadas = 0
+    try {
+      await ejecutar(async () => {
+        for (const f of validas) {
+          await warehouseDeliveriesService.crear({
+            documentType: 'R-20',
+            productId: f.productoId,
+            solicitanteId: solicitanteId.trim(),
+            destinoAreaId,
+            opId: ordenProduccion.trim() || undefined,
+            cantidad: Number(f.cantidad),
+            unidad: f.unidadMedida.trim(),
+            fechaEntrega: new Date(fechaEntrega).toISOString(),
+            observaciones: observaciones.trim() || undefined,
+          })
+          creadas += 1
+        }
+      })
+      toast.success(`${creadas} ${creadas === 1 ? 'ítem registrado' : 'ítems registrados'} en la nota de entrega.`)
+      setFilasEntrega([filaEntregaVacia()])
+    } catch (err) {
+      toast.error(creadas > 0 ? `Se guardaron ${creadas} de ${validas.length} ítems — ${err.message}` : (err.message ?? 'No se pudo guardar.'))
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
       <CabeceraFormulario antetitulo="Registro" titulo="Salida de Envases y Embalaje" codigo="P-ADM-03/R-27 · P-ADM-03/R-20" version="01" />
 
-      <MockupBanner />
-
       {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
 
-      <SeccionFormulario numero={1} titulo="Requerimiento del área">
+      <SeccionFormulario numero={1} titulo="Requerimiento del área" nota="Mockup — sin tabla propia en el backend, solo P-ADM-03/R-20 (§2) es real.">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <FormInput label="Solicitante" value={solicitante} onChange={(e) => setSolicitante(e.target.value)} placeholder="Claudia Rojas" />
-          <FormInput label="Área" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Área A-B" />
+          <FormInput label="Solicitante (uuid)" value={solicitanteId} onChange={(e) => setSolicitanteId(e.target.value)} placeholder="id del solicitante" />
+          {!areas ? (
+            <Skeleton className="h-16" />
+          ) : (
+            <FormSelect label="Área de destino" value={destinoAreaId} onChange={(e) => setDestinoAreaId(e.target.value)}>
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </FormSelect>
+          )}
           <FormInput label="N°" value={numeroRequerimiento} onChange={(e) => setNumeroRequerimiento(e.target.value)} placeholder="204" />
           <FormInput label="Fecha" type="date" value={fechaRequerimiento} onChange={(e) => setFechaRequerimiento(e.target.value)} />
           <FormInput label="OE/OP" value={ordenProduccion} onChange={(e) => setOrdenProduccion(e.target.value)} placeholder="OE-166" />
@@ -244,16 +294,16 @@ export default function SeccionSalidaEnvases() {
         <FirmasResponsables
           responsables={[
             { rol: 'Entregado por', puesto: 'Asistente de Almacén' },
-            { rol: 'Recibido por', puesto: area || 'Área solicitante' },
+            { rol: 'Recibido por', puesto: areas?.find((a) => a.id === destinoAreaId)?.name ?? 'Área solicitante' },
           ]}
           claseGrilla="sm:grid-cols-2"
         />
       </SeccionFormulario>
 
       <div className="flex justify-end">
-        <Button onClick={guardar}>
+        <Button onClick={guardar} disabled={enviando || !puedeGuardar}>
           <Plus className="mr-1.5 size-4" strokeWidth={2} />
-          Guardar
+          {enviando ? 'Guardando…' : 'Guardar'}
         </Button>
       </div>
     </div>

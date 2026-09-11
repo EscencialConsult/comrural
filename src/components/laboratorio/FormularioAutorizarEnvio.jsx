@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Send, Stamp, Gavel, Truck, Ban, SquareCheck, Square } from 'lucide-react'
+import { Send, Stamp, Gavel, Truck, Ban, SquareCheck, Square, ShieldCheck, Download } from 'lucide-react'
 import { suppliersService } from '../../services/suppliersService'
 import { externalShipmentsService } from '../../services/externalShipmentsService'
 import { listarTodo } from '../../services/paginacion'
 import { laboratoryReportsService } from '../../services/laboratoryReportsService'
+import { documentsService } from '../../services/documentsService'
 import { UNIDADES_SUBMUESTRA } from '../../config/laboratoriosDestino'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { toast } from '../../lib/toast'
@@ -56,10 +57,37 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
   const puedeAutorizar = permisos.has('external-shipments:authorize')
   const puedeGestionar = permisos.has('external-shipments:manage')
   const puedeCargarInforme = permisos.has('laboratory-reports:manage')
+  const puedeValidarInforme = permisos.has('laboratory-reports:validate')
 
   const [envio, setEnvio] = useState(envioInicial ?? null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
+
+  // Informe EXTERNO del envío — cuelga del envío, no de la solicitud (ver
+  // laboratoryReportsService.crearExterno). Se completa apenas se sube el
+  // PDF (onSubido, abajo); si el formulario se abre directo sobre un envío
+  // que ya tiene resultado (RESULTADO_RECIBIDO/CERRADO) se busca por
+  // externalShipmentId, porque en ese caso nunca pasó por onSubido en esta
+  // sesión.
+  const [informe, setInforme] = useState(null)
+
+  useEffect(() => {
+    if (!envio || !['RESULTADO_RECIBIDO', 'CERRADO'].includes(envio.status) || informe) return
+    let cancelado = false
+    laboratoryReportsService
+      .listar({ externalShipmentId: envio.id, limit: 1 })
+      .then((reportes) => {
+        if (cancelado) return
+        if (reportes[0]) setInforme(reportes[0])
+      })
+      .catch((err) => {
+        if (cancelado) return
+        console.error('No se pudo cargar el informe del envío externo:', err)
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [envio, informe])
 
   // Catálogo real de laboratorios: proveedores activos con type=LABORATORY.
   // Si el que hace falta no está, se da de alta en Proveedores — no hay
@@ -185,6 +213,25 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
     )
 
   const esBorrador = !envio || envio.status === 'BORRADOR'
+
+  const descargarInforme = async () => {
+    try {
+      const url = await documentsService.urlDescarga(informe.documentId)
+      window.open(url, '_blank')
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  // Última firma de la ruta externa: valida el PDF ya registrado y el
+  // backend cierra el envío (RESULTADO_RECIBIDO -> CERRADO) y recalcula la
+  // cobertura de la solicitud en el mismo paso.
+  const validarInforme = () =>
+    ejecutar(async () => {
+      const informeValidado = await laboratoryReportsService.validar(informe.id)
+      setInforme(informeValidado)
+      return externalShipmentsService.obtener(envio.id)
+    }, 'Informe validado — envío cerrado.')
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -416,17 +463,45 @@ export default function FormularioAutorizarEnvio({ solicitud, ensayos, envio: en
               ayuda="Se sube directo al almacenamiento privado; el backend verifica el archivo antes de aceptarlo."
               onSubido={async (documento) => {
                 await ejecutar(async () => {
-                  await laboratoryReportsService.crearExterno(envio.id, { documentId: documento.id })
+                  const informeCreado = await laboratoryReportsService.crearExterno(envio.id, { documentId: documento.id })
+                  setInforme(informeCreado)
                   return externalShipmentsService.obtener(envio.id)
                 }, 'Resultado registrado — queda pendiente de validación.')
               }}
             />
+          ) : envio.status === 'ENVIADO' ? (
+            <p className="text-sm text-marron-cafe/60">Esperando el informe del laboratorio.</p>
+          ) : !informe ? (
+            <p className="text-sm text-marron-cafe/60">Cargando informe…</p>
+          ) : informe.status === 'VALIDADO' ? (
+            <div className="flex items-center gap-3 rounded-2xl bg-verde-hoja/10 p-4">
+              <ShieldCheck className="size-5 shrink-0 text-verde-bosque" strokeWidth={1.75} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-verde-bosque">Informe validado</p>
+                <p className="text-xs text-verde-bosque/70">
+                  {new Date(informe.validatedAt).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })}
+                </p>
+              </div>
+              <Button type="button" variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={descargarInforme}>
+                <Download className="size-3.5" strokeWidth={2} />
+                Descargar PDF
+              </Button>
+            </div>
           ) : (
-            <p className="text-sm text-marron-cafe/60">
-              {envio.status === 'ENVIADO'
-                ? 'Esperando el informe del laboratorio.'
-                : 'El resultado ya fue registrado — se valida desde la pestaña de informes de la solicitud.'}
-            </p>
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border-l-4 border-marron-arcilla/40 bg-marron-tierra/5 p-4">
+              <Button type="button" variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={descargarInforme}>
+                <Download className="size-3.5" strokeWidth={2} />
+                Ver PDF adjunto
+              </Button>
+              {puedeValidarInforme ? (
+                <Button type="button" disabled={guardando} onClick={validarInforme} className="gap-1.5 px-3 py-1.5 text-xs">
+                  <ShieldCheck className="size-3.5" strokeWidth={2} />
+                  {guardando ? 'Validando…' : 'Validar informe'}
+                </Button>
+              ) : (
+                <span className="text-xs text-marron-cafe/50">Esperando validación.</span>
+              )}
+            </div>
           )}
         </SeccionFormulario>
       )}

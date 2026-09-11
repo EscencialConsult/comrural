@@ -185,6 +185,17 @@ export const GRUPOS_MAESTROS = [
         permiso: 'lots:read',
         Icon: ShieldCheck,
       },
+      // Liberación formal sobre producto ya envasado — real
+      // (quality-area-b-inspections), permiso propio, no lots:read. Distinta
+      // de "Inspección Área B" de arriba (esa es el control informal
+      // previo al envasado, sin tabla en el backend).
+      {
+        id: 'liberacion-envasado',
+        nombre: 'Liberación de Envasado',
+        ruta: '/panel/calidad/liberacion-envasado',
+        permiso: 'quality-area-b-inspections:read',
+        Icon: PackageCheck,
+      },
     ],
   },
   {

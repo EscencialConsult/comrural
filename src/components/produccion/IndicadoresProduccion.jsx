@@ -10,6 +10,11 @@ const INDICADORES = [
   { key: 'rendimiento', etiqueta: 'Rendimiento', meta: '> 90%', cumple: (v) => v > 90 },
   { key: 'saponina', etiqueta: 'Saponina', meta: '≤ 8%', cumple: (v) => v <= 8 },
   { key: 'quinuaMenuda', etiqueta: 'Quinua Menuda', meta: '≤ 2%', cumple: (v) => v <= 2 },
+  // Punto 4 del relevamiento (sección 2.10): ganancia de peso por humedad en
+  // el lavado, meta ≈0.5%. El backend todavía no expone `difPromedioPct` en
+  // /production-area-a/indicators — mientras no lo haga, esta fila muestra
+  // "Sin datos" igual que cualquier indicador sin valor.
+  { key: 'difHumedad', etiqueta: 'Diferencia positiva (humedad)', meta: '≈ 0,5%', cumple: (v) => Math.abs(v - 0.5) <= 0.2 },
 ]
 
 // Pestaña "Indicadores" de Área A — real, `GET /production-area-a/indicators`
@@ -45,6 +50,7 @@ export default function IndicadoresProduccion() {
     rendimiento: indicadores.rendimientoPct,
     saponina: indicadores.saponinaPct,
     quinuaMenuda: indicadores.quinuaMenudaPct,
+    difHumedad: indicadores.difPromedioPct,
   }
 
   return (

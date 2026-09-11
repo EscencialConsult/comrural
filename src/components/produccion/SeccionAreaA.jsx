@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Layers, Scale, Gauge } from 'lucide-react'
+import { Layers, Gauge, Truck } from 'lucide-react'
 import PillTabs from '../dashboard/PillTabs.jsx'
 import SeccionLotesProduccion from './SeccionLotesProduccion.jsx'
+import SeccionEntregasPendientes from './SeccionEntregasPendientes.jsx'
 import ControlVolumenA from './formularios/ControlVolumenA.jsx'
 import IndicadoresProduccion from './IndicadoresProduccion.jsx'
 
@@ -17,9 +18,27 @@ import IndicadoresProduccion from './IndicadoresProduccion.jsx'
 // fusión no tocó nada del backend. "Consulta externa" (planilla de órdenes
 // de compra de Logística) también se sacó — pedido explícito, no había
 // módulo real de órdenes de compra detrás y no estaba planeado agregarlo.
+// "Volumen A" NO está acá a propósito — no es una pestaña de acceso libre.
+// Ese formulario solo debe aparecer con un lote ya elegido desde "Lotes"
+// ("Iniciar producción"/"Continuar producción"), que es el único lugar que
+// valida la R-24 confirmada (ver SeccionLotesProduccion.jsx) antes de dejar
+// pasar. Si "Volumen A" fuera una pestaña clicable con su propio buscador
+// de lote (como era antes), ese buscador no tenía ningún filtro de R-24 —
+// dejaba elegir cualquier lote LIBERADO/LAVADO y recién frenaba en el
+// backend al registrar, después de llenar todo el formulario. El estado
+// `subPestaña` puede seguir valiendo 'volumen-a' (ver alIniciarProduccion
+// abajo), solo que no hay pastilla para llegar ahí por su cuenta.
+// "Informes Calidad/Lab" se movió a Área B (SeccionAreaB.jsx) — el dato real
+// que la respalda (quality_area_b_inspections) cuelga de una corrida de
+// ENVASADO, que recién existe una vez que el lote llegó a Área B. Un lote
+// que todavía está acá en Área A (LIBERADO/LAVADO) nunca puede tener esos
+// controles, así que no tenía sentido ofrecerlo desde esta pestaña.
 const SUBPESTAÑAS_AREA_A = [
   { id: 'lotes', nombre: 'Lotes', Icon: Layers },
-  { id: 'volumen-a', nombre: 'Volumen A', Icon: Scale },
+  // Confirmar recepción de entregas de Almacén (warehouse-deliveries, real
+  // — ver docs/warehouse-deliveries.md). Hoy no es un gate real sobre
+  // "Volumen A" (ver comentario de SeccionEntregasPendientes.jsx).
+  { id: 'entregas', nombre: 'Entregas', Icon: Truck },
   { id: 'indicadores', nombre: 'Indicadores', Icon: Gauge },
 ]
 
@@ -46,6 +65,7 @@ export default function SeccionAreaA() {
       <PillTabs pestañas={SUBPESTAÑAS_AREA_A} activa={subPestaña} onCambiar={setSubPestaña} />
 
       {subPestaña === 'lotes' && <SeccionLotesProduccion onIniciarProduccion={alIniciarProduccion} />}
+      {subPestaña === 'entregas' && <SeccionEntregasPendientes />}
       {subPestaña === 'volumen-a' && <ControlVolumenA loteInicialId={loteParaIniciar} />}
       {subPestaña === 'indicadores' && <IndicadoresProduccion />}
     </div>

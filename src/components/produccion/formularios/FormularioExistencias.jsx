@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import { productsService } from '../../../services/productsService'
 import { rawMaterialReceptionsService } from '../../../services/rawMaterialReceptionsService'
 import { productionAreaAService } from '../../../services/productionAreaAService'
+import { productionAreaBService } from '../../../services/productionAreaBService'
+import { lotTraceabilityService } from '../../../services/lotTraceabilityService'
 import { shiftsService } from '../../../services/shiftsService'
 import { listarTodo } from '../../../services/paginacion'
 import Button from '../../Button.jsx'
-import FormInput from '../../FormInput.jsx'
-import FormSelect from '../../FormSelect.jsx'
 import CabeceraFormulario from '../../formularios/CabeceraFormulario.jsx'
 import SeccionFormulario from '../../formularios/SeccionFormulario.jsx'
 import Skeleton from '../../Skeleton.jsx'
 import EmptyState from '../../EmptyState.jsx'
+import ModalRegistrarSalidaAreaB from './ModalRegistrarSalidaAreaB.jsx'
 
 function CampoLote({ etiqueta, valor }) {
   return (
@@ -24,46 +25,44 @@ function CampoLote({ etiqueta, valor }) {
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
-// Día de semana abreviado a partir de la fecha — solo para precargar el
-// desplegable al agregar la fila; queda editable a mano después (pedido
-// explícito, "el día también es un input").
 const diaSemanaAbreviado = (fechaStr) => {
   if (!fechaStr) return ''
   const indiceDomingo0 = new Date(`${fechaStr}T00:00:00`).getDay()
   return DIAS_SEMANA[(indiceDomingo0 + 6) % 7]
 }
 
-let contadorFila = 0
-const filaVacia = (tipo) => {
-  const fecha = new Date().toLocaleDateString('en-CA')
-  return {
-    id: `fila-${++contadorFila}`,
-    tipo, // 'entrada' | 'salida' — decide cuál de las dos columnas de cantidad se edita
-    fecha,
-    dia: diaSemanaAbreviado(fecha),
-    turnoId: '',
-    cantidadBolsas: '',
-    saldo: '',
-    entregadoPor: '',
-    recibidoPor: '',
-  }
-}
-
 // Formulario "Control de Existencias" — subpestaña de Área B (ver
-// SeccionAreaB.jsx / SeccionControlExistencias.jsx). MOCKUP frontend-only a
-// pedido explícito: las filas de entrada/salida viven solo en memoria
-// (useState), no se guardan contra ningún backend todavía — el modelo de
-// datos real (tabla/endpoints) se define después, cuando se decida bien.
-// La cabecera sí es real: producto/lote/sacos vienen de
-// rawMaterialReceptionsService, mismo endpoint que ya usa ControlVolumenA.jsx
-// para el resumen del lote en Volumen A.
+// SeccionAreaB.jsx / SeccionControlExistencias.jsx). Real de punta a punta:
+// la tabla de movimientos es el kardex de quinua lavada (GET
+// /lots/:lotId/kardex-lavada, ver comrural_erp_backend/docs/
+// lot-traceability.md §4) — INGRESO = entradas cerradas de Volumen A,
+// SALIDA = entradas de Área B con inputType='NUEVA', saldo corrido ya
+// calculado por el backend. "Añadir salida" abre
+// ModalRegistrarSalidaAreaB.jsx, que llama a POST
+// /production-area-b/entries de verdad.
+//
+// Sin "Entregado por"/"Recibido por" — decisión explícita del cliente (ver
+// docs/production-area-b.md §1): no hace falta tabla de traspaso entre
+// Área A y Área B, alcanza con el responsable que cada lado ya registra
+// por su cuenta.
 export default function FormularioExistencias({ lote, onVolver }) {
   const [productos, setProductos] = useState(null)
   const [datosLote, setDatosLote] = useState(null)
   const [turnos, setTurnos] = useState(null)
   const [entradasVolumenA, setEntradasVolumenA] = useState(null)
+  const [kardex, setKardex] = useState(null)
+  const [saldoDisponibleKg, setSaldoDisponibleKg] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [filas, setFilas] = useState([])
+  const [modalSalidaAbierto, setModalSalidaAbierto] = useState(false)
+
+  const cargarMovimientos = useCallback(async () => {
+    const [kardexResp, saldoResp] = await Promise.all([
+      lotTraceabilityService.kardexLavada(lote.id),
+      productionAreaBService.saldoLavado(lote.id),
+    ])
+    setKardex(kardexResp)
+    setSaldoDisponibleKg(saldoResp.washedKgDisponible)
+  }, [lote.id])
 
   useEffect(() => {
     let cancelado = false
@@ -72,6 +71,7 @@ export default function FormularioExistencias({ lote, onVolver }) {
       rawMaterialReceptionsService.obtener(lote.id),
       shiftsService.listar(),
       productionAreaAService.listarPorLote(lote.id),
+      cargarMovimientos(),
     ])
       .then(([productosResp, datosLoteResp, turnosResp, entradasResp]) => {
         if (cancelado) return
@@ -84,7 +84,7 @@ export default function FormularioExistencias({ lote, onVolver }) {
     return () => {
       cancelado = true
     }
-  }, [lote.id])
+  }, [lote.id, cargarMovimientos])
 
   const productoNombre = productos?.find((p) => p.id === lote.productId)?.name ?? '—'
 
@@ -97,13 +97,9 @@ export default function FormularioExistencias({ lote, onVolver }) {
     return turnos.filter((t) => idsUsados.includes(t.id))
   }, [turnos, entradasVolumenA])
 
-  const actualizarFila = (id, campo) => (valor) =>
-    setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)))
+  const turnoNombre = (shiftId) => turnos?.find((t) => t.id === shiftId)?.name ?? '—'
 
-  const agregarFila = (tipo) => setFilas((prev) => [...prev, filaVacia(tipo)])
-  const quitarFila = (id) => setFilas((prev) => prev.filter((f) => f.id !== id))
-
-  const cargando = !productos || !datosLote || !turnos || !entradasVolumenA
+  const cargando = !productos || !datosLote || !turnos || !entradasVolumenA || !kardex
 
   if (errorCarga) {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
@@ -125,16 +121,15 @@ export default function FormularioExistencias({ lote, onVolver }) {
       <SeccionFormulario
         titulo="Cabecera y movimientos"
         acciones={
-          <div className="flex flex-wrap gap-2">
-            <Button className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => agregarFila('entrada')}>
-              <Plus className="size-3.5" strokeWidth={2} />
-              Registrar entrada
-            </Button>
-            <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => agregarFila('salida')}>
-              <Plus className="size-3.5" strokeWidth={2} />
-              Añadir salida
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            className="gap-1.5 px-3 py-1.5 text-xs"
+            onClick={() => setModalSalidaAbierto(true)}
+            disabled={cargando}
+          >
+            <Plus className="size-3.5" strokeWidth={2} />
+            Añadir salida
+          </Button>
         }
       >
         {cargando ? (
@@ -155,11 +150,11 @@ export default function FormularioExistencias({ lote, onVolver }) {
           </dl>
         )}
 
-        {filas.length === 0 ? (
+        {!cargando && kardex.length === 0 ? (
           <EmptyState Icon={Plus} titulo="Todavía no hay movimientos cargados" />
-        ) : (
+        ) : cargando ? null : (
           <div className="overflow-x-auto rounded-2xl bg-white/70">
-            <table className="w-full min-w-[980px] border-collapse text-sm">
+            <table className="w-full min-w-[780px] border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-verde-hoja/35 text-left text-xs font-bold uppercase tracking-wide text-verde-bosque">
                   <th className="px-3 py-2.5">Fecha</th>
@@ -168,109 +163,22 @@ export default function FormularioExistencias({ lote, onVolver }) {
                   <th className="px-3 py-2.5 text-verde-bosque">Ingreso bolsas</th>
                   <th className="px-3 py-2.5 text-rojo-pasankalla">Salida bolsas</th>
                   <th className="px-3 py-2.5">Saldo</th>
-                  <th className="px-3 py-2.5">Entregado por</th>
-                  <th className="px-3 py-2.5">Recibido por</th>
-                  <th className="px-3 py-2.5" />
                 </tr>
               </thead>
               <tbody>
-                {filas.map((f) => (
+                {kardex.map((m) => (
                   <tr
-                    key={f.id}
+                    key={m.entryId}
                     className={`border-b border-marron-tierra/15 last:border-b-0 border-l-4 ${
-                      f.tipo === 'entrada' ? 'border-l-verde-bosque bg-verde-hoja/10' : 'border-l-rojo-pasankalla bg-rojo-pasankalla/8'
+                      m.tipo === 'INGRESO' ? 'border-l-verde-bosque bg-verde-hoja/10' : 'border-l-rojo-pasankalla bg-rojo-pasankalla/8'
                     }`}
                   >
-                    <td className="px-3 py-2">
-                      <FormInput
-                        type="date"
-                        value={f.fecha}
-                        onChange={(e) => actualizarFila(f.id, 'fecha')(e.target.value)}
-                        className="w-36"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <FormSelect value={f.dia} onChange={(e) => actualizarFila(f.id, 'dia')(e.target.value)} className="w-20">
-                        <option value="">—</option>
-                        {DIAS_SEMANA.map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        ))}
-                      </FormSelect>
-                    </td>
-                    <td className="px-3 py-2">
-                      <FormSelect
-                        value={f.turnoId}
-                        onChange={(e) => actualizarFila(f.id, 'turnoId')(e.target.value)}
-                        className="w-40"
-                      >
-                        <option value="">Seleccionar…</option>
-                        {turnosDelLote.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </FormSelect>
-                    </td>
-                    <td className="px-3 py-2">
-                      {f.tipo === 'entrada' ? (
-                        <FormInput
-                          type="number"
-                          min="0"
-                          value={f.cantidadBolsas}
-                          onChange={(e) => actualizarFila(f.id, 'cantidadBolsas')(e.target.value)}
-                          className="w-24"
-                        />
-                      ) : (
-                        <span className="text-marron-cafe/30">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {f.tipo === 'salida' ? (
-                        <FormInput
-                          type="number"
-                          min="0"
-                          value={f.cantidadBolsas}
-                          onChange={(e) => actualizarFila(f.id, 'cantidadBolsas')(e.target.value)}
-                          className="w-24"
-                        />
-                      ) : (
-                        <span className="text-marron-cafe/30">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <FormInput
-                        type="number"
-                        value={f.saldo}
-                        onChange={(e) => actualizarFila(f.id, 'saldo')(e.target.value)}
-                        className="w-24"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <FormInput
-                        value={f.entregadoPor}
-                        onChange={(e) => actualizarFila(f.id, 'entregadoPor')(e.target.value)}
-                        className="w-36"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <FormInput
-                        value={f.recibidoPor}
-                        onChange={(e) => actualizarFila(f.id, 'recibidoPor')(e.target.value)}
-                        className="w-36"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => quitarFila(f.id)}
-                        className="text-marron-cafe/40 transition-colors duration-150 hover:text-rojo-pasankalla"
-                        aria-label="Quitar fila"
-                      >
-                        <Trash2 className="size-4" strokeWidth={1.75} />
-                      </button>
-                    </td>
+                    <td className="px-3 py-2 text-marron-cafe">{m.fecha}</td>
+                    <td className="px-3 py-2 text-marron-cafe">{diaSemanaAbreviado(m.fecha)}</td>
+                    <td className="px-3 py-2 text-marron-cafe">{turnoNombre(m.shiftId)}</td>
+                    <td className="px-3 py-2 tabular-nums text-marron-cafe">{m.tipo === 'INGRESO' ? m.bolsas : <span className="text-marron-cafe/30">—</span>}</td>
+                    <td className="px-3 py-2 tabular-nums text-marron-cafe">{m.tipo === 'SALIDA' ? m.bolsas : <span className="text-marron-cafe/30">—</span>}</td>
+                    <td className="px-3 py-2 tabular-nums text-marron-cafe">{m.saldoBolsas}</td>
                   </tr>
                 ))}
               </tbody>
@@ -278,6 +186,17 @@ export default function FormularioExistencias({ lote, onVolver }) {
           </div>
         )}
       </SeccionFormulario>
+
+      {!cargando && (
+        <ModalRegistrarSalidaAreaB
+          abierto={modalSalidaAbierto}
+          onCerrar={() => setModalSalidaAbierto(false)}
+          lotId={lote.id}
+          turnos={turnosDelLote}
+          saldoDisponibleKg={saldoDisponibleKg}
+          onCreada={cargarMovimientos}
+        />
+      )}
     </div>
   )
 }
