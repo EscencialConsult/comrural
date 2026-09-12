@@ -6,9 +6,15 @@ import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptio
 import { inspectionsService } from '../../services/inspectionsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
-import { lotsService } from '../../services/lotsService'
+import { listarTodo } from '../../services/paginacion'
+import { useGenerarPdf } from '../../hooks/useGenerarPdf'
+import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
+import FormInput from '../FormInput.jsx'
+import FormSelect from '../FormSelect.jsx'
+import Switch from '../Switch.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
 import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
@@ -18,21 +24,21 @@ import TablaRechazo from './TablaRechazo.jsx'
 import TablaMediciones from './TablaMediciones.jsx'
 import CampoObservaciones from './CampoObservaciones.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
-import AvisoFaltante from './AvisoFaltante.jsx'
-import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
+import SeccionResolucionCalidad from './SeccionResolucionCalidad.jsx'
+import { ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS, COLUMNAS_RECHAZO } from './codigosCriticosInspeccion.js'
 
 // Registro I-CAL-29/R-01 — "Inspección de Materia Prima", maquetado según el
 // papel real. Cuerpo del formulario extraído como componente propio, sin
 // ruta ni router adentro — mismo criterio que
-// FormularioIngresoMateriaPrima.jsx: `lotId`/`onVolver`/`onCambiarLote`
-// llegan por props, no de `useParams()`/`useNavigate()`.
+// FormularioIngresoMateriaPrima.jsx: `lotId`/`onVolver` llegan por props, no
+// de `useParams()`/`useNavigate()`.
 //
 // Por qué se sacó de la pantalla: Facundo pidió una subpestaña
 // "Recepción/Inspección" DENTRO de Calidad y Laboratorio — al tocar un
 // lote ahí se abre el formulario directo, sin pasar por la pantalla
 // intermedia de estado (PanelRecepcionLote.jsx) que existía antes. Ese
 // hub sigue vivo para quien lo necesite completo (Compras, desde
-// PanelLotes.jsx), pero ya no es el único camino hacia acá.
+// PanelCompras.jsx), pero ya no es el único camino hacia acá.
 //
 // Diferencia de fondo con FormularioInspeccion.jsx, que ya existía: aquel
 // es un renderer GENÉRICO — recorre form.items y dibuja un control por
@@ -53,46 +59,21 @@ const SECCION = {
 
 // La pregunta que corta el formulario: si se responde "No", se rechaza el
 // lote entero y el resto de la hoja deja de aplicar.
-const ITEM_ACEPTA_CONDICIONES = 'arrival_conditions_accepted'
-const ITEM_TOTAL_RECHAZADAS = 'total_rejected_bags'
-
-// Cómo se parte en dos columnas la tabla de la sección 3.
 //
-// En el papel es UNA sola tabla de hallazgos impresa a dos columnas porque
-// no entra a lo largo: arranca en "Paja", baja nueve renglones y sigue en
-// "Granos dañados". No hay títulos de bloque ahí — es la misma lista que
-// continúa, y por eso acá tampoco los hay.
+// ITEM_ACEPTA_CONDICIONES, ITEM_TOTAL_RECHAZADAS y COLUMNAS_RECHAZO viven
+// en codigosCriticosInspeccion.js (no acá) para que PanelFormularios.jsx
+// pueda advertir antes de dar de baja uno de estos ítems sin tener que
+// importar este componente completo. Es la misma fuente que se usa más
+// abajo — no hay una segunda lista con estos códigos.
 //
-// El corte va por código y no por `sortOrder` partido al medio: los dos
-// grupos "Otros" van al final de la sección (sortOrder 15 a 18) aunque en
-// la hoja cada uno cierra SU columna, así que el orden de la base no
-// alcanza para reconstruir la disposición. Va explícito, en un solo lugar.
-const COLUMNAS_RECHAZO = [
-  {
-    grupoOtros: 'rejection_other_contaminant',
-    codigos: [
-      'straw_bags',
-      'mouse_droppings_bags',
-      'bird_droppings_bags',
-      'larvae_bags',
-      'quartz_stone_bags',
-      'hard_stone_bags',
-      'volcanic_stone_bags',
-      'foreign_material_bags',
-    ],
-  },
-  {
-    grupoOtros: 'rejection_other_grain',
-    codigos: [
-      'damaged_grains_bags',
-      'broken_grains_bags',
-      'immature_grains_bags',
-      'colored_grains_bags',
-      'coated_grains_bags',
-      'contrasting_varieties_bags',
-    ],
-  },
-]
+// En el papel, la tabla de rechazo (sección 3) es UNA sola tabla de
+// hallazgos impresa a dos columnas porque no entra a lo largo: arranca en
+// "Paja", baja nueve renglones y sigue en "Granos dañados". No hay
+// títulos de bloque ahí — es la misma lista que continúa, y por eso acá
+// tampoco los hay. El corte va por código y no por `sortOrder` partido al
+// medio: los dos grupos "Otros" van al final de la sección (sortOrder 15
+// a 18) aunque en la hoja cada uno cierra SU columna, así que el orden de
+// la base no alcanza para reconstruir la disposición.
 
 // Aclaración del asterisco de "Materias extrañas", al pie de toda la tabla.
 // No es decorativa: define qué cuenta como materia extraña, que es lo que
@@ -164,7 +145,7 @@ const campoValor = (item, valor) => {
 
 const GENERALES_VACIOS = { producto: null, proveedor: null, lote: null, fecha: '', horaInicio: null, horaFin: null }
 
-export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote, onVolver, tituloVolver = 'Volver' }) {
+export default function FormularioInspeccionMateriaPrima({ lotId, onVolver, tituloVolver = 'Volver' }) {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('raw-material-receptions:read')
 
@@ -175,17 +156,10 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   const [tocados, setTocados] = useState(new Set())
   const [observaciones, setObservaciones] = useState('')
   const [generales, setGenerales] = useState(GENERALES_VACIOS)
-  const [listados, setListados] = useState({ productos: [], proveedores: [], lotes: [] })
-  const [cargandoListados, setCargandoListados] = useState(true)
-  // Observaciones por criterio de la sección 2, { [itemId]: texto }.
-  // Se escriben y se ven, pero todavía no se guardan: la migración 0020 cargó
-  // las 8 preguntas como BOOLEAN sueltos, sin un ítem TEXT hermano donde
-  // pueda vivir el texto. Se avisa una vez al pie de la sección en vez de
-  // bloquear los campos — bloquearlos era peor: no se podía dejar constancia
-  // de nada ni siquiera para leerlo en la misma sesión.
-  const [observacionesCriterio, setObservacionesCriterio] = useState({})
+  const [listados, setListados] = useState({ productos: [], proveedores: [] })
   const [confirmacion, setConfirmacion] = useState(null)
   const [confirmandoFinal, setConfirmandoFinal] = useState(false)
+  const [avisoGuardarPrimero, setAvisoGuardarPrimero] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
   const { enviando, error, ejecutar } = useSolicitud()
 
@@ -195,60 +169,40 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     setPasoActual(0)
   }, [lotId])
 
+  // Si se entra a un lote cuya inspección ya está FINALIZADA (típicamente
+  // desde el ícono de "visto bueno" de PanelCalidadRecepcion.jsx), no tiene
+  // sentido arrancar en "Datos generales" con el resto del asistente oculto
+  // (AsistenteDeEtapas no renderiza etapas por delante del paso actual) —
+  // "Resolución y visto bueno" (más abajo, siempre la última etapa cuando
+  // existe) quedaría escondida detrás de 4-5 clics en "Siguiente" sobre
+  // secciones ya completas y de solo lectura. En vez de duplicar acá la
+  // cuenta de cuántas etapas hay (condiciones/rechazo/grano son
+  // condicionales, ver `etapas` más abajo) para saltar directo al índice
+  // exacto, arranca con TODO colapsado (pasoActual más allá del final): un
+  // clic en la última pastilla ("Resolución y visto bueno") la expande.
+  // `pasoInicialAplicadoRef` evita repetir el salto en cada `recargar()`
+  // (p. ej. al volver de emitir la resolución), que sí necesita que el
+  // usuario se quede donde está.
+  const pasoInicialAplicadoRef = useRef(null)
+  useEffect(() => {
+    if (!recepcion || !detalle) return
+    if (pasoInicialAplicadoRef.current === lotId) return
+    pasoInicialAplicadoRef.current = lotId
+    if (
+      detalle.inspection.status === 'FINALIZADA' &&
+      (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve'))
+    ) {
+      setPasoActual(Number.MAX_SAFE_INTEGER)
+    }
+  }, [recepcion, detalle, lotId, permisos])
+
   // PDF real, no un screenshot de window.print() — Facundo lo pidió
   // explícito: el botón "Imprimir" abría el diálogo nativo del navegador,
   // y ahí lo que se ve/genera depende de cada navegador (algunos rasterizan
   // mal, otros ignoran el print-color-adjust) — "se ve todo mal, todo
-  // feo". Ahora se captura el mismo bloque ya aislado (área imprimible,
-  // ver el div con `ref={areaImprimibleRef}` más abajo) a un canvas de
-  // buena resolución y se arma un PDF de verdad con jsPDF, paginado a A4 —
-  // el botón abre ESE archivo, nunca el diálogo de impresión del sistema.
-  const areaImprimibleRef = useRef(null)
-  const [generandoPdf, setGenerandoPdf] = useState(false)
-  const [errorPdf, setErrorPdf] = useState(null)
-
-  const generarPdf = async () => {
-    // Se abre la pestaña ANTES de esperar nada async — si se abre recién
-    // después del await, la mayoría de los navegadores lo trata como
-    // popup no disparado por el usuario y lo bloquea en silencio.
-    const ventana = window.open('', '_blank')
-    setGenerandoPdf(true)
-    setErrorPdf(null)
-    try {
-      // Deja que React termine de ocultar los avisos (confirmación/error/
-      // rechazo total/faltantes) antes de capturar — sin este respiro el
-      // canvas se toma con el DOM todavía en el estado de un frame atrás.
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const nodo = areaImprimibleRef.current
-      if (!nodo) throw new Error('No se encontró el contenido del formulario.')
-      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor: '#faf4e8', useCORS: true })
-      const imagen = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-      const anchoPagina = pdf.internal.pageSize.getWidth()
-      const altoPagina = pdf.internal.pageSize.getHeight()
-      const altoImagen = (canvas.height * anchoPagina) / canvas.width
-      let alturaRestante = altoImagen
-      let posicionY = 0
-      pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-      alturaRestante -= altoPagina
-      while (alturaRestante > 0) {
-        posicionY = alturaRestante - altoImagen
-        pdf.addPage()
-        pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-        alturaRestante -= altoPagina
-      }
-      const url = URL.createObjectURL(pdf.output('blob'))
-      if (ventana) ventana.location.href = url
-      else window.open(url, '_blank') // el navegador no bloqueó el popup — fallback igual, por las dudas
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch (err) {
-      ventana?.close()
-      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
-    } finally {
-      setGenerandoPdf(false)
-    }
-  }
+  // feo". Ver useGenerarPdf.js para el mecanismo completo (canvas + jsPDF,
+  // cortando hoja solo entre secciones, nunca en medio de una).
+  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
 
   const recargar = useCallback(() => {
     if (!puedeVer) return
@@ -304,10 +258,9 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   }, [lotId, recargar])
 
   // `lotIdIntentado` guarda el ÚLTIMO lote para el que ya se intentó, no
-  // un booleano simple — sin eso, cambiar de lote por el selector de la
-  // sección 1 (que reusa este mismo componente vía `onCambiarLote`, sin
-  // desmontarlo) dejaría el auto-inicio bloqueado para siempre después
-  // del primer intento.
+  // un booleano simple — sin eso, cambiar de `lotId` sin desmontar el
+  // componente dejaría el auto-inicio bloqueado para siempre después del
+  // primer intento.
   const lotIdIntentado = useRef(null)
   useEffect(() => {
     if (!recepcion || detalle) return
@@ -317,43 +270,37 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     intentarIniciar()
   }, [recepcion, detalle, permisos, lotId, intentarIniciar])
 
-  // Maestros para los selectores de la sección 1 (producto / proveedor /
-  // lote). Cada opción viaja como { id, nombre, detalle }: el `id` es lo que
-  // de verdad identifica la fila, `nombre` lo que se busca y se muestra, y
+  // Maestros para los selectores de la sección 1 (producto / proveedor).
+  // Cada opción viaja como { id, nombre, detalle }: el `id` es lo que de
+  // verdad identifica la fila, `nombre` lo que se busca y se muestra, y
   // `detalle` el dato de desempate — hay proveedores homónimos cargados dos
   // veces con distinto tipo (PRODUCER y OTHER), y sin el tipo al lado son dos
-  // renglones idénticos imposibles de distinguir.
+  // renglones idénticos imposibles de distinguir. "Lote" quedó fijo (no
+  // editable, ver DatosGeneralesLote.jsx), no necesita su propio maestro acá.
   //
   // allSettled y no all: el rol `calidad` NO tiene `lots:read` (ver
-  // 0019_business_modules_permissions.sql), así que ese pedido le va a fallar
-  // siempre. Con Promise.all, esa falla dejaría también sin opciones a
-  // producto y proveedor, que sí puede leer.
+  // 0019_business_modules_permissions.sql) — si algún día se necesitara ese
+  // pedido, no debería tirar abajo también producto y proveedor, que sí
+  // puede leer.
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    setCargandoListados(true)
-    Promise.allSettled([
-      productsService.listar({ limit: 100 }),
-      suppliersService.listar({ limit: 100 }),
-      lotsService.listar({ limit: 100 }),
-    ]).then(([productos, proveedores, lotes]) => {
-      if (cancelado) return
-      const datos = (r) => (r.status === 'fulfilled' ? (r.value.data ?? []) : [])
-      setListados({
-        productos: datos(productos).map((p) => ({ id: p.id, nombre: p.name, detalle: p.code })),
-        proveedores: datos(proveedores).map((s) => ({
-          id: s.id,
-          nombre: s.person
-            ? `${s.person.firstNames} ${s.person.lastNames}`
-            : (s.organization?.tradeName ?? s.organization?.legalName ?? 'Sin nombre'),
-          detalle: s.type,
-        })),
-        lotes: datos(lotes)
-          .filter((l) => l.nature === 'PM')
-          .map((l) => ({ id: l.id, nombre: l.code, detalle: l.currentStatus?.replace(/_/g, ' ') })),
-      })
-      setCargandoListados(false)
-    })
+    Promise.allSettled([listarTodo(productsService.listar), listarTodo(suppliersService.listar)]).then(
+      ([productos, proveedores]) => {
+        if (cancelado) return
+        const datos = (r) => (r.status === 'fulfilled' ? (r.value ?? []) : [])
+        setListados({
+          productos: datos(productos).map((p) => ({ id: p.id, nombre: p.name, detalle: p.code })),
+          proveedores: datos(proveedores).map((s) => ({
+            id: s.id,
+            nombre: s.person
+              ? `${s.person.firstNames} ${s.person.lastNames}`
+              : (s.organization?.tradeName ?? s.organization?.legalName ?? 'Sin nombre'),
+            detalle: s.type,
+          })),
+        })
+      },
+    )
     return () => {
       cancelado = true
     }
@@ -397,6 +344,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     return () => clearTimeout(id)
   }, [confirmacion])
 
+  useEffect(() => {
+    if (!avisoGuardarPrimero) return
+    const id = setTimeout(() => setAvisoGuardarPrimero(false), 4000)
+    return () => clearTimeout(id)
+  }, [avisoGuardarPrimero])
+
   const porSeccion = useMemo(() => {
     const mapa = new Map()
     for (const item of detalle?.form?.items ?? []) {
@@ -429,20 +382,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     [valores],
   )
 
-  // Único campo que de verdad se puede "cambiar" en Datos generales — el
-  // resto (producto/proveedor/fecha/hora) quedó de solo lectura, ver
-  // DatosGeneralesLote.jsx. Elegir otro lote no edita esta inspección, abre
-  // LA SUYA.
-  const cambiarLoteGeneral = (valor) => {
-    if (valor?.id && valor.id !== lotId) onCambiarLote?.(valor.id)
-  }
-
-  // Pedido de alta de un maestro que falta. Hoy es un stub local de la
-  // maqueta (ver components/formularios/solicitudesDeAlta.js): el aviso no le
-  // llega a nadie todavía porque falta definir quién carga cada maestro. La
-  // interacción queda igual para cuando exista el endpoint de verdad.
-  const solicitarAlta = ({ tipo, detalle }) => solicitarAltaDeMaestro({ tipo, detalle })
-
   if (!puedeVer) return <AccesoDenegado mensaje="No tenés acceso a la inspección de materia prima." />
 
   if (errorCarga) {
@@ -473,7 +412,13 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   }
 
   if (!recepcion) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+      </div>
+    )
   }
 
   if (!detalle) {
@@ -521,11 +466,16 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       )
     }
 
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-40" />
+      </div>
+    )
   }
 
   const { form, inspection } = detalle
-  const { qualityResolution, warehouseReceipt } = recepcion
+  const { qualityResolution, warehouseReceipt, summary } = recepcion
 
   // Cada sección se filtra al tipo de dato que su maquetación sabe dibujar.
   // No es defensa teórica: el formulario real tiene ítems TEXT sueltos en
@@ -587,6 +537,14 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     // mostrándose en el aviso de error de más abajo, igual que cualquier
     // otro caso que este cálculo no llegue a cubrir.
     if (CODIGOS_PRUEBA_CONOCIDOS.has(item.code)) return false
+    // Rechazo (sección 3) nunca bloquea: cada contador ya se MUESTRA en "0"
+    // por defecto (ver TablaRechazo.jsx, "sin valor cargado = no apareció,
+    // que es lo mismo que 0") — pedirle al analista que "llene" un renglón
+    // que ya vale 0 no tiene sentido. `guardar()` de abajo manda ese 0 real
+    // al backend para lo que nunca se tocó, así el paso avanza y
+    // `assertAllRequiredAnswered` del lado del servidor igual queda
+    // conforme.
+    if (item.section === SECCION.RECHAZO) return false
     if (!item.isRequired) return false
     const ocurrenciasEsperadas = item.occurrences != null && item.occurrences > 1 ? item.occurrences : 1
     for (let occ = 1; occ <= ocurrenciasEsperadas; occ++) {
@@ -605,10 +563,42 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       if (valor === null || valor === '') cambios.push({ itemId, occurrence: Number(occ), clear: true })
       else cambios.push({ itemId, occurrence: Number(occ), ...campoValor(item, valor) })
     }
-    if (cambios.length === 0) return
+    // Completa con 0 real los contadores de Rechazo que nunca se tocaron —
+    // sin `rechazoTotal` (el lote no se rechazó entero, esa sección sigue
+    // aplicando). Es la contraparte de sacarlos de `faltantes` arriba: acá
+    // se persiste de verdad lo que ahí se dejó de exigir.
+    if (!rechazoTotal) {
+      for (const item of form.items) {
+        if (item.section !== SECCION.RECHAZO || !item.isRequired) continue
+        const ocurrenciasEsperadas = item.occurrences != null && item.occurrences > 1 ? item.occurrences : 1
+        for (let occ = 1; occ <= ocurrenciasEsperadas; occ++) {
+          if (tocados.has(clave(item.id, occ)) || leer(item, occ) !== null) continue
+          cambios.push({ itemId: item.id, occurrence: occ, ...campoValor(item, 0) })
+        }
+      }
+    }
+    // startedAt se manda junto con las respuestas en el mismo "Guardar" —
+    // mismo criterio que FormularioIngresoMateriaPrima.jsx (Almacén): se
+    // combinan fecha+hora locales y se interpretan en hora local del
+    // navegador.
+    const startedAtIso =
+      generales.fecha && generales.horaInicio ? new Date(`${generales.fecha}T${generales.horaInicio}`).toISOString() : null
+
+    if (cambios.length === 0 && !startedAtIso) return
     try {
-      await ejecutar(() => inspectionsService.guardarRespuestas(inspection.id, cambios))
-      setConfirmacion('Respuestas guardadas.')
+      await ejecutar(() =>
+        Promise.all([
+          cambios.length > 0 ? inspectionsService.guardarRespuestas(inspection.id, cambios) : Promise.resolve(),
+          startedAtIso ? inspectionsService.actualizar(inspection.id, { startedAt: startedAtIso }) : Promise.resolve(),
+        ]),
+      )
+      setConfirmacion('Cambios guardados.')
+      setAvisoGuardarPrimero(false)
+      // `recargar()` no reseeda `tocados` (el `useEffect` que lo hace está
+      // atado a `formId`, que no cambia al guardar) — sin esto, "Finalizar"
+      // seguía viendo cambios "sin guardar" para siempre después del primer
+      // guardado.
+      setTocados(new Set())
       recargar()
     } catch {
       // el mensaje legible ya quedó en `error`
@@ -623,12 +613,39 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
     try {
       await ejecutar(() => inspectionsService.completar(inspection.id, {}))
       setConfirmandoFinal(false)
-      setConfirmacion('Inspección finalizada.')
+      toast.success('Inspección finalizada.')
       recargar()
+      // Avanza a la etapa de Resolución/visto bueno en vez de volver al
+      // listado — recién entra en `etapas` una vez que `recargar()`
+      // refresque `inspection.status` a FINALIZADA, pero siempre queda
+      // inmediatamente después de "Observaciones y Firmas" (el paso
+      // actual, acá), sea cual sea su índice real. Si esta persona no
+      // tiene ningún permiso sobre la resolución, esa etapa ni se agrega
+      // (ver `etapas` más abajo) — ahí no hay a dónde avanzar, así que se
+      // mantiene el volver al listado de siempre.
+      if (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve')) {
+        setPasoActual((p) => p + 1)
+      } else {
+        onVolver?.()
+      }
     } catch {
       // se deja `confirmandoFinal` abierto para reintentar sin perder el
       // contexto de qué se estaba por confirmar
     }
+  }
+
+  // Antes, "Finalizar inspección" completaba directo aunque hubiera
+  // respuestas tipeadas y nunca guardadas (`tocados` sin vaciar) — esos
+  // cambios se perdían en silencio, porque el backend valida contra lo que
+  // ya está en `form_responses`, no contra el estado local. Ahora ese clic
+  // se corta acá si `tocados` no está vacío, con un aviso en vez de abrir
+  // la confirmación.
+  const pedirFinalizar = () => {
+    if (tocados.size > 0) {
+      setAvisoGuardarPrimero(true)
+      return
+    }
+    setConfirmandoFinal(true)
   }
 
   // Completitud por etapa — reusa `faltantes` (ya calculado arriba, la
@@ -654,16 +671,13 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       titulo: 'Datos generales',
       completa: true,
       contenido: (
-        // El aviso de "falta un dato" vive acá y no en el encabezado: los
-        // campos que pueden quedarse sin opción (producto, proveedor, lote)
-        // son justo los de esta sección, así que la salida tiene que estar
-        // donde aparece el problema, no a media pantalla de distancia.
-        <SeccionFormulario numero={1} titulo="Datos generales" acciones={<AvisoFaltante onEnviar={solicitarAlta} />}>
+        <SeccionFormulario numero={1} titulo="Datos generales">
           <DatosGeneralesLote
             valores={generales}
-            onCambiarLote={cambiarLoteGeneral}
             opciones={listados}
-            cargandoOpciones={cargandoListados}
+            soloLectura={soloLectura}
+            onCambiarFecha={(v) => setGenerales((g) => ({ ...g, fecha: v }))}
+            onCambiarHoraInicio={(v) => setGenerales((g) => ({ ...g, horaInicio: v }))}
           />
         </SeccionFormulario>
       ),
@@ -674,21 +688,15 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       completa: condicionesCompleta,
       motivoIncompleta: motivoIncompleta(SECCION.CONDICIONES),
       contenido: (
-        <SeccionFormulario
-          numero={2}
-          titulo="Condiciones de llegada de transporte"
-          nota="Marcá Sí o No según corresponda. La observación de cada criterio es opcional y todavía no se guarda al recargar."
-        >
+        <SeccionFormulario numero={2} titulo="Condiciones de llegada de transporte" nota="Marcá Sí o No según corresponda.">
           <TablaCriterios
             items={condiciones}
             valorDe={(item) => leer(item)}
-            observacionDe={(item) => observacionesCriterio[item.id] ?? ''}
             onCambiar={(item, v) => escribir(item, 1, v)}
-            onCambiarObservacion={(item, texto) => setObservacionesCriterio((prev) => ({ ...prev, [item.id]: texto }))}
             soloLectura={soloLectura}
             codigoDecisivo={ITEM_ACEPTA_CONDICIONES}
           />
-          <CamposSinClasificar items={sueltosCondiciones} />
+          <CamposSinClasificar items={sueltosCondiciones} leer={leer} escribir={escribir} soloLectura={soloLectura} />
         </SeccionFormulario>
       ),
     },
@@ -713,7 +721,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
             ocurrenciasDe={ocurrenciasDe}
             soloLectura={soloLectura || rechazoTotal}
           />
-          <CamposSinClasificar items={sueltosRechazo} />
+          <CamposSinClasificar
+            items={sueltosRechazo}
+            leer={leer}
+            escribir={escribir}
+            soloLectura={soloLectura || rechazoTotal}
+          />
         </SeccionFormulario>
       ),
     },
@@ -735,7 +748,12 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
             onCambiar={(item, occ, v) => escribir(item, occ, v)}
             soloLectura={soloLectura || rechazoTotal}
           />
-          <CamposSinClasificar items={sueltosGrano} />
+          <CamposSinClasificar
+            items={sueltosGrano}
+            leer={leer}
+            escribir={escribir}
+            soloLectura={soloLectura || rechazoTotal}
+          />
         </SeccionFormulario>
       ),
     },
@@ -746,12 +764,18 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
       contenido: (
         <>
           {otrasSecciones.map(([seccion, items]) => (
-            <SeccionFormulario key={seccion} titulo={seccion} nota="Sección sin maquetación propia todavía.">
-              <ul className="flex flex-col gap-1 text-sm text-marron-cafe/60">
-                {items.map((i) => (
-                  <li key={i.id}>{i.label}</li>
+            <SeccionFormulario key={seccion} titulo={seccion} nota="Sección agregada desde Configuración — sin maquetación propia del papel, un campo debajo del otro.">
+              <div className="flex flex-col gap-3">
+                {items.map((item) => (
+                  <CampoGenerico
+                    key={item.id}
+                    item={item}
+                    valor={leer(item)}
+                    onChange={(v) => escribir(item, 1, v)}
+                    soloLectura={soloLectura}
+                  />
                 ))}
-              </ul>
+              </div>
             </SeccionFormulario>
           ))}
 
@@ -809,6 +833,30 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
             <p className="text-sm font-medium text-marron-cafe/70">Sacos rechazados: {inspection.rejectedBagCount}</p>
           )}
         </>
+      ),
+    },
+    // Emitir la resolución de Calidad + el visto bueno gerencial — antes
+    // una pantalla propia (PanelAprobacionResolucion.jsx), solo alcanzable
+    // desde un botón aparte. Pedido explícito: que sea un paso más de este
+    // mismo formulario en vez de un trámite a parte. Recién existe una vez
+    // que la inspección está FINALIZADA (antes no hay nada que resolver), y
+    // solo si esta persona podría hacer algo en algún momento del ciclo —
+    // mismo gate que tenía el botón que reemplaza (ver PanelCalidadRecepcion.jsx).
+    inspection.status === 'FINALIZADA' &&
+    (permisos.has('quality-resolutions:create') || permisos.has('quality-resolutions:approve')) && {
+      id: 'resolucion',
+      titulo: 'Resolución de Calidad',
+      completa: true,
+      contenido: (
+        <SeccionFormulario titulo="Resolución de Calidad">
+          <SeccionResolucionCalidad
+            inspection={inspection}
+            qualityResolution={qualityResolution}
+            summary={summary}
+            permisos={permisos}
+            onCambio={recargar}
+          />
+        </SeccionFormulario>
       ),
     },
   ].filter(Boolean)
@@ -872,17 +920,6 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
           </p>
         )}
 
-        {!soloLectura && faltantes.length > 0 && !generandoPdf && (
-          <div className="flex flex-col gap-1.5 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm print:hidden">
-            <p className="flex items-center gap-2 font-semibold text-marron-arcilla">
-              <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
-              Faltan {faltantes.length} {faltantes.length === 1 ? 'campo obligatorio' : 'campos obligatorios'} por
-              responder — todavía no se puede finalizar.
-            </p>
-            <p className="text-xs text-marron-cafe/70">{faltantes.map((i) => i.label).join(' · ')}</p>
-          </div>
-        )}
-
         <AsistenteDeEtapas
           etapas={etapas}
           pasoActual={pasoActual}
@@ -891,45 +928,59 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
           modoImpresion={generandoPdf || soloLectura}
         />
       </div>
-      {/* Cierra `areaImprimibleRef` — de acá para abajo (Guardar/Finalizar/
-          Volver) no es parte del papel, nunca entra al PDF. Gateado al
+      {/* Cierra `areaImprimibleRef` — de acá para abajo (Guardar/Finalizar y
+          sus avisos) no es parte del papel, nunca entra al PDF. Gateado al
           último paso del asistente — mismo criterio que
-          FormularioIngresoMateriaPrima.jsx. */}
+          FormularioIngresoMateriaPrima.jsx. "Volver" ya vive arriba, como
+          link junto al encabezado — no hace falta repetirlo acá abajo. */}
 
       {!soloLectura && pasoActual === etapas.length - 1 && (
-        <div className="flex flex-wrap items-center gap-3 print:hidden">
-          <Button disabled={enviando} onClick={guardar}>
-            {enviando ? 'Guardando…' : 'Guardar inspección'}
-          </Button>
-
-          {confirmandoFinal ? (
-            <>
-              <span className="text-sm font-medium text-marron-cafe">
-                ¿Confirmar finalización? Guardá las respuestas antes — una vez finalizada, la inspección queda en solo
-                lectura.
-              </span>
-              <Button disabled={enviando} onClick={finalizar}>
-                {enviando ? 'Finalizando…' : 'Sí, finalizar'}
-              </Button>
-              <Button variant="secondary" disabled={enviando} onClick={() => setConfirmandoFinal(false)}>
-                Seguir revisando
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={enviando || faltantes.length > 0}
-              title={faltantes.length > 0 ? `Faltan ${faltantes.length} campos obligatorios por responder` : undefined}
-              onClick={() => setConfirmandoFinal(true)}
-            >
-              Finalizar inspección
+        <div className="flex flex-col gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={enviando} onClick={guardar}>
+              {enviando ? 'Guardando…' : 'Guardar inspección'}
             </Button>
+
+            {confirmandoFinal ? (
+              <>
+                <span className="text-sm font-medium text-marron-cafe">
+                  ¿Confirmar finalización? Una vez finalizada, la inspección queda en solo lectura.
+                </span>
+                <Button disabled={enviando} onClick={finalizar}>
+                  {enviando ? 'Finalizando…' : 'Sí, finalizar'}
+                </Button>
+                <Button variant="secondary" disabled={enviando} onClick={() => setConfirmandoFinal(false)}>
+                  Seguir revisando
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={enviando || faltantes.length > 0}
+                title={faltantes.length > 0 ? `Faltan ${faltantes.length} campos obligatorios por responder` : undefined}
+                onClick={pedirFinalizar}
+              >
+                Finalizar inspección
+              </Button>
+            )}
+          </div>
+
+          {faltantes.length > 0 && (
+            <div className="flex flex-col gap-1.5 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm">
+              <p className="flex items-center gap-2 font-semibold text-marron-arcilla">
+                <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
+                Faltan {faltantes.length} {faltantes.length === 1 ? 'campo obligatorio' : 'campos obligatorios'} por
+                responder — todavía no se puede finalizar.
+              </p>
+              <p className="text-xs text-marron-cafe/70">{faltantes.map((i) => i.label).join(' · ')}</p>
+            </div>
           )}
 
-          {onVolver && (
-            <Button variant="secondary" disabled={enviando} onClick={onVolver}>
-              {tituloVolver}
-            </Button>
+          {avisoGuardarPrimero && (
+            <p className="flex items-center gap-2 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-semibold text-marron-arcilla">
+              <TriangleAlert className="size-4 shrink-0" strokeWidth={2} />
+              Guardá las respuestas primero.
+            </p>
           )}
         </div>
       )}
@@ -937,34 +988,98 @@ export default function FormularioInspeccionMateriaPrima({ lotId, onCambiarLote,
   )
 }
 
-// Ítems que existen en el formulario pero no entran en la maquetación de su
-// sección. Hoy son restos de prueba cargados a mano en la base real
-// (`asd`/"asdf", `nueva_seccion`, `nuevo_campo`), y varios están marcados
-// como obligatorios — así que `assertAllRequiredAnswered` los va a exigir y
-// ninguna inspección se va a poder finalizar hasta que se borren.
-//
-// Se muestran señalados en vez de filtrarlos en silencio: si no se ven, el
-// 400 al finalizar llega sin ninguna explicación en pantalla.
-function CamposSinClasificar({ items }) {
+// Control genérico por dataType — para cualquier ítem que Configuración
+// (PanelFormularios.jsx) agregue a este formulario sin que el frontend
+// conozca su código de antemano. Mismo criterio de tipos que
+// FormularioInspeccion.jsx (el renderer 100% genérico, que sigue vivo sin
+// usarse en ningún lado — ver conversación), pero hookeado a `leer`/
+// `escribir` de ESTE componente. A propósito solo soporta 1 ocurrencia acá
+// (sin "+ agregar fila") — los ítems repetibles reales del papel (Rechazo,
+// Tamaño de grano) ya tienen su propia maquetación arriba; esto es
+// deliberadamente el camino simple para preguntas sueltas que el papel no
+// contemplaba.
+function CampoGenerico({ item, valor, onChange, soloLectura }) {
+  const label = `${item.label}${item.isRequired ? ' *' : ''}${item.unit ? ` (${item.unit})` : ''}`
+
+  if (item.dataType === 'BOOLEAN') {
+    return (
+      <div className="flex items-center justify-between gap-3 py-1">
+        <span className="text-sm text-marron-cafe">{label}</span>
+        <Switch checked={!!valor} onChange={onChange} disabled={soloLectura} label={item.label} />
+      </div>
+    )
+  }
+  if (item.dataType === 'SELECT') {
+    return (
+      <FormSelect label={label} value={valor ?? ''} onChange={(e) => onChange(e.target.value)} disabled={soloLectura}>
+        <option value="">Seleccioná…</option>
+        {item.config?.options?.map((op) => (
+          <option key={op.value} value={op.value}>
+            {op.label}
+          </option>
+        ))}
+      </FormSelect>
+    )
+  }
+  if (item.dataType === 'DATE') {
+    return (
+      <FormInput
+        label={label}
+        type="date"
+        value={valor ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={soloLectura}
+      />
+    )
+  }
+  if (item.dataType === 'INTEGER' || item.dataType === 'DECIMAL') {
+    return (
+      <FormInput
+        label={label}
+        type="number"
+        step={item.dataType === 'DECIMAL' ? Math.pow(10, -(item.config?.decimalPlaces ?? 2)) : 1}
+        value={valor ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={soloLectura}
+      />
+    )
+  }
+  return (
+    <FormInput
+      label={label}
+      type="text"
+      value={valor ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={soloLectura}
+    />
+  )
+}
+
+// Ítems que existen en el formulario pero no entran en la maquetación fija
+// de su sección (Condiciones/Rechazo/Tamaño de grano) — porque Configuración
+// (PanelFormularios.jsx) agregó algo que el papel real (I-CAL-29/R-01) no
+// tenía. Antes esto se mostraba como texto plano de solo lectura, sin
+// ningún input — un campo así, si quedaba obligatorio, bloqueaba
+// "Finalizar inspección" para siempre porque no había dónde responderlo
+// (exactamente lo que pasó con los 3 ítems de prueba que se borraron de la
+// base esta sesión). Ahora sí tiene un control real, vía CampoGenerico.
+function CamposSinClasificar({ items, leer, escribir, soloLectura }) {
   if (items.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl bg-marron-arcilla/12 p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-marron-arcilla">
-        Campos sin clasificar en el formulario
+    <div className="flex flex-col gap-3 rounded-2xl bg-marron-tierra/5 p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-marron-cafe/50">
+        Campos agregados desde Configuración
       </p>
-      <p className="text-xs text-marron-cafe/70">
-        No corresponden a ningún renglón del papel — parecen restos de prueba cargados en el formulario. Los marcados
-        como obligatorios impiden finalizar la inspección hasta que se borren de la base.
-      </p>
-      <ul className="flex flex-col gap-1 text-xs text-marron-cafe">
-        {items.map((i) => (
-          <li key={i.id}>
-            <code className="font-mono">{i.code}</code> — "{i.label}" ({i.dataType}
-            {i.isRequired ? ', obligatorio' : ''})
-          </li>
-        ))}
-      </ul>
+      {items.map((item) => (
+        <CampoGenerico
+          key={item.id}
+          item={item}
+          valor={leer(item)}
+          onChange={(v) => escribir(item, 1, v)}
+          soloLectura={soloLectura}
+        />
+      ))}
     </div>
   )
 }

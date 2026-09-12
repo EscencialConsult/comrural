@@ -4,9 +4,11 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { useSolicitud } from '../../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
 import { warehouseReceiptsService } from '../../services/warehouseReceiptsService'
-import { lotsService } from '../../services/lotsService'
+import { useGenerarPdf } from '../../hooks/useGenerarPdf'
+import { toast } from '../../lib/toast'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import SeccionFormulario from './SeccionFormulario.jsx'
 import AsistenteDeEtapas from './AsistenteDeEtapas.jsx'
@@ -18,14 +20,12 @@ import ResumenRecepcion from './ResumenRecepcion.jsx'
 import PesajeFinal from './PesajeFinal.jsx'
 import CampoObservaciones from './CampoObservaciones.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
-import AvisoFaltante from './AvisoFaltante.jsx'
-import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 
 // Registro P-ADM-03/R-02 — "Ingreso de Materia Prima", segundo formulario
 // de la maqueta (ver docs/formulario-ingreso-materia-prima.md). Cuerpo del
 // formulario extraído como componente propio, sin ruta ni router adentro
-// — por eso `lotId` y `onCambiarLote`/`onVolver` llegan por props en vez de
-// leerse de `useParams()`/`useNavigate()`.
+// — por eso `lotId`/`onVolver` llegan por props en vez de leerse de
+// `useParams()`/`useNavigate()`.
 //
 // Por qué se sacó de la pantalla: la reunión con Milenka (ver
 // video1788040555.txt) es explícita en que este formulario vive DENTRO de
@@ -40,15 +40,24 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // Section-aware contra el papel real, reusando los átomos de
 // src/components/formularios/ que el primer formulario (Calidad) ya dejó
 // genéricos (CabeceraFormulario, SeccionFormulario, FirmasResponsables,
-// CampoObservaciones, AvisoFaltante).
+// CampoObservaciones).
 //
 // Diferencia real con el formulario de Calidad: acá el documento vive en
 // DOS pasos del backend, no uno. El papel es una sola hoja continua, pero
 // `warehouse-receipts` exige crear primero (POST, con lo mínimo: envase +
 // cantidad) y recién después completar el resto por PATCH — no hay forma
 // de mandar la hoja entera de una. El botón de abajo cambia según el estado
-// real: "Iniciar recepción" (todavía no existe) → "Guardar cambios" (existe,
-// INICIADA) → nada (FINALIZADA, todo de solo lectura).
+// real: "Finalizar recepción" (todavía no existe — este POST es el que de
+// verdad arranca la recepción: crea el warehouseReceipt en INICIADA y pasa
+// el lote a EN_RECEPCION) → "Guardar cambios" (existe, INICIADA) → nada
+// (FINALIZADA, todo de solo lectura). El POST sella `startedAt` con el
+// instante real del servidor, pero eso casi nunca coincide con la fecha/
+// hora que el usuario ve en pantalla (capturada al abrir el formulario,
+// editable — ver DatosRecepcionLote.jsx): por eso `finalizar()` manda un
+// PATCH de corrección inmediatamente después, con ese valor. Tanto
+// "Finalizar recepción" como "Guardar cambios" vuelven al listado
+// (`onVolver`) con un toast al terminar, en vez de quedarse en el asistente
+// — un solo botón de acción abajo, sin un "Volver al listado" aparte.
 //
 // Se ve UNA sección a la vez (AsistenteDeEtapas.jsx) — corrección
 // post-revisión: antes las secciones se mostraban todas juntas ("como el
@@ -57,15 +66,27 @@ import { solicitarAltaDeMaestro } from './solicitudesDeAlta'
 // — se ve todo de una, como un documento cerrado normal.
 const TIPOS_ENVASE = ['Saco de polipropileno', 'Bolsa de yute', 'Bolsa de rafia', 'A granel']
 
+// Índices de etapas dentro de `etapas` (armado más abajo, en el cuerpo del
+// componente) — documentos(0), recepción(1), transporte(2), producto(3,
+// unidades de medida), firmas(4). Viven acá arriba porque el efecto que
+// decide el salto automático (más abajo) corre antes de que `etapas` exista.
+const PASO_DOCUMENTOS = 0
+const PASO_PRODUCTO = 3
+const PASO_FIRMAS = 4
+
 const DOCUMENTOS_VACIOS = { productores: { verificado: null, notas: '' }, guia: { verificado: null, notas: '' } }
-const CONDUCTOR_VACIO = { fullName: '', identityDocument: '', licenseNumber: '', licenseCategory: '' }
-const VEHICULO_VACIO = { plate: '', type: '', brand: '', model: '', color: '' }
+// Solo los campos que pide negocio (ver DatosTransporte.jsx) — el backend
+// ya no exige identityDocument/licenseCategory/brand/model (se sacaron de
+// driverSchema/vehicleSchema en warehouse-receipt.dto.ts, ya no hace falta
+// rellenarlos con 'N/A').
+const CONDUCTOR_VACIO = { fullName: '', licenseNumber: '' }
+const VEHICULO_VACIO = { plate: '', type: '', color: '' }
 
 const soloFecha = (iso) => (iso ? new Date(iso).toLocaleDateString('en-CA') : '')
 const soloHora = (iso) =>
   iso ? new Date(iso).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit', hour12: false }) : null
 
-export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, onVolver, tituloVolver = 'Volver' }) {
+export default function FormularioIngresoMateriaPrima({ lotId, onVolver, tituloVolver = 'Volver' }) {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('raw-material-receptions:read')
   const puedeCrear = permisos.has('warehouse-receipts:create')
@@ -73,7 +94,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
 
   const [recepcion, setRecepcion] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
 
   const [documentos, setDocumentos] = useState(DOCUMENTOS_VACIOS)
   const [conductor, setConductor] = useState(CONDUCTOR_VACIO)
@@ -83,64 +103,39 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   const [notes, setNotes] = useState('')
   const [pesoBruto, setPesoBruto] = useState('')
   const [pesoNeto, setPesoNeto] = useState('')
-  const [lotesOpciones, setLotesOpciones] = useState([])
-  const [cargandoLotes, setCargandoLotes] = useState(true)
+  // Editables mientras la recepción siga abierta (pedido explícito) — ver
+  // DatosRecepcionLote.jsx y warehouse-receipt.dto.ts (`startedAt` ahora
+  // acepta PATCH). Antes de crearse la recepción no hay nada que editar:
+  // `startedAt` lo sella el propio POST al presionar "Iniciar".
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [horaInicio, setHoraInicio] = useState(null)
   const [pasoActual, setPasoActual] = useState(0)
 
   const { enviando, error, ejecutar } = useSolicitud()
 
-  // PDF real, mismo mecanismo que FormularioInspeccionMateriaPrima.jsx
-  // (ver ese archivo para el porqué completo): captura el bloque ya
-  // aislado (cabecera → firmas) a un canvas de buena resolución y arma un
-  // PDF paginado a A4 con jsPDF — el botón "Imprimir" abre ESE archivo,
-  // nunca el diálogo de impresión del navegador.
-  const areaImprimibleRef = useRef(null)
-  const [generandoPdf, setGenerandoPdf] = useState(false)
-  const [errorPdf, setErrorPdf] = useState(null)
+  // PDF real, mismo mecanismo que FormularioInspeccionMateriaPrima.jsx —
+  // ver useGenerarPdf.js para el porqué completo (no window.print(),
+  // captura el bloque aislado a un canvas y arma un PDF paginado a A4 con
+  // jsPDF, cortando hoja solo entre secciones, nunca en medio de una) — el
+  // botón "Imprimir" abre ESE archivo, nunca el diálogo del navegador.
+  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
 
-  const generarPdf = async () => {
-    const ventana = window.open('', '_blank')
-    setGenerandoPdf(true)
-    setErrorPdf(null)
-    try {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const nodo = areaImprimibleRef.current
-      if (!nodo) throw new Error('No se encontró el contenido del formulario.')
-      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor: '#faf4e8', useCORS: true })
-      const imagen = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-      const anchoPagina = pdf.internal.pageSize.getWidth()
-      const altoPagina = pdf.internal.pageSize.getHeight()
-      const altoImagen = (canvas.height * anchoPagina) / canvas.width
-      let alturaRestante = altoImagen
-      let posicionY = 0
-      pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-      alturaRestante -= altoPagina
-      while (alturaRestante > 0) {
-        posicionY = alturaRestante - altoImagen
-        pdf.addPage()
-        pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-        alturaRestante -= altoPagina
-      }
-      const url = URL.createObjectURL(pdf.output('blob'))
-      if (ventana) ventana.location.href = url
-      else window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch (err) {
-      ventana?.close()
-      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
-    } finally {
-      setGenerandoPdf(false)
-    }
-  }
-
-  // El asistente arranca desde el paso 1 cada vez que se entra a OTRO
-  // lote — sin esto, cambiar de lote por el selector dejaría a alguien
-  // parado en el paso 4 del lote anterior, viendo los datos del nuevo.
+  // El asistente arranca desde el paso 1 cada vez que cambia `lotId` — sin
+  // esto, entrar a otro lote (por ejemplo desde un link directo) dejaría a
+  // alguien parado en el paso 4 del lote anterior, viendo los datos del nuevo.
   useEffect(() => {
     setPasoActual(0)
   }, [lotId])
+
+  // Salta a la sección que tiene el dato faltante/con error y la trae a la
+  // vista — los avisos viven junto al botón, al final del todo, lejos de la
+  // sección real cuando el asistente está en otro paso (cada etapa se
+  // desmonta al no ser la actual, ver AsistenteDeEtapas.jsx, así que no
+  // alcanza con un scroll sin cambiar `pasoActual` primero).
+  const irAPaso = (paso) => {
+    setPasoActual(paso)
+    areaImprimibleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const recargar = useCallback(() => {
     if (!puedeVer) return
@@ -151,38 +146,6 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   useEffect(() => {
     recargar()
   }, [recargar])
-
-  // Opciones para el selector "Lote" — mismo filtro que el formulario de
-  // Calidad (solo materia prima, `nature === 'PM'`). Solo se piden si hay
-  // a dónde navegar al elegir otro lote (`onCambiarLote`) — montado dentro
-  // de Almacén, cambiar de lote significa cambiar la vista local, no
-  // navegar, así que el propio contenedor decide si ofrece el selector.
-  useEffect(() => {
-    if (!puedeVer || !onCambiarLote) return
-    let cancelado = false
-    setCargandoLotes(true)
-    lotsService
-      .listar({ limit: 100 })
-      .then((r) => {
-        if (cancelado) return
-        setLotesOpciones(
-          (r.data ?? [])
-            .filter((l) => l.nature === 'PM')
-            .map((l) => ({ id: l.id, nombre: l.code, detalle: l.currentStatus?.replace(/_/g, ' ') })),
-        )
-        setCargandoLotes(false)
-      })
-      .catch(() => setCargandoLotes(false))
-    return () => {
-      cancelado = true
-    }
-  }, [puedeVer, onCambiarLote])
-
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
 
   // Se resiembra SOLO cuando cambia la recepción de verdad (creada, o el
   // lote cambió), nunca en cada `recargar()` — mismo bug ya resuelto antes
@@ -211,14 +174,77 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     setNotes(warehouseReceipt?.notes ?? '')
     setPesoBruto(warehouseReceipt?.acceptedGrossWeightKg != null ? String(warehouseReceipt.acceptedGrossWeightKg) : '')
     setPesoNeto(warehouseReceipt?.acceptedNetWeightKg != null ? String(warehouseReceipt.acceptedNetWeightKg) : '')
+    // Si ya existe la recepción, la fecha/hora real vienen del backend
+    // (`startedAt`). Si todavía no existe, la captura del momento actual la
+    // hace el efecto de abajo (atado a `recepcion`, no a `wrId` — ver por
+    // qué) — acá no hace nada en ese caso, para no pisarla en cada
+    // `recargar()`.
+    if (warehouseReceipt) {
+      setFechaInicio(soloFecha(warehouseReceipt.startedAt))
+      setHoraInicio(soloHora(warehouseReceipt.startedAt))
+    }
+
+    // Al continuar una recepción ya iniciada, entrar directo a la etapa más
+    // inmediata que todavía necesita algo — no siempre al paso 0. Pedido
+    // explícito: antes de esto, Almacén volvía a caer siempre en el paso 0
+    // y tenía que reclickear "Siguiente" en las etapas ya completas
+    // (colapsadas, sin nada más que hacer ahí) para llegar a donde de
+    // verdad hacía falta seguir. Se calcula sobre `warehouseReceipt`/
+    // `summary` (el dato recién llegado del backend), no sobre el estado
+    // local (`documentos`/`packagingType`/...) — ese todavía tiene los
+    // valores del `wrId` anterior en este mismo efecto, una carrera contra
+    // los `setDocumentos`/`setPackagingType`/... de arriba, que recién se
+    // reflejan en el próximo render. Solo corre cuando cambia `wrId` (mismo
+    // motivo que el resto de este efecto: no pisar el paso en el que está
+    // parado alguien cada vez que `recargar()` refresca datos).
+    const { summary } = recepcion
+    const documentosCompletaWR =
+      (warehouseReceipt?.producerListVerified === true || (warehouseReceipt?.producerListNotes ?? '').trim() !== '') &&
+      (warehouseReceipt?.shippingGuideVerified === true || (warehouseReceipt?.shippingGuideNotes ?? '').trim() !== '')
+    const productoCompletaWR =
+      (warehouseReceipt?.packagingType ?? '') !== '' &&
+      warehouseReceipt?.receivedPackageCount != null &&
+      warehouseReceipt.receivedPackageCount > 0
+    // El pesaje (unidades de medida, vive en la misma etapa "producto") no
+    // entra en `productoCompletaWR` — se habilita recién cuando Calidad
+    // resuelve, así que es su propia condición de "todavía falta algo acá".
+    const pesajePendiente = summary.canRegisterWeight || summary.canCompleteWithoutWeight
+
+    let pasoInicial = PASO_DOCUMENTOS
+    if (warehouseReceipt?.status === 'INICIADA') {
+      if (!documentosCompletaWR) pasoInicial = PASO_DOCUMENTOS
+      else if (!productoCompletaWR || pesajePendiente) pasoInicial = PASO_PRODUCTO
+      else pasoInicial = PASO_FIRMAS
+    }
+    setPasoActual(pasoInicial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wrId])
+
+  // Captura el momento actual como fecha/hora de inicio EDITABLE, apenas se
+  // confirma que el lote todavía no tiene recepción — es el mismo instante
+  // en que se clickeó "Iniciar" en la lista de Almacén, que solo abre este
+  // formulario sin crear nada (ver DatosRecepcionLote.jsx). No puede vivir
+  // en el efecto de arriba: ese está atado a `wrId`
+  // (`recepcion?.warehouseReceipt?.id`), que sigue siendo `null` tanto
+  // ANTES de cargar `recepcion` como DESPUÉS si la recepción no existe
+  // todavía — la dependencia nunca cambia, así que ese efecto nunca vuelve
+  // a correr para capturar nada. Acá se usa `recepcion` (no `wrId`) como
+  // disparador, y un ref para no re-capturar en cada `recargar()` (que
+  // repite mientras el usuario sigue completando el resto del formulario).
+  const loteYaCapturado = useRef(null)
+  useEffect(() => {
+    if (!recepcion || recepcion.warehouseReceipt) return
+    if (loteYaCapturado.current === lotId) return
+    loteYaCapturado.current = lotId
+    const ahora = new Date()
+    setFechaInicio(ahora.toLocaleDateString('en-CA'))
+    setHoraInicio(`${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`)
+  }, [recepcion, lotId])
 
   const cambiarDocumento = (clave, campo, valor) =>
     setDocumentos((prev) => ({ ...prev, [clave]: { ...prev[clave], [campo]: valor } }))
   const cambiarConductor = (campo, valor) => setConductor((prev) => ({ ...prev, [campo]: valor }))
   const cambiarVehiculo = (campo, valor) => setVehiculo((prev) => ({ ...prev, [campo]: valor }))
-  const solicitarAlta = ({ tipo, detalle }) => solicitarAltaDeMaestro({ tipo, detalle, solicitante: 'Almacén' })
 
   if (!puedeVer) return <AccesoDenegado mensaje="No tenés acceso al ingreso de materia prima." />
 
@@ -246,7 +272,13 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   }
 
   if (!recepcion) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+      </div>
+    )
   }
 
   const { lot, summary, warehouseReceipt } = recepcion
@@ -268,25 +300,17 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
   // el botón quedaba deshabilitado sin decir por qué, así que alguien con
   // el formulario a medio llenar no tenía forma de saber qué le faltaba
   // sin ir campo por campo. Se arma la lista una sola vez para reusarla en
-  // el aviso visible y en el `title` del botón.
+  // el aviso visible y en el `title` del botón. `paso` es el índice en
+  // `etapas` (abajo) — permite saltar directo a la sección que tiene el
+  // problema en vez de solo nombrarla.
   const motivosFaltantes = []
-  if (receivedPackageCount == null || receivedPackageCount <= 0) motivosFaltantes.push('N. de bolsas')
+  if (receivedPackageCount == null || receivedPackageCount <= 0) motivosFaltantes.push({ texto: 'N. de bolsas', paso: 3 })
   if (!documentos.productores.verificado && documentos.productores.notas.trim() === '')
-    motivosFaltantes.push('Observaciones de lista de productores (no cumple)')
+    motivosFaltantes.push({ texto: 'Observaciones de lista de productores (no cumple)', paso: 0 })
   if (!documentos.guia.verificado && documentos.guia.notas.trim() === '')
-    motivosFaltantes.push('Observaciones de guía de remisión (no cumple)')
+    motivosFaltantes.push({ texto: 'Observaciones de guía de remisión (no cumple)', paso: 0 })
 
-  const camposTransporte = [
-    conductor.fullName,
-    conductor.identityDocument,
-    conductor.licenseNumber,
-    conductor.licenseCategory,
-    vehiculo.plate,
-    vehiculo.type,
-    vehiculo.brand,
-    vehiculo.model,
-    vehiculo.color,
-  ]
+  const camposTransporte = [conductor.fullName, conductor.licenseNumber, vehiculo.plate, vehiculo.type, vehiculo.color]
   const transporteCompleto = camposTransporte.every((v) => v.trim() !== '')
 
   const dtoDocumentosYTransporte = () => ({
@@ -297,15 +321,32 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
     shippingGuideVerified: documentos.guia.verificado,
     shippingGuideNotes: documentos.guia.verificado ? undefined : documentos.guia.notas,
     notes: notes || undefined,
+    // `transportInfo` sigue siendo todo-o-nada en el backend, pero ahora
+    // driverSchema/vehicleSchema (warehouse-receipt.dto.ts) solo piden los
+    // mismos 5 campos que muestra DatosTransporte.jsx — ya no hace falta
+    // rellenar nada con 'N/A'.
     ...(transporteCompleto ? { transportInfo: { driver: conductor, vehicle: vehiculo } } : {}),
   })
 
-  const iniciar = async () => {
+  const finalizar = async () => {
     if (!validoParaGuardar) return
     try {
-      await ejecutar(() => warehouseReceiptsService.iniciar(lotId, dtoDocumentosYTransporte()))
-      setConfirmacion('Recepción iniciada.')
-      recargar()
+      await ejecutar(async () => {
+        const creado = await warehouseReceiptsService.iniciar(lotId, dtoDocumentosYTransporte())
+        // El POST sella `startedAt` con el instante real del servidor —
+        // acá se corrige de inmediato con el valor capturado al abrir el
+        // formulario (o editado a mano mientras se completaba el resto),
+        // en la misma acción de "Finalizar recepción". Sin esto, la fecha/
+        // hora que se ve en pantalla nunca coincidía con la que terminaba
+        // guardada.
+        if (fechaInicio && horaInicio) {
+          await warehouseReceiptsService.actualizar(creado.id, {
+            startedAt: new Date(`${fechaInicio}T${horaInicio}`).toISOString(),
+          })
+        }
+      })
+      toast.success('Recepción registrada.')
+      onVolver?.()
     } catch {
       // mensaje ya en `error`
     }
@@ -319,9 +360,16 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
       // `receivedPackageCount` queda afuera del PATCH — mandarlo igual es
       // un 400 asegurado, no algo que valga la pena intentar.
       if (cantidadBloqueada) delete dto.receivedPackageCount
+      // `startedAt` se manda solo si fecha/hora de inicio están cargadas
+      // (no antes de crear la recepción) — combinar los dos campos locales
+      // en un instante único e interpretarlo en hora local del navegador,
+      // igual criterio que aInputLocal/datetime-local en utils/fecha.js.
+      if (fechaInicio && horaInicio) {
+        dto.startedAt = new Date(`${fechaInicio}T${horaInicio}`).toISOString()
+      }
       await ejecutar(() => warehouseReceiptsService.actualizar(warehouseReceipt.id, dto))
-      setConfirmacion('Cambios guardados.')
-      recargar()
+      toast.success('Cambios guardados.')
+      onVolver?.()
     } catch {
       // mensaje ya en `error`
     }
@@ -340,8 +388,8 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
           ...(puedeCerrarConPesos ? { acceptedGrossWeightKg: Number(pesoBruto), acceptedNetWeightKg: Number(pesoNeto) } : {}),
         }),
       )
-      setConfirmacion('Recepción cerrada.')
-      recargar()
+      toast.success('Recepción cerrada.')
+      onVolver?.()
     } catch {
       // mensaje ya en `error`
     }
@@ -382,14 +430,14 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
           <DatosRecepcionLote
             valores={{
               producto: lot.productId ? { id: lot.productId, nombre: lot.productName ?? '' } : null,
-              fecha: soloFecha(warehouseReceipt?.startedAt),
-              horaInicio: soloHora(warehouseReceipt?.startedAt),
+              fecha: fechaInicio,
+              horaInicio,
               horaFin: soloHora(warehouseReceipt?.completedAt),
               lote: { id: lot.id, nombre: lot.code },
             }}
-            onCambiarLote={(op) => op?.id && op.id !== lotId && onCambiarLote?.(op.id)}
-            opcionesLotes={lotesOpciones}
-            cargandoLotes={cargandoLotes}
+            soloLectura={soloLectura}
+            onCambiarFecha={setFechaInicio}
+            onCambiarHoraInicio={setHoraInicio}
           />
         </SeccionFormulario>
       ),
@@ -548,24 +596,7 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
           titulo="Ingreso de Materia Prima"
           codigo="P-ADM-03/R-02"
           version="05"
-          acciones={<AvisoFaltante onEnviar={solicitarAlta} />}
         />
-
-        {confirmacion && !generandoPdf && (
-          <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-medium text-verde-bosque print:hidden">
-            {confirmacion}
-          </p>
-        )}
-        {error && !generandoPdf && (
-          <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla print:hidden">
-            {error}
-          </p>
-        )}
-        {!existe && !puedeCrear && !generandoPdf && (
-          <p className="rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-medium text-marron-arcilla print:hidden">
-            Tu rol no tiene permiso para iniciar una recepción (`warehouse-receipts:create`).
-          </p>
-        )}
 
         <AsistenteDeEtapas
           etapas={etapas}
@@ -576,54 +607,75 @@ export default function FormularioIngresoMateriaPrima({ lotId, onCambiarLote, on
         />
       </div>
       {/* Cierra `areaImprimibleRef` — de acá para abajo (Iniciar/Guardar/
-          Cerrar/Volver) no es parte del papel, nunca entra al PDF. Gateado
-          al último paso del asistente: los botones de guardar/cerrar
-          recién tienen sentido una vez que se pasó por todas las etapas —
-          antes de eso ya está el botón "Siguiente" de cada una. */}
+          Cerrar/Volver, y sus avisos) no es parte del papel, nunca entra al
+          PDF. Gateado al último paso del asistente: los botones de guardar/
+          cerrar recién tienen sentido una vez que se pasó por todas las
+          etapas — antes de eso ya está el botón "Siguiente" de cada una.
+          Los avisos van DESPUÉS de los botones, no antes — arriba del todo
+          (junto a la cabecera) quedaban fuera de la vista de quien está
+          parado acá abajo, mirando el botón. */}
 
       {!soloLectura && pasoActual === etapas.length - 1 && (
         <div className="flex flex-col gap-2 print:hidden">
-          {motivosFaltantes.length > 0 && (
-            <p className="text-xs font-medium text-marron-arcilla">
-              Falta completar: {motivosFaltantes.join(' · ')}.
-            </p>
-          )}
           <div className="flex flex-wrap items-center gap-3">
             {!existe ? (
               <Button
                 disabled={enviando || !validoParaGuardar || !puedeCrear}
-                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.join(', ')}` : undefined}
-                onClick={iniciar}
+                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.map((m) => m.texto).join(', ')}` : undefined}
+                onClick={finalizar}
               >
-                {enviando ? 'Iniciando…' : 'Iniciar recepción'}
+                {enviando ? 'Finalizando…' : 'Finalizar recepción'}
+              </Button>
+            ) : puedeCerrarConPesos || puedeCerrarSinPesos ? (
+              // Último paso real (registrar pesos y cerrar) — "Guardar
+              // cambios" no sirve acá: su DTO (dtoDocumentosYTransporte) no
+              // manda pesoBruto/pesoNeto, así que tipear el peso y apretar
+              // "Guardar" no guardaba nada. Se saca del todo en este paso,
+              // queda solo "Cerrar recepción" (que sí manda los pesos).
+              <Button
+                disabled={enviando || !pesosValidos}
+                title={!pesosValidos ? 'Falta el peso bruto y neto para cerrar la recepción' : undefined}
+                onClick={cerrar}
+              >
+                {enviando ? 'Cerrando…' : 'Cerrar recepción'}
               </Button>
             ) : (
-              <>
-                <Button
-                  disabled={enviando || !validoParaGuardar}
-                  title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.join(', ')}` : undefined}
-                  onClick={guardar}
-                >
-                  {enviando ? 'Guardando…' : 'Guardar cambios'}
-                </Button>
-                {(puedeCerrarConPesos || puedeCerrarSinPesos) && (
-                  <Button
-                    variant="secondary"
-                    disabled={enviando || !pesosValidos}
-                    title={!pesosValidos ? 'Falta el peso bruto y neto para cerrar la recepción' : undefined}
-                    onClick={cerrar}
-                  >
-                    {enviando ? 'Cerrando…' : 'Cerrar recepción'}
-                  </Button>
-                )}
-              </>
-            )}
-            {onVolver && (
-              <Button variant="secondary" disabled={enviando} onClick={onVolver}>
-                {tituloVolver}
+              <Button
+                disabled={enviando || !validoParaGuardar}
+                title={motivosFaltantes.length > 0 ? `Falta completar: ${motivosFaltantes.map((m) => m.texto).join(', ')}` : undefined}
+                onClick={guardar}
+              >
+                {enviando ? 'Guardando…' : 'Guardar cambios'}
               </Button>
             )}
           </div>
+
+          {error && (
+            <p className="rounded-2xl bg-rojo-pasankalla/10 px-4 py-3 text-sm font-medium text-rojo-pasankalla">{error}</p>
+          )}
+          {!existe && !puedeCrear && (
+            <p className="rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm font-medium text-marron-arcilla">
+              Tu rol no tiene permiso para iniciar una recepción (`warehouse-receipts:create`).
+            </p>
+          )}
+          {motivosFaltantes.length > 0 && (
+            <div className="flex flex-col gap-1 rounded-2xl bg-marron-arcilla/12 px-4 py-3 text-sm">
+              <p className="font-semibold text-marron-arcilla">Falta completar:</p>
+              <ul className="flex flex-col gap-0.5">
+                {motivosFaltantes.map((m, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      onClick={() => irAPaso(m.paso)}
+                      className="text-left text-xs font-medium text-marron-arcilla underline decoration-marron-arcilla/40 underline-offset-2 hover:text-marron-cafe"
+                    >
+                      {m.texto}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

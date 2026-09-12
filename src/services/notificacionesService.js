@@ -1,29 +1,31 @@
-// Capa de servicio de notificaciones. Los componentes SIEMPRE importan de
-// acá, nunca de src/mock directo. Ver src/mock/README.md.
-import { notificaciones as notificacionesIniciales } from '../mock'
-
-const delay = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Copia mutable en memoria — simula el estado que tendría el backend
-// mientras no existe. Se resetea al recargar la página (antes ni
-// siquiera había notificaciones, así que no es una regresión).
-let notificaciones = notificacionesIniciales.map((n) => ({ ...n }))
+// Servicio real — ver comrural_erp_backend/docs/notifications.md.
+//
+// El mock anterior (notificaciones.json) exponía getNotificaciones/
+// marcarTodasLeidas/eliminarTodas sobre una copia en memoria. El backend
+// real no tiene equivalente para "eliminarTodas" (es append-only, nunca se
+// borra una notificación — ver docs/notifications.md "No-garantías") ni un
+// endpoint para "marcar todas" de una sola vez (se marca de a una), así que
+// esas dos funciones no se migran tal cual: se reemplazan por `listar`
+// (paginada, mismo criterio keyset que peopleService) y `marcarLeida`
+// (una notificación puntual). DashboardHeader.jsx se actualizó para
+// consumir la forma real de la respuesta (title/message/createdAt/readAt)
+// en vez de la forma mock (texto/fecha/leida).
+import { apiClient } from '../lib/apiClient'
 
 export const notificacionesService = {
-  async getNotificaciones() {
-    await delay()
-    return [...notificaciones]
+  // status: 'unread' | 'all' (default 'all' del lado del backend si se omite).
+  async listar({ status, cursor, limit } = {}) {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (cursor) params.set('cursor', cursor)
+    if (limit) params.set('limit', String(limit))
+    const query = params.toString()
+    return apiClient.get(`/notifications${query ? `?${query}` : ''}`)
   },
 
-  async marcarTodasLeidas() {
-    await delay(100)
-    notificaciones = notificaciones.map((n) => ({ ...n, leida: true }))
-    return [...notificaciones]
-  },
-
-  async eliminarTodas() {
-    await delay(100)
-    notificaciones = []
-    return [...notificaciones]
+  // Body vacío a propósito — el backend solo acepta `{}` (ver
+  // markNotificationReadSchema en el backend), nunca contenido del cliente.
+  async marcarLeida(notificationId) {
+    return apiClient.post(`/notifications/${notificationId}/read`, {})
   },
 }

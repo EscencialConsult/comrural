@@ -25,11 +25,11 @@ export default function Button({
   const rippleId = useRef(0)
 
   const base =
-    'relative overflow-hidden inline-flex items-center justify-center rounded-full px-6 py-3 font-medium ' +
+    'relative overflow-hidden inline-flex items-center justify-center rounded-full px-6 py-3 font-medium whitespace-nowrap ' +
     'transition-all duration-300 active:scale-95 active:duration-100 select-none'
 
   const variants = {
-    primary: 'bg-verde-lima text-marron-cafe hover:bg-verde-hoja hover:-translate-y-0.5',
+    primary: 'bg-verde-lima text-marron-cafe shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] hover:bg-verde-hoja hover:-translate-y-0.5',
     secondary:
       'border border-marron-tierra/20 text-marron-cafe hover:bg-marron-tierra/5 hover:-translate-y-0.5',
     // Para botones sobre fondos oscuros (paneles de auth, hero con partículas).

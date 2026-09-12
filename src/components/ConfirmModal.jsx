@@ -31,7 +31,7 @@ export default function ConfirmModal({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-modal-titulo"
-        className="rise-in relative w-full max-w-sm rounded-3xl bg-white p-6"
+        className="rise-in relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
       >
         <h2 id="confirm-modal-titulo" className="text-lg font-extrabold text-marron-cafe">
           {titulo}
@@ -49,10 +49,10 @@ export default function ConfirmModal({
             type="button"
             onClick={onConfirmar}
             autoFocus
-            className={`rounded-full px-4 py-2 text-sm font-medium text-white transition-colors duration-150 ${
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:-translate-y-0.5 ${
               variante === 'peligro'
-                ? 'bg-rojo-pasankalla hover:bg-rojo-pasankalla/90'
-                : 'bg-verde-lima text-marron-cafe hover:bg-verde-hoja'
+                ? 'bg-rojo-pasankalla text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] hover:bg-rojo-pasankalla/90'
+                : 'bg-verde-lima text-marron-cafe shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] hover:bg-verde-hoja'
             }`}
           >
             {textoConfirmar}

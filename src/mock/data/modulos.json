@@ -9,7 +9,7 @@
   },
   {
     "id": "calidad",
-    "nombre": "Calidad y Laboratorio",
+    "nombre": "Calidad",
     "descripcion": "Recepción de materia prima, liberación de lotes, análisis interno y externo.",
     "estado": "relevado_parcial",
     "ruta": "/calidad",
@@ -42,8 +42,8 @@
   {
     "id": "gerencia",
     "nombre": "Gerencia",
-    "descripcion": "Aprobación de ajustes de inventario, órdenes de compra y análisis externos.",
-    "estado": "pendiente",
+    "descripcion": "Trazabilidad de lotes de punta a punta. Aprobación de ajustes de inventario, órdenes de compra y análisis externos.",
+    "estado": "relevado_parcial",
     "ruta": "/gerencia",
     "orden": 6
   },

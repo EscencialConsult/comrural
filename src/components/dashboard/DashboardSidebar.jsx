@@ -1,23 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LayoutDashboard, SlidersHorizontal, Users, ChevronDown, X } from 'lucide-react'
+import { LayoutDashboard, SlidersHorizontal, Users, TestTubes, ClipboardCheck, ChevronDown, X } from 'lucide-react'
 import { servicioService } from '../../services/servicioService'
 import { MODULO_ICON } from '../../config/moduloIcons'
 import { GRUPOS_MAESTROS } from '../../config/gruposMaestros'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { puedeVerModulo } from '../../utils/permisos'
-import AiAdvisorTeaser from './AiAdvisorTeaser'
 
 const CLAVE_COLAPSADO = 'comrural_sidebar_colapsado'
 const MEDIA_ESCRITORIO = '(min-width: 768px)'
 
-// Datos maestros (FE·M1-M6 del tablero, + Calidad y Laboratorio): qué
-// pantalla va agrupada bajo qué módulo padre vive en config/gruposMaestros.js
-// — es la MISMA fuente que usa GrupoTabs.jsx para las pastillas de arriba de
-// cada pantalla. Sumar una pantalla nueva (o un módulo nuevo con sub-items)
-// es agregar/editar una entrada ahí — este archivo se queda genérico,
-// busca por `modulo.id` en vez de tener un caso hardcodeado por módulo.
+// Datos maestros (FE·M1-M6 del tablero, + Calidad/Almacén): qué pantalla va
+// agrupada bajo qué módulo padre vive en config/gruposMaestros.js — es la
+// MISMA fuente que usa GrupoTabs.jsx para las pastillas de arriba de cada
+// pantalla. Sumar una pantalla nueva (o un módulo nuevo con sub-items) es
+// agregar/editar una entrada ahí — este archivo se queda genérico, busca
+// por `modulo.id` en vez de tener un caso hardcodeado por módulo.
+// 'configuracion' se maneja aparte más abajo (acceso libre, nunca gatea su
+// padre). Mapa por `grupo` completo (no solo `items`) porque el render
+// necesita también `grupo.padre.nombre` — algunos grupos (Calidad) piden un
+// nombre más corto acá que el que usan las páginas públicas de
+// mock/data/modulos.json.
+const GRUPOS_POR_MODULO = new Map(
+  GRUPOS_MAESTROS.filter((g) => g.id !== 'configuracion' && g.id !== 'usuarios').map((g) => [g.id, g]),
+)
 const SUBITEMS_CONFIGURACION = GRUPOS_MAESTROS.find((g) => g.id === 'configuracion').items
+const SUBITEMS_USUARIOS = GRUPOS_MAESTROS.find((g) => g.id === 'usuarios').items
+// Laboratorio no tiene fila en modulos.json (no es un módulo de negocio con
+// permiso "laboratorio:read" — usa samples:read), así que no pasa por
+// GRUPOS_POR_MODULO/`modulos.map(...)` de más abajo como los módulos
+// reales: su NavGroup se arma acá a mano con los mismos datos de
+// gruposMaestros.js (única fuente real, GrupoTabs.jsx ya lee de ahí para
+// las pastillas de arriba) en vez de un link plano suelto.
+const GRUPO_LABORATORIO = GRUPOS_MAESTROS.find((g) => g.id === 'laboratorio')
+// Inventario: mismo criterio que Laboratorio — no tiene fila en
+// modulos.json (no es uno de los 8 departamentos reales de la empresa,
+// usa el permiso de Almacén) así que arma su NavGroup a mano en vez de
+// pasar por `modulos.map(...)` de más abajo.
+const GRUPO_INVENTARIO = GRUPOS_MAESTROS.find((g) => g.id === 'inventario')
 
 // Nav del panel: Resumen + los módulos que el rol del usuario habilita
 // (permisos reales "<moduloId>:read" — ver src/utils/permisos.js) +
@@ -33,8 +53,32 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
     () => todosLosModulos.filter((m) => puedeVerModulo(m.id, permisos)),
     [todosLosModulos, permisos],
   )
+  // Un array por módulo (no un Map — Map no es una dependencia estable para
+  // useMemo/effects de abajo), ya filtrado por permiso real de cada
+  // sub-item. Vacío para cualquier módulo sin grupo propio en
+  // gruposMaestros.js (la mayoría), o si el usuario no tiene permiso para
+  // ninguna de las hermanas.
+  const subitemsPorModulo = useMemo(() => {
+    const mapa = {}
+    for (const [moduloId, grupo] of GRUPOS_POR_MODULO) {
+      mapa[moduloId] = grupo.items.filter((s) => permisos.has(s.permiso))
+    }
+    return mapa
+  }, [permisos])
   const subitemsConfiguracion = useMemo(
     () => SUBITEMS_CONFIGURACION.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsUsuarios = useMemo(
+    () => SUBITEMS_USUARIOS.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsLaboratorio = useMemo(
+    () => GRUPO_LABORATORIO.items.filter((s) => permisos.has(s.permiso)),
+    [permisos],
+  )
+  const subitemsInventario = useMemo(
+    () => GRUPO_INVENTARIO.items.filter((s) => permisos.has(s.permiso)),
     [permisos],
   )
   const [colapsado, setColapsado] = useState(
@@ -101,7 +145,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
       el.removeEventListener('scroll', actualizar)
       resizeObserver.disconnect()
     }
-  }, [modulos, subitemsConfiguracion, colapsadoEfectivo, navVersion])
+  }, [modulos, subitemsPorModulo, subitemsConfiguracion, subitemsUsuarios, colapsadoEfectivo, navVersion])
 
   const linkClass = ({ isActive }) =>
     `sidebar-navitem flex items-center rounded-xl py-2.5 text-sm font-medium ${
@@ -195,16 +239,20 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
 
               {modulos.map((modulo) => {
                 const Icon = MODULO_ICON[modulo.id]
-                // Módulos de negocio que además agrupan datos maestros
-                // propios (Compras→Personas/Organizaciones/...,
-                // Calidad→Inspección, Almacén→Recepción) se buscan por `modulo.id`
-                // en GRUPOS_MAESTROS — sumar un módulo agrupado nuevo es una
-                // entrada ahí, no un caso más acá. Si el usuario no tiene
-                // ningún permiso de esos sub-items, queda como link plano
-                // igual que el resto de los módulos.
-                const grupo = GRUPOS_MAESTROS.find((g) => g.id === modulo.id)
-                const subitems = grupo ? grupo.items.filter((s) => permisos.has(s.permiso)) : []
-                if (subitems.length > 0) {
+                // Módulos de negocio que además agrupan pantallas hermanas
+                // (Compras→Personas/Organizaciones/..., Calidad→Inspección/
+                // Remito, Almacén→Recepción) se resuelven por `modulo.id` en
+                // GRUPOS_POR_MODULO — sumar un módulo agrupado nuevo es una
+                // entrada en gruposMaestros.js, no un caso más acá. Si el
+                // usuario no tiene ningún permiso de esos sub-items, queda
+                // como link plano igual que el resto de los módulos.
+                // Laboratorio va deliberadamente SEPARADO de Calidad (pedido
+                // explícito) — no es un módulo de negocio real (no tiene
+                // fila en modulos.json ni permiso "laboratorio:read"), así
+                // que va como link manual más abajo, no por acá.
+                const grupo = GRUPOS_POR_MODULO.get(modulo.id)
+                const subitems = subitemsPorModulo[modulo.id]
+                if (subitems && subitems.length > 0) {
                   return (
                     <NavGroup
                       key={modulo.id}
@@ -214,7 +262,7 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                       // pedir acá un nombre más corto que el que usan las
                       // páginas públicas (mock/data/modulos.json) sin tocar
                       // esas otras pantallas. Hoy solo lo usa Calidad
-                      // ("Calidad y Lab." en vez de "Calidad y Laboratorio").
+                      // ("Calidad" a secas en vez de "Calidad y Laboratorio").
                       nombre={grupo.padre.nombre ?? modulo.nombre}
                       ruta={`/panel/${modulo.id}`}
                       Icon={Icon}
@@ -238,18 +286,91 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
                 )
               })}
 
+              {/* Inventario: pedido explícito del usuario de que se vea
+                  "como otro módulo" — pastillas reales arriba (GrupoTabs.jsx
+                  lee el mismo `gruposMaestros.js`) en vez de pestañas
+                  locales anidadas. Mismo permiso que Almacén (almacen:read)
+                  porque es la misma área funcional, no un módulo de negocio
+                  nuevo (no tiene fila en mock/data/modulos.json). */}
+              {permisos.has('almacen:read') &&
+                (subitemsInventario.length > 0 ? (
+                  <NavGroup
+                    nombre={GRUPO_INVENTARIO.padre.nombre}
+                    ruta={GRUPO_INVENTARIO.padre.ruta}
+                    Icon={ClipboardCheck}
+                    subitems={subitemsInventario}
+                    colapsadoEfectivo={colapsadoEfectivo}
+                    linkClass={linkClass}
+                    onToggle={alExpandirGrupo}
+                  />
+                ) : (
+                  <NavLink
+                    to="/panel/inventario"
+                    className={linkClass}
+                    title={colapsadoEfectivo ? 'Inventario' : undefined}
+                  >
+                    <ClipboardCheck className="size-5 shrink-0" strokeWidth={1.75} />
+                    <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Inventario</span>
+                  </NavLink>
+                ))}
+
+              {/* Laboratorio: módulo aparte de Calidad, a pedido explícito
+                  (antes eran pantallas hermanas con un navbar compartido) —
+                  no viene de modulos.json, así que arma su NavGroup a mano
+                  en vez de por el loop de `modulos` de arriba, mismo
+                  criterio que "Usuarios" más abajo. Gate por samples:read
+                  (el permiso técnico real), no por un flag de módulo que no
+                  existe. Sus 4 secciones ahora son hermanas con ruta propia
+                  (antes, pastillas locales dentro de la pantalla — cambio
+                  puramente visual, ver gruposMaestros.js). */}
+              {permisos.has('samples:read') &&
+                (subitemsLaboratorio.length > 0 ? (
+                  <NavGroup
+                    nombre={GRUPO_LABORATORIO.padre.nombre}
+                    ruta={GRUPO_LABORATORIO.padre.ruta}
+                    Icon={TestTubes}
+                    subitems={subitemsLaboratorio}
+                    colapsadoEfectivo={colapsadoEfectivo}
+                    linkClass={linkClass}
+                    onToggle={alExpandirGrupo}
+                  />
+                ) : (
+                  <NavLink
+                    to="/panel/laboratorio"
+                    className={linkClass}
+                    title={colapsadoEfectivo ? 'Laboratorio' : undefined}
+                  >
+                    <TestTubes className="size-5 shrink-0" strokeWidth={1.75} />
+                    <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Laboratorio</span>
+                  </NavLink>
+                ))}
+
               {/* Gestión de usuarios/roles — solo superadmin hoy (permiso
-                  real "iam:read", no un código de rol hardcodeado). */}
-              {permisos.has('iam:read') && (
-                <NavLink
-                  to="/panel/usuarios"
-                  className={linkClass}
-                  title={colapsadoEfectivo ? 'Usuarios' : undefined}
-                >
-                  <Users className="size-5 shrink-0" strokeWidth={1.75} />
-                  <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Usuarios</span>
-                </NavLink>
-              )}
+                  real "iam:read", no un código de rol hardcodeado). "Roles y
+                  permisos" vive como hermana (GestionRoles.jsx), mismo
+                  criterio que Configuración→Países: el padre sigue siendo la
+                  lista de usuarios. */}
+              {permisos.has('iam:read') &&
+                (subitemsUsuarios.length > 0 ? (
+                  <NavGroup
+                    nombre="Usuarios"
+                    ruta="/panel/usuarios"
+                    Icon={Users}
+                    subitems={subitemsUsuarios}
+                    colapsadoEfectivo={colapsadoEfectivo}
+                    linkClass={linkClass}
+                    onToggle={alExpandirGrupo}
+                  />
+                ) : (
+                  <NavLink
+                    to="/panel/usuarios"
+                    className={linkClass}
+                    title={colapsadoEfectivo ? 'Usuarios' : undefined}
+                  >
+                    <Users className="size-5 shrink-0" strokeWidth={1.75} />
+                    <span className={`sidebar-label ${colapsadoEfectivo ? 'is-oculto' : ''}`}>Usuarios</span>
+                  </NavLink>
+                ))}
 
               {/* Configuración: acceso libre en sí misma (por eso nunca se
                   gatea el link padre), pero Países vive adentro como
@@ -288,12 +409,6 @@ export default function DashboardSidebar({ abierto, onCerrar }) {
               aria-hidden="true"
               className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-linear-to-t from-marron-cafe to-transparent transition-opacity duration-200 ${sombraAbajo ? 'opacity-100' : 'opacity-0'}`}
             />
-          </div>
-
-          <div className={`sidebar-aicard ${colapsadoEfectivo ? 'is-oculto' : ''}`}>
-            <div className="overflow-hidden">
-              <AiAdvisorTeaser />
-            </div>
           </div>
         </aside>
 

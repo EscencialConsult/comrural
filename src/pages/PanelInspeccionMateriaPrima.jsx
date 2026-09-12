@@ -6,7 +6,7 @@ import FormularioInspeccionMateriaPrima from '../components/formularios/Formular
 // de Calidad y Laboratorio (PanelCalidad.jsx), que monta el mismo componente
 // inline, sin navegar. Esta ruta queda para un link directo y compartible a
 // un lote puntual (por ejemplo, desde el resumen de Almacén en
-// PanelRecepcionLote.jsx, o el hub completo que sigue usando PanelLotes.jsx
+// PanelRecepcionLote.jsx, o el hub completo que sigue usando PanelCompras.jsx
 // de Compras) — ver docs/formulario-inspeccion-materia-prima.md.
 export default function PanelInspeccionMateriaPrima() {
   const { lotId } = useParams()
@@ -14,12 +14,7 @@ export default function PanelInspeccionMateriaPrima() {
 
   return (
     <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-      <FormularioInspeccionMateriaPrima
-        lotId={lotId}
-        onCambiarLote={(id) => navigate(`/panel/calidad/lotes/${id}/inspeccion`)}
-        onVolver={() => navigate(-1)}
-        tituloVolver="Volver"
-      />
+      <FormularioInspeccionMateriaPrima lotId={lotId} onVolver={() => navigate(-1)} tituloVolver="Volver" />
     </main>
   )
 }

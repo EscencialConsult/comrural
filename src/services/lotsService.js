@@ -14,10 +14,14 @@
 import { apiClient } from '../lib/apiClient'
 
 export const lotsService = {
-  async listar({ cursor, limit } = {}) {
+  // `code`: búsqueda parcial (ILIKE '%code%' del lado del servidor, ver
+  // LotsService.list del backend) — para un buscador con debounce, no exige
+  // coincidencia exacta ni por prefijo.
+  async listar({ cursor, limit, code } = {}) {
     const params = new URLSearchParams()
     if (cursor) params.set('cursor', cursor)
     if (limit) params.set('limit', String(limit))
+    if (code) params.set('code', code)
     const query = params.toString()
     return apiClient.get(`/lots${query ? `?${query}` : ''}`)
   },
@@ -32,5 +36,13 @@ export const lotsService = {
 
   async actualizar(lotId, dto) {
     return apiClient.patch(`/lots/${lotId}`, dto)
+  },
+
+  // Transiciona EN_ANALISIS -> LIBERADO (ver docs/lots.md §3/§7 del backend).
+  // Sin body. El backend no valida cobertura de informes acá — esa
+  // advertencia la arma el frontend con laboratoryReportsService.cobertura()
+  // antes de llamar (ver SeccionInformeMuestra.jsx, Calidad).
+  async liberar(lotId) {
+    return apiClient.post(`/lots/${lotId}/release`, {})
   },
 }

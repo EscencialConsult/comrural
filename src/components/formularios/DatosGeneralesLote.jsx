@@ -1,79 +1,66 @@
-import SelectorDeBase from './SelectorDeBase.jsx'
 import CampoFechaHora from './CampoFechaHora.jsx'
 
+function DatoPrecargado({ label, valor, className = '', esCodigo = false }) {
+  const texto = typeof valor === 'object' ? (valor?.nombre || valor?.code || valor?.name || '—') : (valor || '—')
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      <span className="text-xs font-bold uppercase tracking-wider text-marron-cafe/70">
+        {label}
+      </span>
+      <div className="flex h-11 items-center rounded-2xl bg-marron-tierra/10 border border-marron-tierra/20 px-3.5 text-sm text-marron-cafe select-none">
+        <span className={`truncate ${esCodigo ? 'font-mono text-marron-cafe/90' : ''}`}>
+          {texto}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // Sección 1 del papel: DATOS GENERALES.
-//
-// Producto, proveedor y lote son atributos DEL LOTE — decisión de Compras,
-// no algo que el inspector elige acá (mismo criterio que ya usa
-// DatosRecepcionLote.jsx en el Formulario 2, sección 2). Corrección
-// post-revisión: hasta esta pasada, `SelectorDeBase` quedaba buscable/
-// editable con `disabled={soloLectura}`, como si el inspector pudiera
-// "cambiar" el producto de una inspección ya abierta — nunca tuvo sentido:
-// el lote llega fijo desde `recepcion.lot`, y esos campos nunca se mandan al
-// backend en `guardar()`. Quedan `disabled` siempre, la única forma real de
-// "cambiar de lote" es el selector "Lote", que navega a OTRA inspección
-// (ver `onCambiarLote` en FormularioInspeccionMateriaPrima.jsx) — ese sí
-// sigue activo.
-//
-// Fecha y horas son del acto de inspeccionar (`startedAt` / `completedAt`),
-// selladas por el propio backend al crear/completar la inspección — no
-// aceptan `PATCH` (confirmado contra inspections.md). Quedan `disabled`
-// siempre por el mismo motivo que producto/proveedor: eran editables con el
-// botón "hoy" de CampoFechaHora, pero era un callejón sin salida — se podía
-// tocar, nunca se guardaba nada.
-export default function DatosGeneralesLote({
-  valores,
-  onCambiarLote,
-  opciones = {},
-  cargandoOpciones = false,
-}) {
+export default function DatosGeneralesLote({ valores, opciones = {}, soloLectura, onCambiarFecha, onCambiarHoraInicio }) {
+  const inicioEditable = !soloLectura && Boolean(valores.fecha)
   return (
     <div className="grid gap-x-6 gap-y-4 sm:grid-cols-6">
-      <SelectorDeBase
+      <DatoPrecargado
+        label="Lote designado"
+        valor={valores.lote}
+        esCodigo
+        className="sm:col-span-2"
+      />
+      <DatoPrecargado
         label="Producto"
         valor={valores.producto}
-        opciones={opciones.productos ?? []}
-        onSeleccionar={() => {}}
-        disabled
-        placeholder="—"
-        className="sm:col-span-4"
+        className="sm:col-span-2"
       />
-
-      <div className="sm:col-span-2">
-        <CampoFechaHora id="fecha-inspeccion" tipo="date" label="Fecha" valor={valores.fecha} onChange={() => {}} disabled />
-      </div>
-
-      <SelectorDeBase
+      <DatoPrecargado
         label="Proveedor"
         valor={valores.proveedor}
-        opciones={opciones.proveedores ?? []}
-        onSeleccionar={() => {}}
-        disabled
-        placeholder="—"
-        className="sm:col-span-4"
-      />
-
-      <SelectorDeBase
-        label="Lote"
-        valor={valores.lote}
-        opciones={opciones.lotes ?? []}
-        onSeleccionar={onCambiarLote}
-        cargando={cargandoOpciones}
-        placeholder="Buscá el lote…"
         className="sm:col-span-2"
       />
 
-      <div className="sm:col-span-3">
+      <div className="sm:col-span-2">
+        <CampoFechaHora
+          id="fecha-inspeccion"
+          tipo="date"
+          label="Fecha"
+          valor={valores.fecha}
+          onChange={inicioEditable ? onCambiarFecha : () => {}}
+          disabled={!inicioEditable}
+        />
+      </div>
+
+      <div className="sm:col-span-2">
         <CampoFechaHora
           id="hora-inicio-inspeccion"
           tipo="time"
           label="Hora de inicio"
           valor={valores.horaInicio}
-          onChange={() => {}}
-          disabled
+          onChange={inicioEditable ? onCambiarHoraInicio : () => {}}
+          disabled={!inicioEditable}
         />
       </div>
-      <div className="sm:col-span-3">
+
+      <div className="sm:col-span-2">
         <CampoFechaHora
           id="hora-fin-inspeccion"
           tipo="time"
@@ -87,3 +74,4 @@ export default function DatosGeneralesLote({
     </div>
   )
 }
+

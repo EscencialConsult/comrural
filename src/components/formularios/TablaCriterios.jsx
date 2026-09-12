@@ -9,23 +9,16 @@ import FilaPreguntaSiNo from './FilaPreguntaSiNo.jsx'
 // partía en cinco renglones mientras el par Sí/No quedaba lejos, a la
 // derecha. Ahora es un listado vertical a todo el ancho, y cada renglón se
 // lee de izquierda a derecha en el orden en que se responde: pregunta →
-// Sí/No → observación.
+// Sí/No.
 //
-// La observación arranca PLEGADA, como un botón chico. Antes era un input a
-// todo el ancho debajo de cada pregunta, y ocupaba tanto espacio como la
-// pregunta misma aunque casi nunca se use: ocho campos vacíos empujaban la
-// sección al doble de alto y competían con lo único que de verdad hay que
-// responder. Se despliega al tocarlo, y si ya tiene texto se muestra abierta
-// sola.
-export default function TablaCriterios({
-  items,
-  valorDe,
-  observacionDe,
-  onCambiar,
-  onCambiarObservacion,
-  soloLectura = false,
-  codigoDecisivo,
-}) {
+// Sin columna de observación a propósito: `raw_material_inspections` y
+// `form_responses` no tienen ninguna columna para guardar una nota por
+// criterio (las 8 preguntas son BOOLEAN sueltos, sin ítem TEXT hermano) —
+// se probó mostrarla igual (campo local, sin guardar) y se sacó porque era
+// un campo que parecía persistirse y no lo hacía. `FilaPreguntaSiNo` sigue
+// soportando observación para quien SÍ la persiste (Control de Documentos),
+// simplemente acá no se le pasa `onCambiarObservacion`.
+export default function TablaCriterios({ items, valorDe, onCambiar, soloLectura = false, codigoDecisivo }) {
   const sinResponder = items.filter((item) => valorDe(item) === null)
   const decisivoSinResponder = codigoDecisivo && sinResponder.some((item) => item.code === codigoDecisivo)
 
@@ -38,9 +31,7 @@ export default function TablaCriterios({
             numero={i + 1}
             pregunta={item.label}
             valor={valorDe(item)}
-            observacion={observacionDe?.(item) ?? ''}
             onCambiar={(v) => onCambiar(item, v)}
-            onCambiarObservacion={(t) => onCambiarObservacion(item, t)}
             soloLectura={soloLectura}
             destacada={item.code === codigoDecisivo}
             avisoSiVacia='Sin esta respuesta no se puede cerrar la inspección — si es "No", se rechaza el lote completo.'

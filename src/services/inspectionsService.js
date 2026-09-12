@@ -19,6 +19,13 @@ export const inspectionsService = {
     return apiClient.get(`/inspections/${inspectionId}`)
   },
 
+  // PATCH /inspections/:id — hoy solo corrige `startedAt`, editable mientras
+  // la inspección siga INICIADA (agregado a pedido explícito, ver
+  // comrural_erp_backend/docs/inspections.md §8).
+  async actualizar(inspectionId, dto) {
+    return apiClient.patch(`/inspections/${inspectionId}`, dto)
+  },
+
   async guardarRespuestas(inspectionId, respuestas) {
     return apiClient.patch(`/inspections/${inspectionId}/responses`, { responses: respuestas })
   },

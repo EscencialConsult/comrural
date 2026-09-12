@@ -13,12 +13,7 @@ export default function PanelIngresoMateriaPrima() {
 
   return (
     <main className="flex w-full flex-col gap-6 p-6 md:p-10">
-      <FormularioIngresoMateriaPrima
-        lotId={lotId}
-        onCambiarLote={(id) => navigate(`/panel/calidad/lotes/${id}/ingreso`)}
-        onVolver={() => navigate(-1)}
-        tituloVolver="Volver"
-      />
+      <FormularioIngresoMateriaPrima lotId={lotId} onVolver={() => navigate(-1)} tituloVolver="Volver" />
     </main>
   )
 }

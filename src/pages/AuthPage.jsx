@@ -6,7 +6,6 @@ import { authService } from '../services/authService'
 import Button from '../components/Button'
 import AuthLayout from '../components/AuthLayout'
 import AuthInput from '../components/AuthInput'
-import SocialButtons from '../components/SocialButtons'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -83,7 +82,7 @@ export default function AuthPage({ modoInicial = 'login' }) {
     setEnviando(true)
     try {
       if (esLogin) {
-        await login({ email, contrasena })
+        await login({ email, contrasena, recordarme })
       } else {
         await authService.registrar({ nombre, email, contrasena, aceptaTerminos })
       }
@@ -236,8 +235,6 @@ export default function AuthPage({ modoInicial = 'login' }) {
               : 'Crear cuenta'}
         </Button>
       </form>
-
-      <SocialButtons />
 
       <Link
         to="/descargas"

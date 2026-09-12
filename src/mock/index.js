@@ -7,7 +7,6 @@ import novedades from './data/novedades.json'
 import usuariosPrueba from './data/usuarios-prueba.json'
 import roles from './data/roles.json'
 import panelResumen from './data/panel-resumen.json'
-import notificaciones from './data/notificaciones.json'
 
 export {
   usuarioActual,
@@ -18,5 +17,4 @@ export {
   usuariosPrueba,
   roles,
   panelResumen,
-  notificaciones,
 }

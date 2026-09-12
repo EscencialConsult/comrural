@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { siguienteCursor } from '../services/paginacion'
+import { toast } from '../lib/toast'
 
 // Centraliza el patrón repetido en Personas/Organizaciones/Proveedores/
 // Productos (M2-M5): listado paginado + vista de detalle con fetch propio +
@@ -32,8 +33,6 @@ export function useCatalogoMaestro(service, { puedeVer, limit = 50 } = {}) {
   // este chequeo, esa respuesta vieja pisaba los datos de la fila que el
   // usuario ya está mirando, mostrando la entidad equivocada.
   const detalleSolicitadoRef = useRef(null)
-
-  const [confirmacion, setConfirmacion] = useState(null)
 
   const cargarPrimeraPagina = () => {
     setErrorCarga(null)
@@ -100,12 +99,6 @@ export function useCatalogoMaestro(service, { puedeVer, limit = 50 } = {}) {
     // efecto tiene que volver a correr.
   }, [puedeVer])
 
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
-
   return {
     items,
     setItems,
@@ -119,7 +112,13 @@ export function useCatalogoMaestro(service, { puedeVer, limit = 50 } = {}) {
     setDetalle,
     errorDetalle,
     abrirDetalle,
-    confirmacion,
-    setConfirmacion,
+    // `setConfirmacion` se mantiene con este nombre a propósito (no
+    // `mostrarToast` ni similar): los 6 paneles que consumen este hook ya
+    // lo llaman como `setConfirmacion("...")` en sus `onGuardado` — cambiar
+    // el nombre hubiera obligado a tocar esas 6 llamadas también, sin
+    // ganar nada. Ya no hay estado `confirmacion` que leer: cada pantalla
+    // dejó de dibujar su propio banner con setTimeout(4000) y ahora
+    // Toaster.jsx (montado una vez en DashboardLayout.jsx) lo muestra.
+    setConfirmacion: (mensaje) => toast.success(mensaje),
   }
 }

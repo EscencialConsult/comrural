@@ -1,30 +1,35 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, FlaskConical, Truck, ClipboardList, ShieldCheck, Leaf } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { lotsService } from '../services/lotsService'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import { qualityResolutionsService } from '../services/qualityResolutionsService'
+import { compararPorFechaRecepcion } from '../utils/fecha'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import StatCard from '../components/dashboard/StatCard.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
+import Skeleton from '../components/Skeleton.jsx'
+import EmptyState from '../components/EmptyState.jsx'
+import SearchInput from '../components/SearchInput.jsx'
 
-// Calidad y Laboratorio — Inicio del área: solo analytics, sin tabla ni
-// acciones. La tabla de trabajo del día a día (lotes + su formulario de
-// inspección) es su propia pantalla con submenú propio en el sidebar —
-// "Inspección" (ver config/gruposMaestros.js y PanelCalidadRecepcion.jsx),
-// mismo mecanismo que ya tiene Compras con
-// Personas/Organizaciones/Proveedores/Productos/Lotes. Se llama
-// "Inspección" y no "Recepción/Inspección" — la Recepción es tarea de
-// Almacén, tiene su propia subpestaña ahí (ver el grupo `almacen` en
-// gruposMaestros.js).
+// Calidad — Inicio del área: solo analytics, sin tabla ni acciones. La
+// tabla de trabajo del día a día (lotes + su formulario de inspección) es
+// su propia pantalla con submenú propio en el sidebar — "Inspección" (ver
+// config/gruposMaestros.js y PanelCalidadRecepcion.jsx), mismo mecanismo
+// que ya tiene Compras con Personas/Organizaciones/Proveedores/Productos/
+// Lotes. Se llama "Inspección" y no "Recepción/Inspección" — la Recepción
+// es tarea de Almacén, tiene su propia subpestaña ahí (ver el grupo
+// `almacen` en gruposMaestros.js). "Muestras" (SeccionMuestras.jsx, el
+// mismo componente que usa PanelLaboratorio.jsx) es otro sub-item más del
+// mismo submenú — no vive acá adentro, ver PanelCalidadMuestras.jsx.
 //
 // Ver comrural_erp_backend/0019_business_modules_permissions.sql: el rol
 // `calidad` NO tiene `lots:read` (solo `almacen`/`superadmin` lo tienen) —
 // por eso esta pantalla tiene DOS caminos reales, no un modo demo:
 //   - Con `lots:read`: este Inicio con analytics, más el submenú del
-//     sidebar hacia Inspección.
+//     sidebar hacia Inspección/Remito/Muestras.
 //   - Sin `lots:read` (rol `calidad` puro, hoy): una cola de pendientes de
 //     visto bueno, armada con GET /quality-resolutions (que ya trae
 //     lote/producto/proveedor embebidos, sin necesitar GET /lots) — sin
@@ -36,7 +41,7 @@ export default function PanelCalidad() {
   const puedeVer = puedeVerLotes || puedeVerResoluciones || permisos.has('raw-material-receptions:read')
 
   if (!puedeVer) {
-    return <AccesoDenegado mensaje="No tenés acceso a Calidad y Laboratorio." />
+    return <AccesoDenegado mensaje="No tenés acceso a Calidad." />
   }
 
   return (
@@ -46,7 +51,7 @@ export default function PanelCalidad() {
           <FlaskConical className="size-6 text-verde-bosque" strokeWidth={1.75} />
         </div>
         <div>
-          <h1 className="text-2xl font-extrabold text-marron-cafe">Calidad y Laboratorio</h1>
+          <h1 className="text-2xl font-extrabold text-marron-cafe">Calidad</h1>
           <p className="text-sm text-marron-cafe/60">Recepción e inspección de materia prima.</p>
         </div>
       </header>
@@ -113,11 +118,35 @@ function InicioCalidad() {
     return { enRecepcion, aceptadosEsteMes, pendientesInspeccion, pendientesVistoBueno }
   }, [lotes, resumenes])
 
+  // Preview de "Pendientes de inspección" — mismos lotes que ya cuenta
+  // stats.pendientesInspeccion, sin pedir nada nuevo al backend. Los
+  // primeros 5 por fecha de llegada más próxima, mismo criterio de orden
+  // que la tabla de "Inspección".
+  const resumenesCargando = (lotes ?? []).length > 0 && Object.keys(resumenes).length < lotes.length
+  const pendientesInspeccion = useMemo(() => {
+    if (!lotes) return []
+    return lotes
+      .filter((l) => {
+        const r = resumenes[l.id]
+        if (!r || r === 'error') return false
+        return r.summary.inspectionStatus == null || r.summary.inspectionStatus === 'INICIADA'
+      })
+      .sort(compararPorFechaRecepcion)
+      .slice(0, 5)
+  }, [lotes, resumenes])
+
   if (errorCarga) {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
   }
   if (!lotes || !stats) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+      </div>
+    )
   }
 
   return (
@@ -133,6 +162,41 @@ function InicioCalidad() {
         así que en volumen muy alto esto va a necesitar pedírselo. El detalle por lote está en "Inspección", en el
         menú lateral.
       </p>
+
+      <div className="mt-3 flex flex-col gap-3 rounded-3xl bg-marron-tierra/5 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-extrabold text-marron-cafe">Pendientes de inspección</h2>
+          <Link
+            to="/panel/calidad/inspeccion"
+            className="flex items-center gap-1 text-sm font-medium text-verde-bosque hover:text-verde-hoja"
+          >
+            Ver todos
+            <ArrowRight className="size-3.5" strokeWidth={2} />
+          </Link>
+        </div>
+
+        {resumenesCargando ? (
+          <Skeleton className="h-32" />
+        ) : pendientesInspeccion.length === 0 ? (
+          <EmptyState Icon={ClipboardList} titulo="No hay lotes pendientes de inspección" />
+        ) : (
+          <div className="overflow-hidden rounded-2xl bg-white/70">
+            {pendientesInspeccion.map((l) => (
+              <div
+                key={l.id}
+                className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3 last:border-b-0"
+              >
+                <span className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</span>
+                <span className="text-sm text-marron-cafe/60">
+                  {l.scheduledReceptionAt
+                    ? new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                    : 'Sin fecha programada'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -143,6 +207,7 @@ function ColaPendientesVistoBueno() {
   const navigate = useNavigate()
   const [resoluciones, setResoluciones] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
+  const [busqueda, setBusqueda] = useState('')
 
   useEffect(() => {
     let cancelado = false
@@ -159,8 +224,29 @@ function ColaPendientesVistoBueno() {
     return <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>
   }
   if (!resoluciones) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-6 w-52" />
+        <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0">
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
+
+  // Sin endpoint de búsqueda por texto (GET /quality-resolutions no lo
+  // tiene) — se filtra en el cliente sobre los 50 ya cargados, mismo
+  // criterio que BuscadorPersona/BuscadorOrganizacion en PanelProveedores.jsx.
+  const q = busqueda.trim().toLowerCase()
+  const filtradas = q
+    ? resoluciones.filter((r) =>
+        `${r.lot.code} ${r.product.name} ${r.supplier?.name ?? ''}`.toLowerCase().includes(q),
+      )
+    : resoluciones
 
   return (
     <section className="flex flex-col gap-3">
@@ -169,29 +255,43 @@ function ColaPendientesVistoBueno() {
         Tu rol no tiene acceso al listado completo de lotes — esta cola sale de tus resoluciones de Calidad
         pendientes de aprobación.
       </p>
-      <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
-        {resoluciones.map((r) => (
-          <div
-            key={r.id}
-            className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
-          >
-            <span className="font-mono text-xs font-semibold text-marron-cafe/70">{r.lot.code}</span>
-            <span className="text-sm text-marron-cafe">{r.product.name}</span>
-            <span className="text-sm text-marron-cafe/60">{r.supplier?.name ?? '—'}</span>
-            <Badge tono={r.decision === 'APROBADA' ? 'positivo' : 'negativo'}>{r.decision}</Badge>
-            <Button
-              variant="secondary"
-              className="ml-auto px-3 py-1.5 text-xs"
-              onClick={() => navigate(`/panel/calidad/lotes/${r.lot.id}/aprobacion`)}
+
+      {resoluciones.length > 0 && (
+        <SearchInput
+          label="Buscar"
+          placeholder="Lote, producto o proveedor…"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+      )}
+
+      {resoluciones.length === 0 ? (
+        <EmptyState Icon={ShieldCheck} titulo="No hay resoluciones pendientes de tu visto bueno" />
+      ) : (
+        <div className="overflow-hidden rounded-3xl bg-marron-tierra/5">
+          {filtradas.map((r) => (
+            <div
+              key={r.id}
+              className="flex flex-wrap items-center gap-3 border-b border-marron-tierra/10 px-4 py-3.5 last:border-b-0"
             >
-              Revisar
-            </Button>
-          </div>
-        ))}
-        {resoluciones.length === 0 && (
-          <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">No hay resoluciones pendientes de tu visto bueno.</p>
-        )}
-      </div>
+              <span className="font-mono text-xs font-semibold text-marron-cafe/70">{r.lot.code}</span>
+              <span className="text-sm text-marron-cafe">{r.product.name}</span>
+              <span className="text-sm text-marron-cafe/60">{r.supplier?.name ?? '—'}</span>
+              <Badge tono={r.decision === 'APROBADA' ? 'positivo' : 'negativo'}>{r.decision}</Badge>
+              <Button
+                variant="secondary"
+                className="ml-auto px-3 py-1.5 text-xs"
+                onClick={() => navigate(`/panel/calidad/lotes/${r.lot.id}/inspeccion`)}
+              >
+                Revisar
+              </Button>
+            </div>
+          ))}
+          {filtradas.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-marron-cafe/50">Ninguna coincide con la búsqueda.</p>
+          )}
+        </div>
+      )}
     </section>
   )
 }

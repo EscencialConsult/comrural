@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft, Printer, CircleAlert } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { rawMaterialReceptionsService } from '../../services/rawMaterialReceptionsService'
+import { useGenerarPdf } from '../../hooks/useGenerarPdf'
 import AccesoDenegado from '../dashboard/AccesoDenegado.jsx'
 import Button from '../Button.jsx'
+import Skeleton from '../Skeleton.jsx'
 import CabeceraFormulario from './CabeceraFormulario.jsx'
 import FirmasResponsables from './FirmasResponsables.jsx'
 
@@ -52,49 +54,10 @@ export default function NotaRecepcionMateriaPrima({ lotId, onVolver, tituloVolve
   }, [recargar])
 
   // Mismo mecanismo de PDF real que los otros dos formularios — ver
-  // FormularioInspeccionMateriaPrima.jsx para el porqué completo (no
-  // window.print(), captura el bloque aislado a un canvas y arma un PDF
-  // paginado a A4 con jsPDF).
-  const areaImprimibleRef = useRef(null)
-  const [generandoPdf, setGenerandoPdf] = useState(false)
-  const [errorPdf, setErrorPdf] = useState(null)
-
-  const generarPdf = async () => {
-    const ventana = window.open('', '_blank')
-    setGenerandoPdf(true)
-    setErrorPdf(null)
-    try {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const nodo = areaImprimibleRef.current
-      if (!nodo) throw new Error('No se encontró el contenido de la nota.')
-      const canvas = await html2canvas(nodo, { scale: 2, backgroundColor: '#faf4e8', useCORS: true })
-      const imagen = canvas.toDataURL('image/jpeg', 0.95)
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
-      const anchoPagina = pdf.internal.pageSize.getWidth()
-      const altoPagina = pdf.internal.pageSize.getHeight()
-      const altoImagen = (canvas.height * anchoPagina) / canvas.width
-      let alturaRestante = altoImagen
-      let posicionY = 0
-      pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-      alturaRestante -= altoPagina
-      while (alturaRestante > 0) {
-        posicionY = alturaRestante - altoImagen
-        pdf.addPage()
-        pdf.addImage(imagen, 'JPEG', 0, posicionY, anchoPagina, altoImagen)
-        alturaRestante -= altoPagina
-      }
-      const url = URL.createObjectURL(pdf.output('blob'))
-      if (ventana) ventana.location.href = url
-      else window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch (err) {
-      ventana?.close()
-      setErrorPdf(err.message ?? 'No se pudo generar el PDF.')
-    } finally {
-      setGenerandoPdf(false)
-    }
-  }
+  // useGenerarPdf.js para el porqué completo (no window.print(), captura
+  // el bloque aislado a un canvas y arma un PDF paginado a A4 con jsPDF,
+  // cortando hoja solo entre secciones, nunca en medio de una).
+  const { areaImprimibleRef, generandoPdf, errorPdf, generarPdf } = useGenerarPdf({ backgroundColor: '#faf4e8' })
 
   if (!puedeVer) return <AccesoDenegado mensaje="No tenés acceso a la nota de recepción." />
 
@@ -122,7 +85,12 @@ export default function NotaRecepcionMateriaPrima({ lotId, onVolver, tituloVolve
   }
 
   if (!recepcion) {
-    return <p className="text-sm text-marron-cafe/50">Cargando…</p>
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-32" />
+      </div>
+    )
   }
 
   const { lot, warehouseReceipt } = recepcion
@@ -170,7 +138,7 @@ export default function NotaRecepcionMateriaPrima({ lotId, onVolver, tituloVolve
 
         <section className="flex flex-col gap-4 rounded-3xl bg-verde-pistacho/25 p-6">
           <h2 className="text-sm font-bold uppercase tracking-wide text-marron-cafe">Materia prima recepcionada</h2>
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Dato etiqueta="Producto" valor={lot?.productName} />
             <Dato etiqueta="Tipo de envase" valor={warehouseReceipt?.packagingType} />
             <Dato etiqueta="Cantidad (bolsas)" valor={warehouseReceipt?.storedPackageCount} />

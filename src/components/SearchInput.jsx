@@ -15,7 +15,7 @@ export default function SearchInput({ label, className = '', ...props }) {
         />
         <input
           {...props}
-          className={`w-full rounded-xl border border-marron-tierra/20 bg-white py-2 pl-9 pr-3 text-sm text-marron-cafe outline-none transition-colors duration-150 focus-visible:border-verde-lima ${className}`}
+          className={`w-full rounded-xl border border-marron-tierra/20 bg-white py-2 pl-9 pr-3 text-sm text-marron-cafe outline-none transition-all duration-200 focus-visible:border-verde-lima focus-visible:ring-2 focus-visible:ring-verde-lima/20 ${className}`}
         />
       </div>
     </label>

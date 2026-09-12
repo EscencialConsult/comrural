@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Receipt, X, CheckCircle2, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { lotsService } from '../services/lotsService'
 import { productsService } from '../services/productsService'
 import { suppliersService } from '../services/suppliersService'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
+import { listarTodo } from '../services/paginacion'
+import { useLotesBuscables } from '../hooks/useLotesBuscables'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
@@ -12,6 +13,7 @@ import SearchInput from '../components/SearchInput.jsx'
 import FormSelect from '../components/FormSelect.jsx'
 import FormInput from '../components/FormInput.jsx'
 import NotaRecepcionMateriaPrima from '../components/formularios/NotaRecepcionMateriaPrima.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 // Formulario 3 (Nota de Recepción, P-ADM-03/R-11) — a propósito FUERA del
 // molde de Inspección/Recepción (sin desplegable en el sidebar, ver
@@ -25,6 +27,7 @@ const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   PENDIENTE_LIBERACION: 'alerta',
   RETENIDO: 'negativo',
@@ -32,8 +35,6 @@ const TONO_ESTADO_LOTE = {
   RECHAZADO: 'negativo',
   CANCELADO: 'neutro',
 }
-
-const TAMANIO_PAGINA = 10
 
 // Mismo criterio que PanelAlmacenRecepcion.jsx: solo se marca algo cuando
 // la recepción está genuinamente cerrada — es la señal de "esta nota ya
@@ -51,18 +52,15 @@ export default function PanelCalidadRemito() {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('lots:read')
 
-  const [lotes, setLotes] = useState(null)
+  const { lotes, busqueda, setBusqueda, cursor, cargandoMas, errorCarga, cargarMas } = useLotesBuscables({ puedeVer })
   const [productos, setProductos] = useState(null)
   const [proveedores, setProveedores] = useState(null)
-  const [errorCarga, setErrorCarga] = useState(null)
   const [lotAbierto, setLotAbierto] = useState(null)
 
-  const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState('')
   const [productoId, setProductoId] = useState('')
   const [proveedorId, setProveedorId] = useState('')
   const [fecha, setFecha] = useState('')
-  const [pagina, setPagina] = useState(0)
 
   const hayFiltrosActivos = busqueda !== '' || estado !== '' || productoId !== '' || proveedorId !== '' || fecha !== ''
   const limpiarFiltros = () => {
@@ -71,7 +69,6 @@ export default function PanelCalidadRemito() {
     setProductoId('')
     setProveedorId('')
     setFecha('')
-    setPagina(0)
   }
 
   const [resumenes, setResumenes] = useState({})
@@ -79,14 +76,13 @@ export default function PanelCalidadRemito() {
   useEffect(() => {
     if (!puedeVer) return
     let cancelado = false
-    Promise.all([lotsService.listar({ limit: 100 }), productsService.listar({ limit: 100 }), suppliersService.listar({ limit: 100 })])
-      .then(([lotesResp, productosResp, proveedoresResp]) => {
+    Promise.all([listarTodo(productsService.listar), listarTodo(suppliersService.listar)])
+      .then(([productos, proveedores]) => {
         if (cancelado) return
-        setLotes(lotesResp.data.filter((l) => l.nature === 'PM'))
-        setProductos(productosResp.data)
-        setProveedores(proveedoresResp.data)
+        setProductos(productos)
+        setProveedores(proveedores)
       })
-      .catch((err) => !cancelado && setErrorCarga(err.message))
+      .catch(() => {})
     return () => {
       cancelado = true
     }
@@ -99,30 +95,28 @@ export default function PanelCalidadRemito() {
     return s.person ? `${s.person.firstNames} ${s.person.lastNames}` : s.organization ? s.organization.tradeName || s.organization.legalName : '—'
   }
 
+  // busqueda (código) ya filtra del lado del servidor (ver
+  // useLotesBuscables) — acá solo quedan los filtros que el backend todavía
+  // no soporta.
   const filtrados = useMemo(() => {
     if (!lotes) return []
-    const q = busqueda.trim().toLowerCase()
     return lotes.filter((l) => {
       if (estado && l.currentStatus !== estado) return false
       if (productoId && l.productId !== productoId) return false
       if (proveedorId && l.supplierId !== proveedorId) return false
       if (fecha && (!l.scheduledReceptionAt || new Date(l.scheduledReceptionAt).toLocaleDateString('en-CA') !== fecha)) return false
-      if (q && !l.code.toLowerCase().includes(q) && !productoNombre(l.productId).toLowerCase().includes(q)) return false
       return true
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotes, busqueda, estado, productoId, proveedorId, fecha, productos])
-
-  const paginados = filtrados.slice(pagina * TAMANIO_PAGINA, (pagina + 1) * TAMANIO_PAGINA)
+  }, [lotes, estado, productoId, proveedorId, fecha])
 
   useEffect(() => {
     let cancelado = false
-    Promise.allSettled(paginados.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
+    Promise.allSettled(filtrados.map((l) => rawMaterialReceptionsService.obtener(l.id))).then((resultados) => {
       if (cancelado) return
       setResumenes((prev) => {
         const siguiente = { ...prev }
         resultados.forEach((r, i) => {
-          siguiente[paginados[i].id] = r.status === 'fulfilled' ? r.value : 'error'
+          siguiente[filtrados[i].id] = r.status === 'fulfilled' ? r.value : 'error'
         })
         return siguiente
       })
@@ -131,7 +125,7 @@ export default function PanelCalidadRemito() {
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagina, lotes, busqueda, estado, productoId, proveedorId])
+  }, [lotes, estado, productoId, proveedorId, fecha])
 
   const volverALista = () => setLotAbierto(null)
 
@@ -164,27 +158,22 @@ export default function PanelCalidadRemito() {
       {errorCarga && <p className="text-sm font-medium text-rojo-pasankalla">No se pudo cargar: {errorCarga}</p>}
 
       {!lotes ? (
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-64" />
+        </div>
       ) : (
         <>
-          <div className="grid gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-3 lg:grid-cols-6">
-            <SearchInput
-              label="Buscar"
-              placeholder="Código o producto…"
-              value={busqueda}
-              onChange={(e) => {
-                setBusqueda(e.target.value)
-                setPagina(0)
-              }}
-            />
-            <FormSelect
-              label="Producto"
-              value={productoId}
-              onChange={(e) => {
-                setProductoId(e.target.value)
-                setPagina(0)
-              }}
-            >
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-marron-tierra/5 p-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="col-span-2 sm:col-span-1">
+              <SearchInput
+                label="Buscar"
+                placeholder="Código de lote…"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
+            <FormSelect label="Producto" value={productoId} onChange={(e) => setProductoId(e.target.value)}>
               <option value="">Todos</option>
               {productos?.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -192,14 +181,7 @@ export default function PanelCalidadRemito() {
                 </option>
               ))}
             </FormSelect>
-            <FormSelect
-              label="Proveedor"
-              value={proveedorId}
-              onChange={(e) => {
-                setProveedorId(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Proveedor" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
               <option value="">Todos</option>
               {proveedores?.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -211,19 +193,9 @@ export default function PanelCalidadRemito() {
               label="Fecha de recepción"
               type="date"
               value={fecha}
-              onChange={(e) => {
-                setFecha(e.target.value)
-                setPagina(0)
-              }}
+              onChange={(e) => setFecha(e.target.value)}
             />
-            <FormSelect
-              label="Estado"
-              value={estado}
-              onChange={(e) => {
-                setEstado(e.target.value)
-                setPagina(0)
-              }}
-            >
+            <FormSelect label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)}>
               <option value="">Todos</option>
               {Object.keys(TONO_ESTADO_LOTE).map((e) => (
                 <option key={e} value={e}>
@@ -231,7 +203,7 @@ export default function PanelCalidadRemito() {
                 </option>
               ))}
             </FormSelect>
-            <div className="flex items-end">
+            <div className="col-span-2 flex items-end sm:col-span-1">
               <Button
                 variant="secondary"
                 className="w-full justify-center gap-1.5 px-3 py-2 text-sm"
@@ -244,8 +216,59 @@ export default function PanelCalidadRemito() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-3xl bg-marron-tierra/5">
-            <table className="w-full table-fixed text-left text-sm">
+          {/* Tarjetas en mobile (hidden md:block/md:hidden) — la tabla de
+              abajo obliga a scrollear horizontal en pantallas angostas
+              (min-w-[820px]), acá se repite la misma info apilada. */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {filtrados.map((l) => {
+              const resumen = resumenes[l.id]
+              const etapa = etapaDe(resumen)
+              return (
+                <div key={l.id} className="flex flex-col gap-2 rounded-2xl bg-marron-tierra/5 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-semibold text-marron-cafe/70">{l.code}</p>
+                      <p className="truncate text-sm text-marron-cafe">{productoNombre(l.productId)}</p>
+                      <p className="truncate text-xs text-marron-cafe/60">{proveedorNombre(l.supplierId)}</p>
+                    </div>
+                    {resumen === 'error' ? (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">—</span>
+                    ) : resumen && etapa ? (
+                      <Badge tono={etapa.tono} className="inline-flex shrink-0 items-center gap-1">
+                        <etapa.Icon className="size-3" strokeWidth={2.5} />
+                        {etapa.texto}
+                      </Badge>
+                    ) : resumen ? (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">Sin recepción todavía</span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-marron-cafe/40">Cargando…</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-marron-tierra/10 pt-2">
+                    <span className="text-xs text-marron-cafe/60">
+                      {l.scheduledReceptionAt ? (
+                        new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
+                      ) : (
+                        <span className="text-marron-cafe/40">Sin fecha</span>
+                      )}
+                    </span>
+                    <Button variant="secondary" className="gap-1.5 px-3 py-1.5 text-xs" onClick={() => setLotAbierto(l.id)}>
+                      <Receipt className="size-3.5 shrink-0" strokeWidth={2} />
+                      Ver remito
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+            {filtrados.length === 0 && (
+              <p className="rounded-2xl bg-marron-tierra/5 px-4 py-6 text-center text-sm text-marron-cafe/50">
+                No hay lotes de materia prima que coincidan con el filtro.
+              </p>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto rounded-3xl bg-marron-tierra/5 md:block">
+            <table className="w-full min-w-[820px] table-fixed text-left text-sm">
               <colgroup>
                 <col className="w-[9%]" />
                 <col className="w-[24%]" />
@@ -265,7 +288,7 @@ export default function PanelCalidadRemito() {
                 </tr>
               </thead>
               <tbody>
-                {paginados.map((l) => {
+                {filtrados.map((l) => {
                   const resumen = resumenes[l.id]
                   const etapa = etapaDe(resumen)
                   return (
@@ -278,11 +301,9 @@ export default function PanelCalidadRemito() {
                         {proveedorNombre(l.supplierId)}
                       </td>
                       <td className="px-4 py-3 text-center text-marron-cafe/70">
-                        {l.scheduledReceptionAt ? (
-                          new Date(l.scheduledReceptionAt).toLocaleDateString('es-BO', { dateStyle: 'medium' })
-                        ) : (
-                          <span className="text-xs text-marron-cafe/40">—</span>
-                        )}
+                        {l.scheduledReceptionAt
+                          ? new Date(l.scheduledReceptionAt).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })
+                          : <span className="text-xs text-marron-cafe/40">—</span>}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {resumen === 'error' ? (
@@ -307,7 +328,7 @@ export default function PanelCalidadRemito() {
                     </tr>
                   )
                 })}
-                {paginados.length === 0 && (
+                {filtrados.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-sm text-marron-cafe/50">
                       No hay lotes de materia prima que coincidan con el filtro.
@@ -318,38 +339,13 @@ export default function PanelCalidadRemito() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-marron-cafe/60">
-            <span>
-              Mostrando {paginados.length === 0 ? 0 : pagina * TAMANIO_PAGINA + 1}–{pagina * TAMANIO_PAGINA + paginados.length} de{' '}
-              {filtrados.length} lotes
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" className="px-3 py-1.5 text-xs" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>
-                Anterior
-              </Button>
-              {Array.from({ length: Math.max(1, Math.ceil(filtrados.length / TAMANIO_PAGINA)) }, (_, i) => i).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPagina(p)}
-                  aria-current={p === pagina ? 'page' : undefined}
-                  className={`flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-150 ${
-                    p === pagina ? 'bg-verde-lima text-marron-cafe' : 'text-marron-cafe/60 hover:bg-marron-tierra/10'
-                  }`}
-                >
-                  {p + 1}
-                </button>
-              ))}
-              <Button
-                variant="secondary"
-                className="px-3 py-1.5 text-xs"
-                disabled={(pagina + 1) * TAMANIO_PAGINA >= filtrados.length}
-                onClick={() => setPagina((p) => p + 1)}
-              >
-                Siguiente
+          {cursor && (
+            <div className="flex justify-center">
+              <Button variant="secondary" className="px-4 py-2 text-sm" disabled={cargandoMas} onClick={cargarMas}>
+                {cargandoMas ? 'Cargando…' : 'Cargar más'}
               </Button>
             </div>
-          </div>
+          )}
         </>
       )}
     </main>

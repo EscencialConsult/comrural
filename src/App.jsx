@@ -1,35 +1,66 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
 import RutaProtegida from './components/RutaProtegida.jsx'
 import LoadingScreen from './components/LoadingScreen.jsx'
-import Servicio from './pages/Servicio.jsx'
-import Modulos from './pages/Modulos.jsx'
-import Descargas from './pages/Descargas.jsx'
-import Novedades from './pages/Novedades.jsx'
-import Login from './pages/Login.jsx'
-import Registro from './pages/Registro.jsx'
-import RecuperarContrasena from './pages/RecuperarContrasena.jsx'
-import Panel from './pages/Panel.jsx'
-import PanelModulo from './pages/PanelModulo.jsx'
-import PanelCompras from './pages/PanelCompras.jsx'
-import PanelAlmacen from './pages/PanelAlmacen.jsx'
-import PanelAlmacenRecepcion from './pages/PanelAlmacenRecepcion.jsx'
-import PanelCalidad from './pages/PanelCalidad.jsx'
-import PanelCalidadRecepcion from './pages/PanelCalidadRecepcion.jsx'
-import PanelCalidadRemito from './pages/PanelCalidadRemito.jsx'
-import PanelRecepcionLote from './pages/PanelRecepcionLote.jsx'
-import PanelInspeccionMateriaPrima from './pages/PanelInspeccionMateriaPrima.jsx'
-import PanelIngresoMateriaPrima from './pages/PanelIngresoMateriaPrima.jsx'
-import PanelAprobacionResolucion from './pages/PanelAprobacionResolucion.jsx'
-import GestionUsuarios from './pages/GestionUsuarios.jsx'
-import PanelPaises from './pages/PanelPaises.jsx'
-import PanelPersonas from './pages/PanelPersonas.jsx'
-import PanelOrganizaciones from './pages/PanelOrganizaciones.jsx'
-import PanelProveedores from './pages/PanelProveedores.jsx'
-import PanelProductos from './pages/PanelProductos.jsx'
-import PanelLotes from './pages/PanelLotes.jsx'
-import NotFound from './pages/NotFound.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
+
+// Una página por chunk (React.lazy + Suspense, fallback = LoadingScreen ya
+// existente para el restore de sesión) en vez de las ~35 páginas importadas
+// estáticas de una — antes CUALQUIER pantalla descargaba el bundle entero,
+// three.js/@paper-design/shaders de Servicio.jsx (efecto decorativo de la
+// landing pública) incluidos, aunque nadie fuera a visitar /servicio. Cada
+// chunk se pide recién al navegar a esa ruta y el propio navegador lo
+// cachea solo (nombre de archivo con hash de Vite) — no hace falta nada
+// más para que no se vuelva a pedir en la sesión.
+const Servicio = lazy(() => import('./pages/Servicio.jsx'))
+const Modulos = lazy(() => import('./pages/Modulos.jsx'))
+const Descargas = lazy(() => import('./pages/Descargas.jsx'))
+const Novedades = lazy(() => import('./pages/Novedades.jsx'))
+const Login = lazy(() => import('./pages/Login.jsx'))
+const Registro = lazy(() => import('./pages/Registro.jsx'))
+const RecuperarContrasena = lazy(() => import('./pages/RecuperarContrasena.jsx'))
+const Panel = lazy(() => import('./pages/Panel.jsx'))
+const PanelModulo = lazy(() => import('./pages/PanelModulo.jsx'))
+const PanelConfiguracion = lazy(() => import('./pages/PanelConfiguracion.jsx'))
+const PanelCompras = lazy(() => import('./pages/PanelCompras.jsx'))
+const PanelAlmacen = lazy(() => import('./pages/PanelAlmacen.jsx'))
+const PanelAlmacenRecepcion = lazy(() => import('./pages/PanelAlmacenRecepcion.jsx'))
+const PanelAlmacenEnvases = lazy(() => import('./pages/PanelAlmacenEnvases.jsx'))
+const PanelAlmacenProductoTerminado = lazy(() => import('./pages/PanelAlmacenProductoTerminado.jsx'))
+const PanelAlmacenGeneral = lazy(() => import('./pages/PanelAlmacenGeneral.jsx'))
+const PanelInventario = lazy(() => import('./pages/PanelInventario.jsx'))
+const PanelInventarioMateriaPrima = lazy(() => import('./pages/PanelInventarioMateriaPrima.jsx'))
+const PanelInventarioProductoTerminado = lazy(() => import('./pages/PanelInventarioProductoTerminado.jsx'))
+const PanelInventarioEnvasesInsumos = lazy(() => import('./pages/PanelInventarioEnvasesInsumos.jsx'))
+const PanelInventarioAlmacenGeneral = lazy(() => import('./pages/PanelInventarioAlmacenGeneral.jsx'))
+const PanelCalidad = lazy(() => import('./pages/PanelCalidad.jsx'))
+const PanelProduccion = lazy(() => import('./pages/PanelProduccion.jsx'))
+const PanelProduccionAreaA = lazy(() => import('./pages/PanelProduccionAreaA.jsx'))
+const PanelProduccionAreaB = lazy(() => import('./pages/PanelProduccionAreaB.jsx'))
+const PanelGerencia = lazy(() => import('./pages/PanelGerencia.jsx'))
+const PanelLaboratorio = lazy(() => import('./pages/PanelLaboratorio.jsx'))
+const PanelLaboratorioAnalisis = lazy(() => import('./pages/PanelLaboratorioAnalisis.jsx'))
+const PanelLaboratorioActividad = lazy(() => import('./pages/PanelLaboratorioActividad.jsx'))
+const PanelLaboratorioLoteDespacho = lazy(() => import('./pages/PanelLaboratorioLoteDespacho.jsx'))
+const PanelCalidadRecepcion = lazy(() => import('./pages/PanelCalidadRecepcion.jsx'))
+const PanelCalidadRemito = lazy(() => import('./pages/PanelCalidadRemito.jsx'))
+const PanelCalidadMuestras = lazy(() => import('./pages/PanelCalidadMuestras.jsx'))
+const PanelCalidadControlProceso = lazy(() => import('./pages/PanelCalidadControlProceso.jsx'))
+const PanelCalidadInspeccionAreaB = lazy(() => import('./pages/PanelCalidadInspeccionAreaB.jsx'))
+const PanelRecepcionLote = lazy(() => import('./pages/PanelRecepcionLote.jsx'))
+const PanelInspeccionMateriaPrima = lazy(() => import('./pages/PanelInspeccionMateriaPrima.jsx'))
+const PanelIngresoMateriaPrima = lazy(() => import('./pages/PanelIngresoMateriaPrima.jsx'))
+const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios.jsx'))
+const GestionRoles = lazy(() => import('./pages/GestionRoles.jsx'))
+const PanelPaises = lazy(() => import('./pages/PanelPaises.jsx'))
+const PanelFormularios = lazy(() => import('./pages/PanelFormularios.jsx'))
+const PanelAreas = lazy(() => import('./pages/PanelAreas.jsx'))
+const PanelPersonas = lazy(() => import('./pages/PanelPersonas.jsx'))
+const PanelOrganizaciones = lazy(() => import('./pages/PanelOrganizaciones.jsx'))
+const PanelProveedores = lazy(() => import('./pages/PanelProveedores.jsx'))
+const PanelProductos = lazy(() => import('./pages/PanelProductos.jsx'))
+const NotFound = lazy(() => import('./pages/NotFound.jsx'))
 
 // "/" ES el login (no un redirect a /login) — la puerta de entrada del
 // sistema es el login, no una ruta aparte. Con sesión activa, redirige
@@ -46,59 +77,86 @@ function Raiz() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Raiz />} />
-      <Route path="/login" element={<Navigate to="/" replace />} />
-      <Route path="/registro" element={<Registro />} />
-      <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
-      {/*
-        Servicio/Modulos/Descargas/Novedades son informativas/de
-        marketing (lista de módulos, links de descarga, novedades) — no
-        datos operativos reales todavía, así que son públicas a
-        propósito. Alguien sin cuenta tiene que poder ver "qué es esto" y
-        bajar el software antes de registrarse.
-      */}
-      <Route path="/servicio" element={<Servicio />} />
-      <Route path="/modulos" element={<Modulos />} />
-      <Route path="/descargas" element={<Descargas />} />
-      <Route path="/novedades" element={<Novedades />} />
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        <Route path="/" element={<Raiz />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/registro" element={<Registro />} />
+        <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
+        {/*
+          Servicio/Modulos/Descargas/Novedades son informativas/de
+          marketing (lista de módulos, links de descarga, novedades) — no
+          datos operativos reales todavía, así que son públicas a
+          propósito. Alguien sin cuenta tiene que poder ver "qué es esto" y
+          bajar el software antes de registrarse.
+        */}
+        <Route path="/servicio" element={<Servicio />} />
+        <Route path="/modulos" element={<Modulos />} />
+        <Route path="/descargas" element={<Descargas />} />
+        <Route path="/novedades" element={<Novedades />} />
 
-      {/*
-        Panel: primera zona realmente autenticada — acá sí va
-        RutaProtegida, envolviendo el layout UNA sola vez. DashboardLayout
-        arma sidebar + header (siempre igual, mismos datos) y cada ruta
-        hija solo pone su propio contenido vía <Outlet />.
-      */}
-      <Route
-        element={
-          <RutaProtegida>
-            <DashboardLayout />
-          </RutaProtegida>
-        }
-      >
-        <Route path="/panel" element={<Panel />} />
-        <Route path="/panel/usuarios" element={<GestionUsuarios />} />
-        <Route path="/panel/paises" element={<PanelPaises />} />
-        <Route path="/panel/personas" element={<PanelPersonas />} />
-        <Route path="/panel/organizaciones" element={<PanelOrganizaciones />} />
-        <Route path="/panel/proveedores" element={<PanelProveedores />} />
-        <Route path="/panel/productos" element={<PanelProductos />} />
-        <Route path="/panel/lotes" element={<PanelLotes />} />
-        <Route path="/panel/compras" element={<PanelCompras />} />
-        <Route path="/panel/almacen" element={<PanelAlmacen />} />
-        <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
-        <Route path="/panel/calidad" element={<PanelCalidad />} />
-        <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
-        <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />
-        <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
-        <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
-        <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />
-        <Route path="/panel/calidad/lotes/:lotId/aprobacion" element={<PanelAprobacionResolucion />} />
-        <Route path="/panel/:moduloId" element={<PanelModulo />} />
-      </Route>
+        {/*
+          Panel: primera zona realmente autenticada — acá sí va
+          RutaProtegida, envolviendo el layout UNA sola vez. DashboardLayout
+          arma sidebar + header (siempre igual, mismos datos) y cada ruta
+          hija solo pone su propio contenido vía <Outlet />.
+        */}
+        <Route
+          element={
+            <RutaProtegida>
+              <DashboardLayout />
+            </RutaProtegida>
+          }
+        >
+          <Route path="/panel" element={<Panel />} />
+          <Route path="/panel/usuarios" element={<GestionUsuarios />} />
+          <Route path="/panel/usuarios/roles" element={<GestionRoles />} />
+          <Route path="/panel/paises" element={<PanelPaises />} />
+          <Route path="/panel/formularios" element={<PanelFormularios />} />
+          <Route path="/panel/areas" element={<PanelAreas />} />
+          <Route path="/panel/personas" element={<PanelPersonas />} />
+          <Route path="/panel/organizaciones" element={<PanelOrganizaciones />} />
+          <Route path="/panel/proveedores" element={<PanelProveedores />} />
+          <Route path="/panel/productos" element={<PanelProductos />} />
+          <Route path="/panel/compras" element={<PanelCompras />} />
+          <Route path="/panel/almacen" element={<PanelAlmacen />} />
+          <Route path="/panel/almacen/recepcion" element={<PanelAlmacenRecepcion />} />
+          {/* Entrega de MP se unificó como subpestaña de Recepción (ver
+              PanelAlmacenRecepcion.jsx) — se mantiene el redirect para no
+              romper links o pestañas ya abiertas en esa ruta vieja. */}
+          <Route path="/panel/almacen/entrega" element={<Navigate to="/panel/almacen/recepcion" replace />} />
+          <Route path="/panel/almacen/envases" element={<PanelAlmacenEnvases />} />
+          <Route path="/panel/almacen/producto-terminado" element={<PanelAlmacenProductoTerminado />} />
+          <Route path="/panel/almacen/general" element={<PanelAlmacenGeneral />} />
+          <Route path="/panel/inventario" element={<PanelInventario />} />
+          <Route path="/panel/inventario/materia-prima" element={<PanelInventarioMateriaPrima />} />
+          <Route path="/panel/inventario/producto-terminado" element={<PanelInventarioProductoTerminado />} />
+          <Route path="/panel/inventario/envases-insumos" element={<PanelInventarioEnvasesInsumos />} />
+          <Route path="/panel/inventario/almacen-general" element={<PanelInventarioAlmacenGeneral />} />
+          <Route path="/panel/calidad" element={<PanelCalidad />} />
+          <Route path="/panel/produccion" element={<PanelProduccion />} />
+          <Route path="/panel/produccion/area-a" element={<PanelProduccionAreaA />} />
+          <Route path="/panel/produccion/area-b" element={<PanelProduccionAreaB />} />
+          <Route path="/panel/gerencia" element={<PanelGerencia />} />
+          <Route path="/panel/laboratorio" element={<PanelLaboratorio />} />
+          <Route path="/panel/laboratorio/analisis" element={<PanelLaboratorioAnalisis />} />
+          <Route path="/panel/laboratorio/actividad" element={<PanelLaboratorioActividad />} />
+          <Route path="/panel/laboratorio/lote-despacho" element={<PanelLaboratorioLoteDespacho />} />
+          <Route path="/panel/calidad/inspeccion" element={<PanelCalidadRecepcion />} />
+          <Route path="/panel/calidad/remito" element={<PanelCalidadRemito />} />
+          <Route path="/panel/calidad/muestras" element={<PanelCalidadMuestras />} />
+          <Route path="/panel/calidad/control-proceso" element={<PanelCalidadControlProceso />} />
+          <Route path="/panel/calidad/inspeccion-area-b" element={<PanelCalidadInspeccionAreaB />} />
+          <Route path="/panel/calidad/lotes/:lotId" element={<PanelRecepcionLote />} />
+          <Route path="/panel/calidad/lotes/:lotId/inspeccion" element={<PanelInspeccionMateriaPrima />} />
+          <Route path="/panel/calidad/lotes/:lotId/ingreso" element={<PanelIngresoMateriaPrima />} />
+          <Route path="/panel/configuracion" element={<PanelConfiguracion />} />
+          <Route path="/panel/:moduloId" element={<PanelModulo />} />
+        </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   )
 }
 

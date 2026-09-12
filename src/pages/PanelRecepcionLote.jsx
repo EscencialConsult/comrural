@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, CheckCircle2, FlaskConical } from 'lucide-react'
+import { ChevronLeft, FlaskConical } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSolicitud } from '../hooks/useSolicitud'
 import { rawMaterialReceptionsService } from '../services/rawMaterialReceptionsService'
 import { qualityResolutionsService } from '../services/qualityResolutionsService'
+import { toast } from '../lib/toast'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import Badge from '../components/Badge.jsx'
 import Button from '../components/Button.jsx'
 import FormInput from '../components/FormInput.jsx'
+import Skeleton from '../components/Skeleton.jsx'
 
 // Calidad y Laboratorio · Proceso 1 (recepción e inspección de materia
 // prima) — ver comrural_erp_backend/docs/raw-material-receptions.md,
 // docs/warehouse-receipts.md, docs/inspections.md y docs/quality-resolutions.md,
-// los 4 leídos completos. Pantalla independiente de PanelLotes.jsx a
+// los 4 leídos completos. Pantalla independiente de PanelCompras.jsx a
 // propósito: el rol `calidad` NO tiene `lots:read` (ver
 // 0019_business_modules_permissions.sql — solo `almacen` recibe esa capa
 // técnica) así que el gate de acceso acá es `raw-material-receptions:read`,
@@ -28,6 +30,7 @@ const TONO_ESTADO_LOTE = {
   PROGRAMADO: 'neutro',
   EN_RECEPCION: 'alerta',
   ACEPTADO_RECEPCION: 'positivo',
+  LAVADO: 'positivo',
   EN_ANALISIS: 'alerta',
   PENDIENTE_LIBERACION: 'alerta',
   RETENIDO: 'negativo',
@@ -48,7 +51,6 @@ export default function PanelRecepcionLote() {
 
   const [datos, setDatos] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
-  const [confirmacion, setConfirmacion] = useState(null)
 
   const [resolucionDetalle, setResolucionDetalle] = useState(null)
 
@@ -64,12 +66,6 @@ export default function PanelRecepcionLote() {
   useEffect(() => {
     recargar()
   }, [recargar])
-
-  useEffect(() => {
-    if (!confirmacion) return
-    const id = setTimeout(() => setConfirmacion(null), 4000)
-    return () => clearTimeout(id)
-  }, [confirmacion])
 
   // `canApprove` NO viene en la vista consolidada (ReceptionSummaryView del
   // backend no lo incluye — se verificó leyendo raw-material-reception.service.ts
@@ -114,8 +110,10 @@ export default function PanelRecepcionLote() {
 
   if (!datos) {
     return (
-      <main className="w-full p-6 md:p-10">
-        <p className="text-sm text-marron-cafe/50">Cargando…</p>
+      <main className="flex w-full flex-col gap-4 p-6 md:p-10">
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
       </main>
     )
   }
@@ -150,13 +148,6 @@ export default function PanelRecepcionLote() {
         </Badge>
       </header>
 
-      {confirmacion && (
-        <p className="flex items-center gap-2 rounded-xl bg-verde-lima/15 px-3 py-2 text-sm font-medium text-verde-bosque">
-          <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} />
-          {confirmacion}
-        </p>
-      )}
-
       {summary.receptionAccepted && (
         <p className="rounded-2xl bg-verde-lima/15 px-4 py-3 text-sm font-semibold text-verde-bosque">
           Ciclo de recepción cerrado — el lote quedó aceptado y almacenado.
@@ -184,7 +175,7 @@ export default function PanelRecepcionLote() {
         usuario={usuario}
         onCambio={(msg) => {
           recargar()
-          setConfirmacion(msg)
+          toast.success(msg)
         }}
       />
     </main>
@@ -303,7 +294,6 @@ function SeccionResolucion({
   usuario,
   onCambio,
 }) {
-  const puedeCrear = permisos.has('quality-resolutions:create')
   const puedeEditar = permisos.has('quality-resolutions:update')
   const puedeAprobar = permisos.has('quality-resolutions:approve')
 
@@ -323,12 +313,15 @@ function SeccionResolucion({
         {qualityResolution && <Badge tono={TONO_DECISION[qualityResolution.decision]}>{qualityResolution.decision}</Badge>}
       </div>
 
+      {/* Emitir la resolución (paso 1 del ciclo) ya no se hace desde acá —
+          pedido explícito: ese paso queda solo en Calidad, como la última
+          etapa del propio formulario de inspección (ver
+          FormularioInspeccionMateriaPrima.jsx, SeccionResolucionCalidad.jsx).
+          Esta pantalla (alcanzable desde Gerencia → Recepción y calidad) se
+          queda con corregir/aprobar una resolución que YA existe, y con
+          este aviso mientras no exista ninguna. */}
       {!qualityResolution ? (
-        puedeCrear ? (
-          <FormularioEmitirResolucion inspectionId={inspection.id} onEmitida={() => onCambio('Resolución emitida.')} />
-        ) : (
-          <p className="text-sm text-marron-cafe/50">Todavía no se emitió una resolución para este lote.</p>
-        )
+        <p className="text-sm text-marron-cafe/50">Todavía no se emitió una resolución para este lote — se emite desde Calidad.</p>
       ) : (
         <>
           <dl className="grid gap-4 sm:grid-cols-2">
@@ -372,64 +365,6 @@ function SeccionResolucion({
         </>
       )}
     </section>
-  )
-}
-
-function FormularioEmitirResolucion({ inspectionId, onEmitida }) {
-  const [decision, setDecision] = useState('APROBADA')
-  const [decisionNotes, setDecisionNotes] = useState('')
-  const [notesTocado, setNotesTocado] = useState(false)
-  const { enviando, error, ejecutar } = useSolicitud()
-
-  const notasValidas = decision === 'APROBADA' || decisionNotes.trim() !== ''
-
-  const submit = async (e) => {
-    e.preventDefault()
-    setNotesTocado(true)
-    if (!notasValidas) return
-    try {
-      await ejecutar(() => qualityResolutionsService.emitir(inspectionId, { decision, decisionNotes: decisionNotes || undefined }))
-      onEmitida()
-    } catch {
-      // mensaje ya en `error`
-    }
-  }
-
-  return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-3 rounded-2xl bg-white/60 p-4">
-      {error && (
-        <p className="rounded-xl bg-rojo-pasankalla/10 px-3 py-2 text-sm font-medium text-rojo-pasankalla">{error}</p>
-      )}
-      <div className="flex gap-2">
-        {['APROBADA', 'RECHAZADA'].map((valor) => (
-          <button
-            key={valor}
-            type="button"
-            onClick={() => setDecision(valor)}
-            aria-pressed={decision === valor}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-150 ${
-              decision === valor ? 'bg-verde-lima text-marron-cafe' : 'bg-marron-tierra/10 text-marron-cafe/60 hover:bg-marron-tierra/15'
-            }`}
-          >
-            {valor}
-          </button>
-        ))}
-      </div>
-      <div>
-        <FormInput
-          label={`Justificación${decision === 'RECHAZADA' ? ' (obligatoria)' : ''}`}
-          value={decisionNotes}
-          onChange={(e) => setDecisionNotes(e.target.value)}
-          onBlur={() => setNotesTocado(true)}
-        />
-        {notesTocado && !notasValidas && (
-          <p className="mt-1 text-xs font-medium text-rojo-pasankalla">Un rechazo necesita justificación.</p>
-        )}
-      </div>
-      <Button type="submit" disabled={enviando} className="self-start">
-        {enviando ? 'Emitiendo…' : 'Emitir resolución'}
-      </Button>
-    </form>
   )
 }
 

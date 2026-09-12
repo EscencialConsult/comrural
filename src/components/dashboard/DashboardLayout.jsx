@@ -5,6 +5,7 @@ import { climaService } from '../../services/climaService'
 import DashboardSidebar from './DashboardSidebar'
 import DashboardHeader from './DashboardHeader'
 import GrupoTabs from './GrupoTabs'
+import Toaster from '../Toaster.jsx'
 
 // Armazón único de sidebar + header para toda la zona autenticada
 // (/panel y sus subpáginas). Antes cada página (Panel.jsx, PanelModulo.jsx)
@@ -56,16 +57,29 @@ export default function DashboardLayout() {
     // debajo de la altura de su propio contenido, así que ignoraría el
     // overflow y volvería a estirar el contenedor padre.
     <div className="flex h-svh overflow-hidden bg-crema-quinua">
+      <Toaster />
       <DashboardSidebar abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto print:overflow-visible">
-        <div className="print:hidden">
+        {/* Solo el <header> es sticky — GrupoTabs queda en flujo normal,
+            SIN animación ni JS de scroll (versión probada antes: colapsar
+            GrupoTabs con max-height/opacity funcionaba pero traía sus
+            propios problemas — bucles de scroll anchoring, "indecisión" en
+            posiciones intermedias). Con esto, al bajar el scroll GrupoTabs
+            pasa por DEBAJO del header (que al ser sticky+posicionado pinta
+            por encima de contenido no posicionado, sin necesitar z-index
+            explícito) y al volver arriba del todo simplemente reaparece en
+            su lugar — mismo efecto visual de "se lo come el header", sin
+            ningún estado ni listener. */}
+        <div className="sticky top-0 z-20 bg-crema-quinua print:static print:hidden">
           <DashboardHeader
             clima={clima}
             climaError={climaError}
             usuario={usuario}
             onAbrirMenu={() => setSidebarAbierto(true)}
           />
+        </div>
+        <div className="print:hidden">
           <GrupoTabs />
         </div>
         <Outlet />
