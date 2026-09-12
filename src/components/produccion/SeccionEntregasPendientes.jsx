@@ -10,7 +10,7 @@ import EmptyState from '../EmptyState.jsx'
 import Skeleton from '../Skeleton.jsx'
 
 // Confirmación de recepción física de una entrega de Almacén
-// (P-ADM-03/R-24, ver almacen/SeccionEntregaMateriaPrima.jsx) — real, POST
+// (P-ADM-03/R-24, ver almacen/ModalEntregaMateriaPrima.jsx) — real, POST
 // /warehouse-deliveries/:id/confirm (ver comrural_erp_backend/docs/
 // warehouse-deliveries.md §3). Lista solo PENDIENTE_CONFIRMACION; una vez
 // confirmada desaparece de acá. Sin gate todavía sobre Volumen A: confirmar

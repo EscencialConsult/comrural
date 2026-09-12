@@ -29,8 +29,11 @@ import SeccionAlmacenIntermedio from '../components/almacen/SeccionAlmacenInterm
 // dos ítems de sidebar separados, único caso donde el par ingreso/salida no
 // vivía junto. Cambio puramente visual: la ruta sigue siendo
 // /panel/almacen/recepcion (la única con deep-link desde notificaciones,
-// ver config/notificacionesRutas.js) y "Entrega" sigue siendo el mismo
-// SeccionEntregaMateriaPrima.jsx de siempre, sin tocar su lógica.
+// ver config/notificacionesRutas.js). "Entrega" es SeccionEntregaMateriaPrima.jsx
+// — ahora un listado de notas P-ADM-03/R-24 ya registradas con botón
+// "Registrar salida" que abre el formulario completo como modal
+// (ModalEntregaMateriaPrima.jsx); antes esa subpestaña ERA el formulario
+// directo, sin listado.
 //
 // "Devoluciones" se suma acá porque SeccionDevolucionAlmacen.jsx no es
 // específica de un material (el ítem es texto libre) — reorganización

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { PackagePlus, PackageMinus, Package, ChevronLeft, Play, AlertTriangle } from 'lucide-react'
+import { PackagePlus, PackageMinus, Package, ChevronLeft, Play, AlertTriangle, History } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import AccesoDenegado from '../components/dashboard/AccesoDenegado.jsx'
 import PillTabs from '../components/dashboard/PillTabs.jsx'
@@ -7,6 +7,7 @@ import Button from '../components/Button.jsx'
 import BarraFiltros from '../components/almacen/BarraFiltros.jsx'
 import SeccionIngresoProductoTerminado from '../components/almacen/SeccionIngresoProductoTerminado.jsx'
 import SeccionSalidaProductoTerminado from '../components/almacen/SeccionSalidaProductoTerminado.jsx'
+import SeccionHistorialSalidaProductoTerminado from '../components/almacen/SeccionHistorialSalidaProductoTerminado.jsx'
 import { LLEGADAS_PROGRAMADAS_PT_EJEMPLO, EXISTENCIAS_EJEMPLO } from '../data/almacenMock.js'
 
 // Lotes de PT disponibles para despacho — mismos datos que Existencias →
@@ -14,17 +15,23 @@ import { LLEGADAS_PROGRAMADAS_PT_EJEMPLO, EXISTENCIAS_EJEMPLO } from '../data/al
 // saldo que se ve acá coincida con el de esa pantalla en vez de inventar
 // dos listas separadas. Ordenados por vencimiento ascendente: es
 // literalmente el orden FEFO que describe la narrativa (P-05) — "priorizar
-// el lote con vencimiento más próximo".
-const LOTES_PT_DISPONIBLES = EXISTENCIAS_EJEMPLO.filter((e) => e.grupo === 'Producto Terminado').sort(
+// el lote con vencimiento más próximo". Solo lotes con saldo > 0 — pedido
+// explícito: un lote agotado desaparece de "Salida" en vez de quedar
+// listado con "0 disponibles" (queda igual visible en el historial, ver
+// SeccionHistorialSalidaProductoTerminado.jsx).
+const LOTES_PT_DISPONIBLES = EXISTENCIAS_EJEMPLO.filter((e) => e.grupo === 'Producto Terminado' && e.disponible > 0).sort(
   (a, b) => new Date(a.vencimiento) - new Date(b.vencimiento),
 )
 
 // Mismo criterio que Envases y Embalaje (PanelAlmacenEnvases.jsx): Ingreso
 // y Salida son el mismo ciclo de vida de un lote de PT, van agrupados en
-// subpestañas locales bajo un solo ítem de sidebar.
+// subpestañas locales bajo un solo ítem de sidebar. "Historial" se suma
+// acá (pedido explícito) — separado de "Salida" porque esa lista solo debe
+// mostrar lotes con saldo pendiente de despacho, no lo ya despachado.
 const SUBPESTAÑAS_PT = [
   { id: 'ingreso', nombre: 'Ingreso', Icon: PackagePlus },
   { id: 'salida', nombre: 'Salida', Icon: PackageMinus },
+  { id: 'historial', nombre: 'Historial', Icon: History },
 ]
 
 // Sub-item nuevo de "Almacén" en el sidebar (config/gruposMaestros.js).
@@ -101,6 +108,7 @@ export default function PanelAlmacenProductoTerminado() {
         ) : (
           <ListaLotesDisponibles onAbrirFormulario={() => setFormularioSalidaAbierto(true)} />
         ))}
+      {subPestaña === 'historial' && <SeccionHistorialSalidaProductoTerminado />}
     </main>
   )
 }

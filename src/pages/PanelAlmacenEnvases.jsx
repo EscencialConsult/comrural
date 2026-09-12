@@ -27,8 +27,11 @@ const SUBPESTAÑAS_ENVASES = [
 ]
 
 // Sub-item nuevo de "Almacén" en el sidebar (config/gruposMaestros.js),
-// mismo permiso que el resto — ver SeccionIngresoEnvases.jsx y
-// SeccionSalidaEnvases.jsx para el detalle de por qué son mockup.
+// mismo permiso que el resto. "Ingreso" es mockup puro (ver
+// SeccionIngresoEnvases.jsx). "Salida" es un listado real de notas
+// P-ADM-03/R-20 (ver SeccionSalidaEnvases.jsx) — el formulario completo
+// (con la sección §1 "Requerimiento del área" todavía mockup) vive en
+// ModalSalidaEnvases.jsx, abierto desde el botón "Registrar salida".
 export default function PanelAlmacenEnvases() {
   const { permisos } = useAuth()
   const puedeVer = permisos.has('almacen:read')

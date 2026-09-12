@@ -10,7 +10,7 @@ import FormSelect from '../../FormSelect.jsx'
 import Button from '../../Button.jsx'
 import Skeleton from '../../Skeleton.jsx'
 
-// RP-19 — mismas presentaciones que Volumen B (ControlVolumenB.jsx). Se
+// RP-19 — mismas presentaciones que Volumen B (ModalRegistrarSalidaAreaB.jsx). Se
 // repite acá en vez de compartirse desde un módulo común: mismo criterio
 // que el resto de los formularios mock de este relevamiento, cada uno es
 // autocontenido hasta que haya un backend real que las sirva como catálogo.

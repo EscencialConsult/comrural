@@ -3,6 +3,7 @@ import { Boxes, ClipboardList, Eye } from 'lucide-react'
 import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { suppliersService } from '../../services/suppliersService'
+import { lotTraceabilityService } from '../../services/lotTraceabilityService'
 import { listarTodo } from '../../services/paginacion'
 import Button from '../Button.jsx'
 import Badge from '../Badge.jsx'
@@ -30,6 +31,7 @@ export default function SeccionControlExistencias() {
   const [proveedores, setProveedores] = useState(null)
   const [errorCarga, setErrorCarga] = useState(null)
   const [loteDetalle, setLoteDetalle] = useState(null)
+  const [kardexDetalle, setKardexDetalle] = useState(null)
   const [loteExistencias, setLoteExistencias] = useState(null)
 
   useEffect(() => {
@@ -46,6 +48,21 @@ export default function SeccionControlExistencias() {
       cancelado = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!loteDetalle) {
+      setKardexDetalle(null)
+      return
+    }
+    let cancelado = false
+    lotTraceabilityService
+      .kardexLavada(loteDetalle.id)
+      .then((data) => !cancelado && setKardexDetalle(data))
+      .catch(() => !cancelado && setKardexDetalle([]))
+    return () => {
+      cancelado = true
+    }
+  }, [loteDetalle])
 
   const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
   const proveedorNombre = (id) => nombreProveedor(proveedores?.find((p) => p.id === id))
@@ -134,6 +151,30 @@ export default function SeccionControlExistencias() {
                 <dd className="text-sm text-marron-cafe">{proveedorNombre(loteDetalle.supplierId)}</dd>
               </div>
             </dl>
+
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-marron-cafe/40">
+                Entradas y salidas (kardex de quinua lavada)
+              </span>
+              {kardexDetalle === null ? (
+                <Skeleton className="h-16" />
+              ) : kardexDetalle.length === 0 ? (
+                <p className="text-sm text-marron-cafe/50">Todavía no hay movimientos cargados.</p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {kardexDetalle.map((m) => (
+                    <li
+                      key={m.entryId}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-marron-tierra/5 px-3 py-2 text-sm"
+                    >
+                      <span className="text-marron-cafe/70">{m.fecha}</span>
+                      <Badge tono={m.tipo === 'INGRESO' ? 'positivo' : 'negativo'}>{m.tipo}</Badge>
+                      <span className="tabular-nums font-medium text-marron-cafe">{m.bolsas} bolsas</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         )}
       </Modal>

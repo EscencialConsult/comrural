@@ -34,11 +34,15 @@ import IndicadoresProduccion from './IndicadoresProduccion.jsx'
 // que todavía está acá en Área A (LIBERADO/LAVADO) nunca puede tener esos
 // controles, así que no tenía sentido ofrecerlo desde esta pestaña.
 const SUBPESTAÑAS_AREA_A = [
+  // Primera pestaña (pedido explícito) — "Recepción" y no "Entregas": acá
+  // se confirman TODAS las entregas de Almacén pendientes (warehouse-
+  // deliveries, real — ver docs/warehouse-deliveries.md), no solo R-24 de
+  // lotes de materia prima, también R-20 de envases/insumos sin lote (ver
+  // SeccionEntregasPendientes.jsx) — nombre y posición viejos ("Entregas",
+  // después de "Lotes") sugerían que era solo un paso de MP. Hoy no es un
+  // gate real sobre "Volumen A" (ver comentario de ese archivo).
+  { id: 'entregas', nombre: 'Recepción', Icon: Truck },
   { id: 'lotes', nombre: 'Lotes', Icon: Layers },
-  // Confirmar recepción de entregas de Almacén (warehouse-deliveries, real
-  // — ver docs/warehouse-deliveries.md). Hoy no es un gate real sobre
-  // "Volumen A" (ver comentario de SeccionEntregasPendientes.jsx).
-  { id: 'entregas', nombre: 'Entregas', Icon: Truck },
   { id: 'indicadores', nombre: 'Indicadores', Icon: Gauge },
 ]
 
@@ -48,7 +52,7 @@ const SUBPESTAÑAS_AREA_A = [
 // (Laboratorio), donde las sub-vistas de una misma área conviven bajo una
 // fila de pastillas propia en vez de "abrir"/"volver" a pantalla completa.
 export default function SeccionAreaA() {
-  const [subPestaña, setSubPestaña] = useState('lotes')
+  const [subPestaña, setSubPestaña] = useState('entregas')
   // Lote elegido en "Lotes" con "Iniciar producción" — salta a "Volumen A"
   // (primer paso real contra el backend, crea la entrada) con ese lote ya
   // precargado. El cierre de turno (temperatura/humedad) vive ahora dentro

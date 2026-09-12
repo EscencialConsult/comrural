@@ -74,3 +74,15 @@ export const LLEGADAS_PROGRAMADAS_PT_EJEMPLO = [
   { id: 1, producto: 'Barra de chocolate 30gr', loteProduccion: '3135190', fechaElaboracion: '2026-09-09', cantidadEstimada: 1800, fechaProgramada: '2026-09-11' },
   { id: 2, producto: 'Quinua blanca 400gr', loteProduccion: '1436460', fechaElaboracion: '2026-09-10', cantidadEstimada: 3200, fechaProgramada: '2026-09-12' },
 ]
+
+// Historial de salidas de Producto Terminado (subpestaña "Historial", ver
+// PanelAlmacenProductoTerminado.jsx) — mismo criterio que el resto de los
+// mocks de Almacén: SeccionSalidaProductoTerminado.jsx no persiste nada
+// (P-BPA-01/R-12 sin backend todavía), así que este historial es ilustrativo,
+// no un registro real de lo que se guardó desde ese formulario.
+export const SALIDAS_PT_EJEMPLO = [
+  { id: 1, fecha: '2026-08-20', producto: 'Barra de chocolate 30gr', lote: '3135173', cantidad: 300, unidad: 'Piezas', destino: 'COALSUD', numeroNota: '128' },
+  { id: 2, fecha: '2026-08-27', producto: 'Barra de chocolate 30gr', lote: '3135173', cantidad: 150, unidad: 'Piezas', destino: 'Mercado local', numeroNota: '131' },
+  { id: 3, fecha: '2026-09-02', producto: 'Miel 500gr', lote: '5835106', cantidad: 40, unidad: 'Piezas', destino: 'Distribuidora Andina', numeroNota: '133' },
+  { id: 4, fecha: '2026-09-08', producto: 'Barra de chocolate 30gr', lote: '3135173', cantidad: 200, unidad: 'Piezas', destino: 'COALSUD', numeroNota: '136' },
+]

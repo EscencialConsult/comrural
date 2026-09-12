@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Gauge, TriangleAlert } from 'lucide-react'
 import { productionAreaBService } from '../../services/productionAreaBService'
 import { packagingService } from '../../services/packagingService'
@@ -7,25 +7,24 @@ import { lotsService } from '../../services/lotsService'
 import { productsService } from '../../services/productsService'
 import { listarTodo } from '../../services/paginacion'
 import Badge from '../Badge.jsx'
+import FormSelect from '../FormSelect.jsx'
 import ComboboxLote from '../formularios/ComboboxLote.jsx'
 import Skeleton from '../Skeleton.jsx'
 
-// Mismos 3 indicadores que IndicadoresProduccion.jsx (Área A), pero por lote
-// (no site-wide como el de Área A) — production-area-b todavía no tiene un
-// endpoint agregado tipo GET /production-area-a/indicators, así que se
-// calculan acá sobre GET /production-area-b/lots/:lotId/entries (ver
-// comrural_erp_backend/docs/production-area-b.md §5) para el lote elegido.
-// Selector propio, independiente del lote que se esté cargando en "Volumen
-// B" (pestaña hermana) — se puede consultar indicadores de cualquier lote
-// sin depender de qué esté editando esa otra pantalla.
+// Mismos 3 indicadores que IndicadoresProduccion.jsx (Área A). Sin
+// endpoint agregado tipo GET /production-area-a/indicators todavía, así que
+// se calculan acá sumando GET /production-area-b/lots/:lotId/entries (ver
+// comrural_erp_backend/docs/production-area-b.md §5) de cada lote incluido
+// en el filtro — mismo trade-off N+1 que ListaLotesVolumenB
+// (ModalRegistrarSalidaAreaB.jsx): candidatos son pocos.
 const INDICADORES = [
   { key: 'rendimiento', etiqueta: 'Rendimiento', meta: '> 90%', cumple: (v) => v > 90 },
   { key: 'quinuaSegunda', etiqueta: 'Quinua Segunda', meta: '< 3%', cumple: (v) => v < 3 },
   { key: 'quinuaTercera', etiqueta: 'Quinua Tercera', meta: '< 1,70%', cumple: (v) => v < 1.7 },
 ]
 
-// Mismo filtro que ControlVolumenB.jsx — cualquier lote que ya pueda tener
-// (o haber tenido) consumo de Área B.
+// Mismo filtro que ModalRegistrarSalidaAreaB.jsx — cualquier lote que ya
+// pueda tener (o haber tenido) consumo de Área B.
 const ESTADOS_CANDIDATOS = ['LAVADO', 'LAVADO_COMPLETO', 'EN_AREA_B']
 
 const porcentaje = (parte, total) => (total > 0 ? Number(((parte / total) * 100).toFixed(2)) : null)
@@ -40,7 +39,10 @@ const sumarCampo = (entradas, campo) => entradas.reduce((acc, e) => acc + e[camp
 // en EN_AREA_B para siempre aunque en la realidad ya esté todo resuelto.
 // No bloquea nada operativo (se puede seguir registrando Área B/envasado
 // sobre ese lote igual), es solo que nunca se va a marcar como terminado
-// solo. Esta función arma el diagnóstico para avisarlo.
+// solo. Esta función arma el diagnóstico para avisarlo. Solo tiene sentido
+// para UN lote puntual — con el filtro mostrando varios a la vez no hay
+// forma clara de resumir "atascado" para todos, así que el llamador solo
+// la invoca cuando el filtro resuelve a exactamente un lote.
 const diagnosticarLoteAtascado = async (lot, saldoDisponibleKg) => {
   if (lot.currentStatus !== 'EN_AREA_B') return null
   if (saldoDisponibleKg > 0.001) return null // todavía queda quinua lavada por consumir, no es "atascado" — está en curso
@@ -69,48 +71,78 @@ const diagnosticarLoteAtascado = async (lot, saldoDisponibleKg) => {
   return null
 }
 
+// Indicador general de Área B — pedido explícito: por defecto agrega TODOS
+// los lotes candidatos en vez de forzar a elegir uno para ver algo. El
+// filtro sigue siendo un buscador (ComboboxLote, con paginación real del
+// backend) para un lote puntual — con potencialmente ~100 candidatos no
+// tiene sentido listarlos todos de una en pantalla (checklist/tabla), un
+// desplegable que busca es lo que ya usa el resto de la app. "Producto"
+// suma un segundo criterio de filtro sin tener que buscar lote por lote.
 export default function IndicadoresAreaB() {
+  const [lotes, setLotes] = useState(null)
   const [productos, setProductos] = useState(null)
+  const [errorCarga, setErrorCarga] = useState(null)
+
+  const [productoId, setProductoId] = useState('')
   const [loteId, setLoteId] = useState('')
+
   const [entradas, setEntradas] = useState(null)
   const [alerta, setAlerta] = useState(null)
-  const [errorCarga, setErrorCarga] = useState(null)
 
   useEffect(() => {
     let cancelado = false
-    listarTodo(productsService.listar)
-      .then((data) => !cancelado && setProductos(data))
+    Promise.all([lotsService.listar({ limit: 100 }), listarTodo(productsService.listar)])
+      .then(([lotesResp, productosResp]) => {
+        if (cancelado) return
+        setLotes(lotesResp.data.filter((l) => l.nature === 'PM' && ESTADOS_CANDIDATOS.includes(l.currentStatus)))
+        setProductos(productosResp)
+      })
       .catch((err) => !cancelado && setErrorCarga(err.message))
     return () => {
       cancelado = true
     }
   }, [])
 
+  const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
+
+  // Lotes que efectivamente entran al cálculo: un lote puntual del
+  // buscador gana sobre todo lo demás; si no hay ninguno elegido, el
+  // filtro de producto (o, sin ninguno de los dos, todos los candidatos).
+  const lotesIncluidos = useMemo(() => {
+    if (!lotes) return []
+    if (loteId) return lotes.filter((l) => l.id === loteId)
+    return productoId ? lotes.filter((l) => l.productId === productoId) : lotes
+  }, [lotes, productoId, loteId])
+
   useEffect(() => {
-    if (!loteId) {
-      setEntradas(null)
+    if (lotesIncluidos.length === 0) {
+      setEntradas([])
       setAlerta(null)
       return
     }
     let cancelado = false
     setEntradas(null)
     setAlerta(null)
-    productionAreaBService
-      .listarPorLote(loteId)
-      .then((data) => !cancelado && setEntradas(data))
+    Promise.all(lotesIncluidos.map((l) => productionAreaBService.listarPorLote(l.id)))
+      .then((porLote) => !cancelado && setEntradas(porLote.flat()))
       .catch((err) => !cancelado && setErrorCarga(err.message))
 
-    Promise.all([lotsService.obtener(loteId), productionAreaBService.saldoLavado(loteId)])
-      .then(([lot, saldo]) => diagnosticarLoteAtascado(lot, saldo.washedKgDisponible))
-      .then((diagnostico) => !cancelado && setAlerta(diagnostico))
-      .catch(() => !cancelado && setAlerta(null))
+    // El diagnóstico de "lote atascado" solo tiene sentido para UN lote
+    // puntual — con varios a la vez no hay forma clara de resumirlo.
+    if (lotesIncluidos.length === 1) {
+      const lote = lotesIncluidos[0]
+      productionAreaBService
+        .saldoLavado(lote.id)
+        .then((saldo) => diagnosticarLoteAtascado(lote, saldo.washedKgDisponible))
+        .then((diagnostico) => !cancelado && setAlerta(diagnostico))
+        .catch(() => !cancelado && setAlerta(null))
+    }
 
     return () => {
       cancelado = true
     }
-  }, [loteId])
-
-  const productoNombre = (id) => productos?.find((p) => p.id === id)?.name ?? '—'
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotesIncluidos])
 
   const totalUsadosKg = entradas ? sumarCampo(entradas, 'usedKg') : 0
   const totalFinalKg = entradas ? sumarCampo(entradas, 'finalKg') : 0
@@ -133,57 +165,95 @@ export default function IndicadoresAreaB() {
         <div className="flex size-10 items-center justify-center rounded-full bg-verde-hoja/10 text-verde-bosque">
           <Gauge className="size-5" strokeWidth={1.75} />
         </div>
-        <h3 className="font-extrabold text-marron-cafe">Área B</h3>
+        <div>
+          <h3 className="font-extrabold text-marron-cafe">Área B</h3>
+          <p className="text-xs text-marron-cafe/40">
+            Indicador general de todos los lotes candidatos — filtrá por producto o elegí lotes puntuales.
+          </p>
+        </div>
       </div>
 
-      <ComboboxLote label="Lote MP" value={loteId} onChange={setLoteId} estados={ESTADOS_CANDIDATOS} productoNombre={productoNombre} />
-
-      {alerta && (
-        <div
-          className={`flex items-start gap-3 rounded-2xl p-4 ${
-            alerta.tono === 'alerta' ? 'bg-marron-arcilla/10' : 'bg-marron-tierra/10'
-          }`}
-        >
-          <TriangleAlert
-            className={`mt-0.5 size-4.5 shrink-0 ${alerta.tono === 'alerta' ? 'text-marron-arcilla' : 'text-marron-cafe/50'}`}
-            strokeWidth={1.75}
-          />
-          <div>
-            <p className="text-sm font-bold text-marron-cafe">{alerta.titulo}</p>
-            <p className="text-xs text-marron-cafe/70">{alerta.mensaje}</p>
-          </div>
-        </div>
-      )}
-
-      {!loteId ? (
-        <p className="text-sm text-marron-cafe/50">Elegí un lote para ver sus indicadores.</p>
-      ) : entradas === null ? (
-        <Skeleton className="h-24" />
+      {!productos || !lotes ? (
+        <Skeleton className="h-32" />
       ) : (
-        <div className="flex flex-col gap-3">
-          {INDICADORES.map(({ key, etiqueta, meta, cumple }) => {
-            const valor = valores[key]
-            const ok = valor != null && cumple(valor)
-            return (
-              <div key={key} className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-marron-cafe">{etiqueta}</p>
-                  <p className="text-xs text-marron-cafe/50">Meta: {meta}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-marron-cafe">
-                    {valor != null ? `${valor}%`.replace('.', ',') : '—'}
-                  </span>
-                  {valor != null ? (
-                    <Badge tono={ok ? 'positivo' : 'negativo'}>{ok ? 'Cumple' : 'Fuera de meta'}</Badge>
-                  ) : (
-                    <Badge tono="neutro">Sin datos</Badge>
-                  )}
-                </div>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormSelect
+              label="Producto"
+              value={productoId}
+              onChange={(e) => {
+                setProductoId(e.target.value)
+                setLoteId('')
+              }}
+            >
+              <option value="">Todos</option>
+              {productos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </FormSelect>
+            <ComboboxLote
+              label="Lote (opcional — sobrescribe el filtro de producto)"
+              value={loteId}
+              onChange={setLoteId}
+              estados={ESTADOS_CANDIDATOS}
+              productoNombre={productoNombre}
+            />
+          </div>
+
+          <p className="text-xs text-marron-cafe/50">
+            {lotesIncluidos.length} {lotesIncluidos.length === 1 ? 'lote incluido' : 'lotes incluidos'} en el cálculo.
+          </p>
+
+          {alerta && (
+            <div
+              className={`flex items-start gap-3 rounded-2xl p-4 ${
+                alerta.tono === 'alerta' ? 'bg-marron-arcilla/10' : 'bg-marron-tierra/10'
+              }`}
+            >
+              <TriangleAlert
+                className={`mt-0.5 size-4.5 shrink-0 ${alerta.tono === 'alerta' ? 'text-marron-arcilla' : 'text-marron-cafe/50'}`}
+                strokeWidth={1.75}
+              />
+              <div>
+                <p className="text-sm font-bold text-marron-cafe">{alerta.titulo}</p>
+                <p className="text-xs text-marron-cafe/70">{alerta.mensaje}</p>
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )}
+
+          {lotesIncluidos.length === 0 ? (
+            <p className="text-sm text-marron-cafe/50">Ningún lote candidato coincide con el filtro.</p>
+          ) : entradas === null ? (
+            <Skeleton className="h-24" />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {INDICADORES.map(({ key, etiqueta, meta, cumple }) => {
+                const valor = valores[key]
+                const ok = valor != null && cumple(valor)
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-marron-cafe">{etiqueta}</p>
+                      <p className="text-xs text-marron-cafe/50">Meta: {meta}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-marron-cafe">
+                        {valor != null ? `${valor}%`.replace('.', ',') : '—'}
+                      </span>
+                      {valor != null ? (
+                        <Badge tono={ok ? 'positivo' : 'negativo'}>{ok ? 'Cumple' : 'Fuera de meta'}</Badge>
+                      ) : (
+                        <Badge tono="neutro">Sin datos</Badge>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

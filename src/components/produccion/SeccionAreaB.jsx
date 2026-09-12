@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { Boxes, Scale, Gauge, Package, Recycle, Warehouse, FileSearch } from 'lucide-react'
+import { Boxes, Gauge, Package, Recycle, Warehouse, FileSearch } from 'lucide-react'
 import PillTabs from '../dashboard/PillTabs.jsx'
 import SeccionControlExistencias from './SeccionControlExistencias.jsx'
-import ControlVolumenB from './formularios/ControlVolumenB.jsx'
-import { filaVacia } from './formularios/volumenBFilas.js'
 import IndicadoresAreaB from './IndicadoresAreaB.jsx'
 import EnvasadoProductoTerminado from './formularios/EnvasadoProductoTerminado.jsx'
 import KardexSubproductos from './formularios/KardexSubproductos.jsx'
@@ -11,15 +9,17 @@ import ControlProductoAlmacen from './formularios/ControlProductoAlmacen.jsx'
 import InformesCalidadLaboratorio from './InformesCalidadLaboratorio.jsx'
 
 // Subpestañas de Área B — mismo patrón que SeccionAreaA.jsx (pastillas
-// locales, no rutas). "Control de Existencias", "Volumen B" e "Indicadores"
-// ya son reales (production-area-b en el backend, ver
-// docs/production-area-b.md) — "Volumen B" hace el POST de verdad,
-// "Indicadores" pide los totales al backend con su propio selector de lote.
+// locales, no rutas). "Control de Existencias" e "Indicadores" ya son
+// reales (production-area-b en el backend, ver docs/production-area-b.md).
+// "Volumen B" (P-PRO-01/R-25) ya NO es una subpestaña propia — el
+// formulario completo vive en ModalRegistrarSalidaAreaB.jsx, que se abre
+// desde "Añadir salida" en Control de Existencias. Antes existía además
+// como pestaña con su propio listado "lotes con salidas / continuar", lo
+// que dejaba dos caminos para registrar la misma salida real y duplicaba lo
+// cargado — se eliminó esa pestaña.
 // "Envasado"/"Subproductos"/"Almacén PT" siguen siendo MOCKUP puro: no
 // tienen ninguna tabla propuesta todavía (ver
-// Diseno_BD_Produccion_COMRURAL.md §7/§13). "Indicadores" es hermana de
-// "Volumen B", no una pestaña más adentro de ese formulario — mismo
-// criterio que Área A (Lotes/Volumen A/Indicadores).
+// Diseno_BD_Produccion_COMRURAL.md §7/§13).
 // "Informes Calidad/Lab" se movió acá desde Área A (SeccionAreaA.jsx) — la
 // tabla de Calidad (pureza/impurezas) sale de quality_area_b_inspections,
 // que cuelga de una corrida de ENVASADO: no existe hasta que el lote llegó
@@ -27,7 +27,6 @@ import InformesCalidadLaboratorio from './InformesCalidadLaboratorio.jsx'
 // ahí. Punto 3 del relevamiento (secciones 2.21 y 3).
 const SUBPESTAÑAS_AREA_B = [
   { id: 'control-existencias', nombre: 'Control de Existencias', Icon: Boxes },
-  { id: 'volumen-b', nombre: 'Volumen B', Icon: Scale },
   { id: 'indicadores', nombre: 'Indicadores', Icon: Gauge },
   { id: 'envasado', nombre: 'Envasado', Icon: Package },
   { id: 'subproductos', nombre: 'Subproductos', Icon: Recycle },
@@ -41,17 +40,12 @@ const SUBPESTAÑAS_AREA_B = [
 // (pedido explícito).
 export default function SeccionAreaB() {
   const [subPestaña, setSubPestaña] = useState('control-existencias')
-  // Filas de Volumen B levantadas hasta acá (no viven en ControlVolumenB.jsx)
-  // para que "Indicadores" pueda leer los mismos totales del turno sin
-  // duplicar el registro — ver volumenBFilas.js.
-  const [filasVolumenB, setFilasVolumenB] = useState(() => [filaVacia()])
 
   return (
     <div className="flex flex-col gap-4">
       <PillTabs pestañas={SUBPESTAÑAS_AREA_B} activa={subPestaña} onCambiar={setSubPestaña} />
 
       {subPestaña === 'control-existencias' && <SeccionControlExistencias />}
-      {subPestaña === 'volumen-b' && <ControlVolumenB filas={filasVolumenB} setFilas={setFilasVolumenB} />}
       {subPestaña === 'indicadores' && <IndicadoresAreaB />}
       {subPestaña === 'envasado' && <EnvasadoProductoTerminado />}
       {subPestaña === 'subproductos' && <KardexSubproductos />}

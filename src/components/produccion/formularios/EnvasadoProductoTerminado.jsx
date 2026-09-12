@@ -17,12 +17,12 @@ import ComboboxLote from '../../formularios/ComboboxLote.jsx'
 import Button from '../../Button.jsx'
 import Skeleton from '../../Skeleton.jsx'
 
-// Mismo filtro que ControlVolumenB.jsx — cualquier lote que ya pueda tener
+// Mismo filtro que ModalRegistrarSalidaAreaB.jsx — cualquier lote que ya pueda tener
 // consumo de Área B, de donde sale el material real que esta corrida
 // vincula (ver guardar()).
 const ESTADOS_CANDIDATOS = ['LAVADO', 'LAVADO_COMPLETO', 'EN_AREA_B']
 
-// RP-19 — mismo catálogo que ControlVolumenB.jsx y ControlProductoAlmacen.jsx.
+// RP-19 — mismo catálogo que ModalRegistrarSalidaAreaB.jsx y ControlProductoAlmacen.jsx.
 const PRESENTACIONES = [
   { value: 'bigbag-1000', label: 'Big Bag 1.000 kg', kg: 1000 },
   { value: 'bigbag-1200', label: 'Big Bag 1.200 kg', kg: 1200 },

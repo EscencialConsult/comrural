@@ -38,8 +38,10 @@ const diaSemanaAbreviado = (fechaStr) => {
 // lot-traceability.md §4) — INGRESO = entradas cerradas de Volumen A,
 // SALIDA = entradas de Área B con inputType='NUEVA', saldo corrido ya
 // calculado por el backend. "Añadir salida" abre
-// ModalRegistrarSalidaAreaB.jsx, que llama a POST
-// /production-area-b/entries de verdad.
+// ModalRegistrarSalidaAreaB.jsx — el formulario completo P-PRO-01/R-25
+// ("Volumen B"), que llama a POST /production-area-b/entries de verdad. Es
+// el único punto de entrada para registrar una salida (ver el comentario de
+// cabecera de ese archivo).
 //
 // Sin "Entregado por"/"Recibido por" — decisión explícita del cliente (ver
 // docs/production-area-b.md §1): no hace falta tabla de traspaso entre
@@ -191,7 +193,7 @@ export default function FormularioExistencias({ lote, onVolver }) {
         <ModalRegistrarSalidaAreaB
           abierto={modalSalidaAbierto}
           onCerrar={() => setModalSalidaAbierto(false)}
-          lotId={lote.id}
+          lote={lote}
           turnos={turnosDelLote}
           saldoDisponibleKg={saldoDisponibleKg}
           onCreada={cargarMovimientos}

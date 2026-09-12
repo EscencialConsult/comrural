@@ -1,9 +1,7 @@
-// Estado de las filas de Volumen B (Área B, P-PRO-01/R-25) compartido entre
-// ControlVolumenB.jsx e IndicadoresAreaB.jsx (pestaña hermana en
-// SeccionAreaB.jsx) — el dueño real de `filas` es SeccionAreaB.jsx, para que
-// "Indicadores" pueda leer los mismos totales sin duplicar el estado. Mismo
-// motivo que separar useCatalogoMaestro: un solo lugar en vez de que cada
-// pantalla arme su propia copia.
+// Estado de las filas de Volumen B (Área B, P-PRO-01/R-25), usado por
+// ModalRegistrarSalidaAreaB.jsx — el formulario completo de "Volumen B" vive
+// ahí, no en una pestaña propia (ver el comentario de cabecera de ese
+// archivo y de SeccionAreaB.jsx).
 
 // Grupo "Detalle del proceso" — subproductos generados en el turno, cada
 // uno con su propio par sacos/kg (peso variable). RP-15: el formulario los

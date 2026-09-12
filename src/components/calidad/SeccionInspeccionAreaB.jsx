@@ -16,10 +16,10 @@ import Skeleton from '../Skeleton.jsx'
 
 // RP-17: pureza mínima exigida antes de envasar. Si una muestra no llega a
 // esto, el resultado es "No aprobado" y el lote vuelve al clasificado
-// (reproceso en Área B, ver ControlVolumenB.jsx).
+// (reproceso en Área B, ver ModalRegistrarSalidaAreaB.jsx).
 const PUREZA_MINIMA = 99.99
 
-// Mismo filtro que ControlVolumenB.jsx / EnvasadoProductoTerminado.jsx —
+// Mismo filtro que ModalRegistrarSalidaAreaB.jsx / EnvasadoProductoTerminado.jsx —
 // única aproximación real disponible hoy para "lote pasando por Área B".
 const ESTADOS_CANDIDATOS = ['LAVADO']
 

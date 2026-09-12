@@ -1,7 +1,7 @@
 import { FlaskConical } from 'lucide-react'
 
 // Aviso visible de "esto es mockup" — a diferencia de los formularios de
-// Área B (Producción, ver ControlVolumenB.jsx y hermanos), acá SÍ se pide
+// Área B (Producción, ver ModalRegistrarSalidaAreaB.jsx y hermanos), acá SÍ se pide
 // explícito que se note a simple vista: esta pantalla vive dentro de un
 // módulo con backend real (Calidad/Laboratorio/Almacén), así que hay que
 // dejar clarísimo qué parte NO lo es, para no hacer pasar un dato inventado
