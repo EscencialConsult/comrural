@@ -19,7 +19,7 @@ import Skeleton from '../Skeleton.jsx'
 // (reproceso en Área B, ver ModalRegistrarSalidaAreaB.jsx).
 const PUREZA_MINIMA = 99.99
 
-// Mismo filtro que ModalRegistrarSalidaAreaB.jsx / EnvasadoProductoTerminado.jsx —
+// Mismo filtro que ModalRegistrarSalidaAreaB.jsx / ModalRegistrarEnvasado.jsx —
 // única aproximación real disponible hoy para "lote pasando por Área B".
 const ESTADOS_CANDIDATOS = ['LAVADO']
 

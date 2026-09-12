@@ -17,9 +17,16 @@ import InformesCalidadLaboratorio from './InformesCalidadLaboratorio.jsx'
 // como pestaña con su propio listado "lotes con salidas / continuar", lo
 // que dejaba dos caminos para registrar la misma salida real y duplicaba lo
 // cargado — se eliminó esa pestaña.
-// "Envasado"/"Subproductos"/"Almacén PT" siguen siendo MOCKUP puro: no
-// tienen ninguna tabla propuesta todavía (ver
-// Diseno_BD_Produccion_COMRURAL.md §7/§13).
+// "Envasado" es real (packaging_entries, ver docs/packaging.md) — listado
+// con botón "Registrar envasado" (ModalRegistrarEnvasado.jsx) y "Completar"
+// para los que quedaron abiertos (ModalCompletarEnvasado.jsx), mismo
+// patrón que Control de Existencias. "Subproductos"/"Almacén PT" siguen
+// siendo MOCKUP puro: no tienen ninguna tabla propuesta todavía (ver
+// Diseno_BD_Produccion_COMRURAL.md §13) — por eso NO se les aplicó el mismo
+// patrón de listado+modal: sin backend real detrás, un listado ahí sería
+// una lista de datos inventados con un botón que abre un formulario que
+// tampoco persiste nada (su `guardar()` solo hace `toast.info(...)`), cero
+// valor agregado sobre lo que ya hay.
 // "Informes Calidad/Lab" se movió acá desde Área A (SeccionAreaA.jsx) — la
 // tabla de Calidad (pureza/impurezas) sale de quality_area_b_inspections,
 // que cuelga de una corrida de ENVASADO: no existe hasta que el lote llegó
